@@ -568,6 +568,15 @@ class shape(object):
                 l = line.strip().split()
                 self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
         self.__options.num_surf[self.__curr_block] = self.__table.__len__()
+    def load_file(self):
+
+        self.__need_normalization = False
+        with open(self.__options.off_name[self.__curr_block], 'r') as f :
+            lines = f.readlines()
+            for line in lines:
+                l = line.strip().split()
+                self.__table = np.append(self.__table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
+        self.__options.num_surf[self.__curr_block] = self.__table.__len__()
 
     def load_file_Angstrom_m(self):
         """

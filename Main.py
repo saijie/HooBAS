@@ -63,7 +63,7 @@ F = 7.0  # :: Full length binding energies, usual = 7
 Dump = 2e5 #dump period for dcd
 
 options.target_dim = 55.0
-options.scale_factor = 5.0
+options.scale_factor = 1.0
 
 options.target_temp = 1.60
 options.target_temp_1 = 0.70
@@ -95,7 +95,7 @@ options.z_m = 1.0 # box z multiplier for surface energy calculations.
 ##################################################################################################################
 options.size = [28.5]
 options.corner_rad = [2.5]
-options.num_particles = [5]
+options.num_particles = [1]
 options.n_double_stranded = [5]
 options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain. Does not return any error if there
 # is no flexor, but options.flag_flexor_angle will stay false
@@ -136,7 +136,7 @@ if not options.non_centrosymmetric_moment:
     options.Iyy.append(tensor_reader.Iyy)
     options.Izz.append(tensor_reader.Izz)
     options.Iyz.append(tensor_reader.Iyz)
-    options.mass = [100]
+    options.mass = [325]
 
 #################################################################################
 ## shape function used; options are 'cube' 'cube6f' for 6 points on cubic faces, 'octahedron', 'dodecahedron', additional
@@ -253,6 +253,10 @@ options.build_flags = buildobj.flags # none defined at the moment, for future us
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
 
+
+
+
+
 system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
@@ -283,9 +287,9 @@ Sangle = angle.harmonic()
 ## need to replace this with dict structure
 for i in range(options.ang_types.__len__()):
     if options.ang_types[i] == 'flexor':
-        Sangle.set_coeff('flexor', k=2.0*options.coarse_k_factor, t0=pi)
+        Sangle.set_coeff('flexor', k=2.0, t0=pi)
     if options.ang_types[i] == 'dsDNA':
-        Sangle.set_coeff('dsDNA', k=30.0*options.coarse_k_factor, t0=pi)
+        Sangle.set_coeff('dsDNA', k=30.0, t0=pi)
     if options.ang_types[i] == 'C-C-C':
         Sangle.set_coeff('C-C-C', k=10.0, t0=pi)
     if options.ang_types[i] == 'B-B-B':

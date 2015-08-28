@@ -413,14 +413,21 @@ class BuildHoomdXML(object):
                 self.size = 2.0
 
             if not inertia_corr is None:
-                self.pos = np.array(inertia_corr.positions)
-                self.types = inertia_corr.types
+
+
+
+                self.types+=inertia_corr.types
+
                 self.s_mass = inertia_corr.masses[0]
-                self.beads = []
+                self.c_mass = 0.0
+                self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = 1.0)]
 
                 for i in range(inertia_corr.types.__len__() ):
-                    self.beads.append(CoarsegrainedBead.bead(position = inertia_corr.positions[i], beadtype = self.types[i], body = 0, mass = inertia_corr.masses[i+1]))
-
+                    self.beads.append(CoarsegrainedBead.bead(position = inertia_corr.positions[i], beadtype = self.types[i+1], body = 0, mass = inertia_corr.masses[i+1]))
+                    self.pos = np.append(self.pos, [inertia_corr.positions[i]],axis =0)
+                    self.beads.append(CoarsegrainedBead.bead(position = list(-np.array(inertia_corr.positions[i])), beadtype = self.types[i+1], body = 0, mass = inertia_corr.masses[i+1]))
+                    self.pos = np.append(self.pos, [-np.array(inertia_corr.positions[i])],axis =0)
+                # also append to pos
             else:
                 self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = c_mass)]
 
@@ -436,6 +443,7 @@ class BuildHoomdXML(object):
             except KeyError:
                 self.__build_surface()
                 self.flags['mst'] = False
+
             if init is None:
                 self.add_DNA(n_ds = n_ds, n_ss = n_ss, p_flex = p_flex, s_end = s_end, num = num, scale = self.scale)
             elif init == 'mst':
@@ -526,6 +534,13 @@ class BuildHoomdXML(object):
             for i in range(self.angles.__len__()):
                 _d.append(self.angles[i][0])
             return list(set(_d))
+
+
+        def tensor_of_intertiaxx(self):
+            _t = 0
+            for i in range(self.beads.__len__()):
+                _t += self.beads[i].mass * (self.beads[i].position[1]**2 + self.beads[i].position[2]**2)
+            return _t
 
         def rotate(self, r_mat):
             _t = self.pos[0,:]

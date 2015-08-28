@@ -81,12 +81,12 @@ class Added_Beads(object):
 
         _mat = [
             [self.__shape.num_surf, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0],
-            [self.__intrinsic_inert_multi[0], 0.0, 2.0*self.__scale**2, 2.0*self.__scale**2, 0.0, 0.0, 0.0],
-            [self.__intrinsic_inert_multi[1], 2.0*self.__scale**2, 0.0, 2.0*self.__scale**2, 0.0, 0.0, 0.0],
-            [self.__intrinsic_inert_multi[2], 2.0*self.__scale**2, 2.0*self.__scale**2, 0.0, 0.0, 0.0, 0.0],
-            [self.__intrinsic_inert_multi[3], 2.0*self.__scale**2, 2.0*self.__scale**2, 4.0*self.__scale**2, -2.0*self.__scale**2, 0.0, 0.0],
-            [self.__intrinsic_inert_multi[4], 2.0*self.__scale**2, 4.0*self.__scale**2, 2.0*self.__scale**2, 0.0, -2.0*self.__scale**2, 0.0],
-            [self.__intrinsic_inert_multi[5], 4.0*self.__scale**2, 2.0*self.__scale**2, 2.0*self.__scale**2, 0.0, 0.0, -2.0*self.__scale**2],
+            [self.__intrinsic_inert_multi[0], 0.0, 2.0*self.__scale**2, 2.0*self.__scale**2, 2.0*self.__scale**2, 2.0*self.__scale**2, 4.0*self.__scale**2],
+            [self.__intrinsic_inert_multi[1], 2.0*self.__scale**2, 0.0, 2.0*self.__scale**2, 2.0*self.__scale**2, 4.0*self.__scale**2, 2.0*self.__scale**2],
+            [self.__intrinsic_inert_multi[2], 2.0*self.__scale**2, 2.0*self.__scale**2, 0.0, 4.0*self.__scale**2, 2.0*self.__scale**2, 2.0*self.__scale**2],
+            [self.__intrinsic_inert_multi[3], 0.0, 0.0, 0.0, -2.0*self.__scale**2, 0.0, 0.0],
+            [self.__intrinsic_inert_multi[4],  0.0, 0.0, 0.0, 0.0, -2.0*self.__scale**2, 0.0],
+            [self.__intrinsic_inert_multi[5],  0.0, 0.0, 0.0, 0.0, 0.0, -2.0*self.__scale**2],
         ]
 
-        self.__added_mass = np.linalg.solve(_mat, [self.__opts.mass[self.__curr_block], self.__opts.Ixx[self.__curr_block], self.__opts.Iyy[self.__curr_block], self.__opts.Izz[self.__curr_block], self.__opts.Ixy[self.__curr_block], self.__opts.Ixz[self.__curr_block], self.__opts.Iyz[self.__curr_block]])
+        self.__added_mass = np.linalg.solve(_mat, [self.__opts.mass[self.__curr_block]-1.0, self.__opts.Ixx[self.__curr_block], self.__opts.Iyy[self.__curr_block], self.__opts.Izz[self.__curr_block], self.__opts.Ixy[self.__curr_block], self.__opts.Ixz[self.__curr_block], self.__opts.Iyz[self.__curr_block]])
