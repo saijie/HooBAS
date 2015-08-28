@@ -60,6 +60,7 @@ class shape(object):
         self.__options = options
         self.__table = np.zeros((0,3))
         self.__need_normalization = True
+        self.flags = {}
 
         if lattice is None :
             self.__lattice = [1, 1, 1]
@@ -567,6 +568,30 @@ class shape(object):
                 l = line.strip().split()
                 self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
         self.__options.num_surf[self.__curr_block] = self.__table.__len__()
+
+    def load_file_Angstrom_m(self):
+        """
+        Load multiple different files for surfaces, i.e., make proteins with different dnas attached to different sites.
+        off_name[curr_block] has to be a list of M elements, where M is the number different attachment sites.
+        :return:
+        """
+
+        self.__need_normalization = False
+        _t = []
+        for i in range(self.__options.off_name[self.__curr_block].__len__()):
+            with open(self.__options.off_name[self.__curr_block][i], 'r') as f :
+                lines = f.readlines()
+                _c = 0
+                for line in lines:
+                    l = line.strip().split()
+                    self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
+                    _c += 1
+            del f
+            _t.append(_c)
+        self.flags['multiple_surface_types'] = _t
+
+
+
 
 
     def rotate(self):

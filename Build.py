@@ -402,6 +402,7 @@ class BuildHoomdXML(object):
             self.c_type = center_type
             self.s_type = surf_type
             self.body_num = 0
+            self.flags = {}
 
             self._sh = loc_sh_obj
             self.orientation = self._sh.n_plane
@@ -425,9 +426,23 @@ class BuildHoomdXML(object):
 
             if self.orientation is None:
                 self.orientation = [0, 0, 1]
-            self.__build_surface()
+
+
+            try:
+                self._surf_cut = self._sh.flags['multiple_surface_types']
+                self.__build_multiple_surfaces()
+                init = 'mst'
+                self.flags['mst'] = True
+            except KeyError:
+                self.__build_surface()
+                self.flags['mst'] = False
             if init is None:
                 self.add_DNA(n_ds = n_ds, n_ss = n_ss, p_flex = p_flex, s_end = s_end, num = num, scale = self.scale)
+            elif init == 'mst':
+                for i in range(n_ds.__len__()):
+                    self.add_DNA(n_ds = n_ds[i], n_ss = n_ss[i], p_flex = p_flex[i], s_end = s_end[i], num = num[i], scale = self.scale, rem_id=i)
+            # need to add a method for diferent surfaces + diff dna to each surface
+
         @property
         def center_mass(self):
             return self.c_mass
@@ -523,17 +538,23 @@ class BuildHoomdXML(object):
                 del _tmp_dump
             self.pos = self.pos + _t
 
-        def add_DNA(self, n_ds, n_ss, p_flex, s_end, scale, num):
+        def add_DNA(self, n_ds, n_ss, p_flex, s_end, scale, num, rem_id = None):
             dna_obj = oneDNA.oneDNAchain(f_DNAtemplate = None, N_dsDNAbeads=int(round(n_ds*1.0/scale)),
                                         Pos_Flex=int(round(p_flex*1.0/scale)), sticky_end=s_end,
                                         N_ssDNAbeads=int(round(n_ss*1.0/scale)),
                                         N_linkerbeads=s_end.__len__(), bond_length=0.6)
-            if num > self.rem_list.__len__():
+            if self.flags['mst']:
+                if num > self.rem_list[rem_id].__len__():
+                    raise ValueError('DNA chain number greater than number of surface beads')
+            elif num > self.rem_list.__len__():
                 raise ValueError('DNA chain number greater than number of surface beads')
 
             _tmp_a_list = []
             while _tmp_a_list.__len__() < num:
-                _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list.__len__()-1)))
+                if self.flags['mst']:
+                    _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
+                else:
+                    _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list.__len__()-1)))
             self.att_list.append(_tmp_a_list)
 
             #  following code makes a copy of the dna object, rotates it, translates it and then changes position and
@@ -570,3 +591,14 @@ class BuildHoomdXML(object):
                 self.rem_list.append(i+1)
                 self.p_num.append(i+1)
                 self.beads.append(CoarsegrainedBead.bead(position = copy.deepcopy(self._sh.pos[i] * self.size / (2*self.scale)), beadtype = self.s_type, body = 0, mass = self.s_mass))
+
+        def __build_multiple_surfaces(self):
+            self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
+            _c = 0
+            for i in range(self._surf_cut.__len__()):
+                self.rem_list.append([])
+                for j in range(self._surf_cut[i]):
+                    self.rem_list[i].append(_c+1)
+                    self.p_num.append(_c+1)
+                    self.beads.append(CoarsegrainedBead.bead(position = self._sh.pos[_c]*self.size / (2*self.scale), beadtype=self.s_type[i], body =0, mass = self.s_mass))
+                    _c += 1

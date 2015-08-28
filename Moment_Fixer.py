@@ -4,10 +4,30 @@ import numpy as np
 from math import *
 
 
-class Moment_Val(object):
+class Import_moment(object):
 
     def __init__(self):
-        self.a = []
+        self.Ixx = []
+        self.Ixy = []
+        self.Ixz = []
+        self.Iyy = []
+        self.Izz = []
+        self.Iyz = []
+
+
+    def read_tensor(self, filename):
+        with open(filename, 'r') as f:
+            lines = f.readlines()
+            l = []
+            for line in lines:
+                l0 = line.strip().split()
+                l.append([[float(l0[0]), float(l0[1]), float(l0[2])]])
+        self.Ixx = l[0][0]
+        self.Ixy = l[0][1]
+        self.Ixz = l[0][2]
+        self.Iyy = l[1][1]
+        self.Izz = l[2][2]
+        self.Iyz = l[1][2]
 
 class Added_Beads(object):
     """

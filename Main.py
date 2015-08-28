@@ -16,7 +16,6 @@ import itertools
 import Build
 import random
 import Moment_Fixer
-import pack_buildingblocks
 from hoomd_script import *
 
 def c_hoomd_box(v, int_bounds, z_multi =1.00):
@@ -85,6 +84,7 @@ options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
 
+
 options.center_sec_factor = (3**0.5)*1.5 # security factor for center-center. min dist between particles in random config.
 options.z_m = 1.0 # box z multiplier for surface energy calculations.
 
@@ -118,12 +118,16 @@ options.lattice_multi = [1.0, 1.0, 3.0]
 #####################################################
 options.non_centrosymmetric_moment = True
 if not options.non_centrosymmetric_moment:
-    options.Ixx = [313.9]
-    options.Ixy = [-27.6]
-    options.Ixz = [-6.1]
-    options.Iyy = [283.96]
-    options.Izz = [224.51]
-    options.Iyz = [11.31]
+
+    tensor_reader = Moment_Fixer.Import_moment()
+    tensor_reader.read_tensor('tensor.xyz')
+
+    options.Ixx = tensor_reader.Ixx
+    options.Ixy = tensor_reader.Ixy
+    options.Ixz = tensor_reader.Ixz
+    options.Iyy = tensor_reader.Iyy
+    options.Izz = tensor_reader.Izz
+    options.Iyz = tensor_reader.Iyz
     options.mass = [100]
 
 #################################################################################
@@ -269,7 +273,7 @@ harmonic.set_coeff('C-C', k=330.0, r0=0.84*0.5)  # align the linker C-G
 Sangle = angle.harmonic()
 
 ## need to replace this with dict structure
-for i in range(options.ang_types):
+for i in range(options.ang_types.__len__()):
     if options.ang_types[i] == 'flexor':
         Sangle.set_coeff('flexor', k=2.0*options.coarse_k_factor, t0=pi)
     if options.ang_types[i] == 'dsDNA':
