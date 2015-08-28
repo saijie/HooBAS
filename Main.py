@@ -116,11 +116,12 @@ options.lattice_multi = [1.0, 1.0, 3.0]
 #####################################################
 # Special moment of inertia for non-centrosymmetric stuff, i.e. needs different corrections
 #####################################################
-options.non_centrosymmetric_moment = True
+
+options.non_centrosymmetric_moment = False
 if not options.non_centrosymmetric_moment:
 
     tensor_reader = Moment_Fixer.Import_moment()
-    tensor_reader.read_tensor('tensor.xyz')
+    #tensor_reader.read_tensor('tensor.xyz')
 
     options.Ixx = tensor_reader.Ixx
     options.Ixy = tensor_reader.Ixy
@@ -204,7 +205,7 @@ else:
     options.m_w = [1]
     options.m_surf = [1]
     options.Inertia_Corrections = []
-    options.center_types = []
+#    options.center_types = []
     for i in range(options.size.__len__()):
         options.Inertia_Corrections.append(Moment_Fixer.Added_Beads(options, i, shapes))
         options.center_types.append(options.Inertia_Corrections[i])

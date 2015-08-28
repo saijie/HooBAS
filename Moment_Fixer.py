@@ -21,7 +21,7 @@ class Import_moment(object):
             l = []
             for line in lines:
                 l0 = line.strip().split()
-                l.append([[float(l0[0]), float(l0[1]), float(l0[2])]])
+                l.append([float(l0[0]), float(l0[1]), float(l0[2])])
         self.Ixx = l[0][0]
         self.Ixy = l[0][1]
         self.Ixz = l[0][2]
@@ -89,4 +89,4 @@ class Added_Beads(object):
             [self.__intrinsic_inert_multi[5], 4.0*self.__scale**2, 2.0*self.__scale**2, 2.0*self.__scale**2, 0.0, 0.0, -2.0*self.__scale**2],
         ]
 
-        self.__added_mass = np.linalg.solve(_mat, [self.__opts.mass, self.__opts.Ixx, self.__opts.Iyy, self.__opts.Izz, self.__opts.Ixy, self.__opts.Ixz, self.__opts.Iyz])
+        self.__added_mass = np.linalg.solve(_mat, [self.__opts.mass[self.__curr_block], self.__opts.Ixx[self.__curr_block], self.__opts.Iyy[self.__curr_block], self.__opts.Izz[self.__curr_block], self.__opts.Ixy[self.__curr_block], self.__opts.Ixz[self.__curr_block], self.__opts.Iyz[self.__curr_block]])
