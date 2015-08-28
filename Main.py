@@ -120,23 +120,30 @@ options.lattice_multi = [1.0, 1.0, 3.0]
 options.non_centrosymmetric_moment = False
 if not options.non_centrosymmetric_moment:
 
-    tensor_reader = Moment_Fixer.Import_moment()
-    #tensor_reader.read_tensor('tensor.xyz')
+    options.Ixx = []
+    options.Ixy = []
+    options.Ixz = []
+    options.Iyy = []
+    options.Izz = []
+    options.Iyz = []
 
-    options.Ixx = tensor_reader.Ixx
-    options.Ixy = tensor_reader.Ixy
-    options.Ixz = tensor_reader.Ixz
-    options.Iyy = tensor_reader.Iyy
-    options.Izz = tensor_reader.Izz
-    options.Iyz = tensor_reader.Iyz
+    tensor_reader = Moment_Fixer.Import_moment()
+    tensor_reader.read_tensor('tensor.xyz')
+
+    options.Ixx.append(tensor_reader.Ixx)
+    options.Ixy.append(tensor_reader.Ixy)
+    options.Ixz.append(tensor_reader.Ixz)
+    options.Iyy.append(tensor_reader.Iyy)
+    options.Izz.append(tensor_reader.Izz)
+    options.Iyz.append(tensor_reader.Iyz)
     options.mass = [100]
 
 #################################################################################
 ## shape function used; options are 'cube' 'cube6f' for 6 points on cubic faces, 'octahedron', 'dodecahedron', additional
 ## stuff can be included in the genshape function
 #################################################################################
-options.genshapecall = ['cube']
-#options.genshapecall = ['load_file_Angstroms']
+#options.genshapecall = ['cube']
+options.genshapecall = ['load_file_Angstroms']
 
 #All filenames will be generated using options.filenameformat. For output purposes only
 Shapename = 'Size'+str(options.size)+'Target'+str(round(options.target_dim,2))+'NDS'+str(options.n_double_stranded)\
@@ -208,7 +215,7 @@ else:
 #    options.center_types = []
     for i in range(options.size.__len__()):
         options.Inertia_Corrections.append(Moment_Fixer.Added_Beads(options, i, shapes))
-        options.center_types.append(options.Inertia_Corrections[i])
+        options.center_types.append(options.Inertia_Corrections[i].types)
 
 ##################################################################################################################
 ## Derived quantities, volumes are calculated in genshape functions.
@@ -316,7 +323,7 @@ def repulse(a,b,sigma=1.0,epsilon = 1.0):
 
 radius = [['S', 0.5], ['A', 1.0], ['B', 0.5], ['FL', 0.3]]
 
-c_uniques = list(set(options.center_types))
+c_uniques = list(set(list(itertools.chain(*options.center_types))))
 for i in range(c_uniques.__len__()):
     radius.append([c_uniques[i],1.0])
 surf_uniques = list(set(options.surface_types))
