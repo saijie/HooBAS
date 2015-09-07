@@ -63,7 +63,7 @@ F = 7.0  # :: Full length binding energies, usual = 7
 Dump = 2e5 #dump period for dcd
 
 options.target_dim = 55.0
-options.scale_factor = 1.0
+options.scale_factor = 5.0
 
 options.target_temp = 1.60
 options.target_temp_1 = 0.70
@@ -95,7 +95,7 @@ options.z_m = 1.0 # box z multiplier for surface energy calculations.
 ##################################################################################################################
 options.size = [28.5]
 options.corner_rad = [2.5]
-options.num_particles = [1]
+options.num_particles = [3]
 options.n_double_stranded = [5]
 options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain. Does not return any error if there
 # is no flexor, but options.flag_flexor_angle will stay false
@@ -103,7 +103,7 @@ options.n_single_stranded = [3]
 options.sticky_ends = [['X','Y']]
 options.center_types = ['W'] #Should be labeled starting with 'W', must have distinct names
 options.surface_types = ['P'] # Should be labeled starting with 'P'
-options.num_surf = [int((options.size[0]*2.0 / options.scale_factor)**2 * 2)] # initial approximation for # of beads on surface
+options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2)] # initial approximation for # of beads on surface
 options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
 options.volume = options.densities[:] # temp value, is set by genshape
 options.p_surf = options.densities[:] # same
@@ -117,7 +117,7 @@ options.lattice_multi = [1.0, 1.0, 3.0]
 # Special moment of inertia for non-centrosymmetric stuff, i.e. needs different corrections
 #####################################################
 
-options.non_centrosymmetric_moment = False
+options.non_centrosymmetric_moment = True
 if not options.non_centrosymmetric_moment:
 
     options.Ixx = []
@@ -142,8 +142,8 @@ if not options.non_centrosymmetric_moment:
 ## shape function used; options are 'cube' 'cube6f' for 6 points on cubic faces, 'octahedron', 'dodecahedron', additional
 ## stuff can be included in the genshape function
 #################################################################################
-#options.genshapecall = ['cube']
-options.genshapecall = ['load_file_Angstroms']
+options.genshapecall = ['cube']
+#options.genshapecall = ['load_file']
 
 #All filenames will be generated using options.filenameformat. For output purposes only
 Shapename = 'Size'+str(options.size)+'Target'+str(round(options.target_dim,2))+'NDS'+str(options.n_double_stranded)\
@@ -232,16 +232,8 @@ else:
     for i in range(options.volume.__len__()):
         options.box_size_packing += 2.5*amax(abs(array(shapes[i].pos)))*2.0 / options.scale_factor
 
-################################
-#### Simulation control param###
-################################
-
-
-
-
 
 # Target box sizes
-
 ################################
 # Making buildobj
 ################################
@@ -255,7 +247,7 @@ options.ang_types = buildobj.ang_types
 
 
 
-
+raise StandardError
 
 system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()

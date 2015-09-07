@@ -53,14 +53,17 @@ class shape(object):
     particles. A volume should be set by the method. Class supports a rotation matrix method.
     """
 
-
     def __init__(self, curr_block, options, surf_plane = None, lattice = None):
 
         self.__curr_block = curr_block
         self.__options = options
         self.__table = np.zeros((0,3))
         self.__need_normalization = True
+
         self.flags = {}
+        self.flags['hard_core_safe_dist'] = 0
+
+
 
         if lattice is None :
             self.__lattice = [1, 1, 1]
@@ -73,7 +76,6 @@ class shape(object):
             self.__rot_mat = self.__get_rot_mat(surf_plane)
             self.__surf_plane = vec(surf_plane)
             self.__n_plane = vec(r_vec)
-
 
     @property
     def opts(self):
@@ -145,11 +147,9 @@ class shape(object):
         Num = self.__options.num_surf[self.__curr_block]
         #filename = options.off_name
         Radius = self.__options.corner_rad[self.__curr_block]*2 / self.__options.size[self.__curr_block]
-        NumSide = int(round((Num/6)**0.5))
+        NumSide = int(round((Num * (1-Radius)**2/6)**0.5))
 
         #Create 6 faces, with range (-1+Radius) to (1-Radius), NumSide**2 points on each
-
-
         Gridbase = np.linspace(-1+Radius, 1-Radius, NumSide)
         xGrid, yGrid = np.meshgrid(Gridbase,Gridbase)
         Tablexy = np.zeros((0,3))
@@ -158,7 +158,8 @@ class shape(object):
             for j in range(NumSide):
                 Tablexy = np.append(Tablexy, np.array([[xGrid[i,j], yGrid[i,j],1]]),axis=0)
 
-        PtEdge = NumSide**2 * pi * Radius / (2*(1-Radius))**2
+        # numside is the proportionality constant, pi * R /4 / (2*(1-R)) is the ratio of the side length to quarter cylinder length
+        PtEdge = NumSide**2 * pi * Radius / (4*2*(1-Radius))
 
         PtAngle = int(PtEdge/NumSide)
         #PtL = int((PtEdge*4*(1-Radius)/pi)**0.5)
@@ -171,19 +172,22 @@ class shape(object):
                 TableEdge = np.append(TableEdge, np.array([[(1-Radius)+Radius*cos(AngleRange[i+1]),Gridbase[j], (1-Radius)+Radius*sin(AngleRange[i+1])]]),axis =0)
 
         #XYZ vertice
-        PtVertice = NumSide*(pi*Radius**2/8) / (2*(1-Radius))**2
-
-        PtTheta = int(PtVertice**0.5)
-        PtPhi = int(PtVertice**0.5)
-
-        TheRange = np.linspace(0,pi/2,PtTheta+2)
-        PhRange = np.linspace(0,pi/2,PtPhi+2)
-
+        PtVertice = int(NumSide**2 *(4*pi*Radius**2/8) / (2*(1-Radius))**2)
         TableVert = np.zeros((0,3))
+        PtVertice *= 8
+        gold_ang = pi*(3-5**0.5)
+        th = gold_ang*np.arange(PtVertice)
+        z = np.linspace(1-1.0/PtVertice, 1.0/PtVertice -1, PtVertice)
 
-        for i in range(PtTheta):
-            for j in range(PtPhi):
-                TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*cos(PhRange[i+1])*sin(TheRange[i+1]), (1-Radius)+Radius*sin(PhRange[i+1])*sin(TheRange[i+1]),(1-Radius)+Radius*cos(TheRange[i+1])]]),axis=0)
+
+        for i in range(0, PtVertice):
+            if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
+                TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*(1-z[i]**2)**0.5*cos(th[i]), (1-Radius)+Radius*(1-z[i]**2)**0.5*sin(th[i]),(1-Radius)+Radius*z[i]]]),axis=0)
+
+
+        #for i in range(PtTheta):
+        #    for j in range(PtPhi):
+        #        TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*cos(PhRange[j+1])*sin(TheRange[i+1]), (1-Radius)+Radius*sin(PhRange[j+1])*sin(TheRange[i+1]),(1-Radius)+Radius*cos(TheRange[i+1])]]),axis=0)
 
         #Write 6 faces
         for i in range(Tablexy.__len__()):
@@ -226,6 +230,10 @@ class shape(object):
             self.__table = np.append(self.__table, [[-TableVert[i,0],-TableVert[i,1], TableVert[i,2]]], axis = 0)
             self.__table = np.append(self.__table, [[-TableVert[i,0],-TableVert[i,1],-TableVert[i,2]]], axis = 0)
 
+        self.flags['hard_core_safe_dist'] = 3**0.5
+        self.flags['volume'] = 2**3
+        self.flags['surface'] = 6*2**2
+        self.flags['simple_I_tensor'] = True
 
         self.__options.num_surf[self.__curr_block] = (6*Tablexy.__len__() + 12*TableEdge.__len__() + 8*TableVert.__len__())
         self.__options.volume[self.__curr_block] = (self.__options.size[self.__curr_block]*2.0 / self.__options.scale_factor)**3
@@ -568,6 +576,7 @@ class shape(object):
                 l = line.strip().split()
                 self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
         self.__options.num_surf[self.__curr_block] = self.__table.__len__()
+
     def load_file(self):
 
         self.__need_normalization = False
@@ -578,12 +587,31 @@ class shape(object):
                 self.__table = np.append(self.__table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
         self.__options.num_surf[self.__curr_block] = self.__table.__len__()
 
-    def load_file_Angstrom_m(self):
+    def load_file_Angstrom_m(self, parser = None):
         """
         Load multiple different files for surfaces, i.e., make proteins with different dnas attached to different sites.
         off_name[curr_block] has to be a list of M elements, where M is the number different attachment sites.
         :return:
         """
+
+
+
+        if parser is None:
+            self.__need_normalization = False
+            _t = []
+            for i in range(self.__options.off_name[self.__curr_block].__len__()):
+                with open(self.__options.off_name[self.__curr_block][i], 'r') as f :
+                    lines = f.readlines()
+                    _c = 0
+                    for line in lines:
+                        l = line.strip().split()
+                        self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
+                        _c += 1
+                del f
+                _t.append(_c)
+            self.flags['multiple_surface_types'] = _t
+
+    def load_file_multiple(self):
 
         self.__need_normalization = False
         _t = []
@@ -598,10 +626,6 @@ class shape(object):
             del f
             _t.append(_c)
         self.flags['multiple_surface_types'] = _t
-
-
-
-
 
     def rotate(self):
         try:

@@ -315,6 +315,23 @@ class BuildHoomdXML(object):
                 for k in range(self.__particles[-1].beads.__len__()):
                     self.__beads.append(self.__particles[-1].beads[k])
 
+    def fix_overlapping(self, _m_dist = 1e-5):
+        # fixes overlapping of beads by setting the min dist between them to _m_dist, by shifting coords of one of them by 1/3 m_dist in the i-j direction.
+
+        for i in range(0,self.__beads.__len__()):
+            if not (self.__beads[i].beadtype == 'P' or self.__beads[i].beadtype == 'W'):
+                print i
+                for j in range(i+1, self.__beads.__len__()):
+                    if not (self.__beads[j].beadtype == 'P' or self.__beads[j].beadtype == 'W'):
+                        _dx = (self.__beads[i].position[0] - self.__beads[j].position[0])
+                        _dy = (self.__beads[i].position[1] - self.__beads[j].position[1])
+                        _dz = (self.__beads[i].position[2] - self.__beads[j].position[2])
+                        if (_dx**2 + _dy**2 + _dz **2) < _m_dist**2:
+                            self.__beads[i].position[0] += _m_dist * np.sign(_dx) / 3.0
+                            self.__beads[i].position[1] += _m_dist * np.sign(_dy) / 3.0
+                            self.__beads[i].position[2] += _m_dist * np.sign(_dz) / 3.0
+
+
     def write_to_file(self, z_box_multi = None):
         if self.__opts.flag_surf_energy:
             L = self.__opts.rot_box
