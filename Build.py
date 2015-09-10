@@ -84,7 +84,7 @@ class BuildHoomdXML(object):
     centers : returns list of center types
     sys_box : returns calculated system box size
     """
-    def __init__(self, center_obj, shapes, opts, init = None):
+    def __init__(self, center_obj, shapes, opts , init = None):
         self.__positions = np.zeros((0,3))
         self.__particles = []
         self.__bonds = []
@@ -101,6 +101,12 @@ class BuildHoomdXML(object):
             self._c_t = center_obj.built_types
             self._sh_obj = shapes
             self.__build_from_options()
+
+        if init == 'from_shapes':
+            self._c_pos = center_obj.positions
+            self._c_t = center_obj.built_types
+            self._sh_obj = shapes
+            self.__build_from_shapes()
 
     @staticmethod
     def get_rot_mat(cubic_plane):
@@ -289,6 +295,34 @@ class BuildHoomdXML(object):
                     # to calculate energies, use min[ E(o1, o2), E(R.o1, o2), ...], where R is a degeneracy rotation matrix
                     # i.e., given by get rotation matrix method applied to ([1 0 0], [-1 0 0], ...).
 
+    def __build_from_shapes(self):
+        b_cnt = 0
+        for i in range(self._c_t.__len__()):
+            for j in range(self._c_pos[i].__len__()):
+                n_ind = self.__opts.center_types.index(self._c_t[i])
+
+
+                self.__particles.append(BuildHoomdXML.Particle(center_type = self.__opts.center_types[n_ind],
+                                                               loc_sh_obj = self._sh_obj[n_ind],
+                                                               scale = self.__opts.scale_factor, **self._sh_obj[i].flags
+                                                               ))
+                self.__types.append(self.__opts.genshapecall)
+                self.__particles[-1].center_position = self._c_pos[i][j,:]
+                self.__particles[-1].body = b_cnt
+                b_cnt += 1
+                try:
+                    self.__particles[-1].pnum_offset = self.__p_num[-1]+1
+                except IndexError:
+                    pass
+                for k in range(self.__particles[-1].p_num.__len__()):
+                    self.__p_num.append(self.__particles[-1].p_num[k])
+                for k in range(self.__particles[-1].bonds.__len__()):
+                    self.__bonds.append(self.__particles[-1].bonds[k])
+                for k in range(self.__particles[-1].angles.__len__()):
+                    self.__angles.append(self.__particles[-1].angles[k])
+                for k in range(self.__particles[-1].beads.__len__()):
+                    self.__beads.append(self.__particles[-1].beads[k])
+
     def __build_from_options(self):
         b_cnt = 0
         for i in range(self._c_t.__len__()):
@@ -409,8 +443,8 @@ class BuildHoomdXML(object):
 
 
         """
-        def __init__(self, size, center_type, surf_type, loc_sh_obj, scale, n_ds = None, n_ss = None, p_flex = None,
-                     s_end = None, num = None, init = None):
+        def __init__(self, center_type, surf_type, loc_sh_obj, scale, size = None, n_ds = None, n_ss = None, p_flex = None,
+                     s_end = None, num = None, init = None, **kwargs):
             self.pos = np.zeros((1,3))
             self.bonds = []
             self.angles = []
@@ -423,7 +457,7 @@ class BuildHoomdXML(object):
             self.body_num = 0
             self.flags = {}
 
-            self._sh = loc_sh_obj
+            self._sh = copy.deepcopy(loc_sh_obj)
             self.orientation = self._sh.n_plane
             self.rem_list = []
             self.att_list = [] #table of tables
@@ -461,8 +495,10 @@ class BuildHoomdXML(object):
                         for i in range(self._sh.I_fixer.types.__len__() ):
                             self.beads.append(CoarsegrainedBead.bead(position = self._sh.I_fixer.positions[i], beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
                             self.pos = np.append(self.pos, [self._sh.I_fixer.positions[i]],axis =0)
+                            self.p_num.append(self.p_num[-1] + 1)
                             self.beads.append(CoarsegrainedBead.bead(position = list(-np.array(self._sh.I_fixer.positions[i])), beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
                             self.pos = np.append(self.pos, [-np.array(self._sh.I_fixer.positions[i])],axis =0)
+                            self.p_num.append(self.p_num[-1] + 1)
                     except AttributeError:
                         try :
                             self._sh.I_fixer = Moment_Fixer.Added_Beads(c_type=center_type, shape_pos=self._sh.pos, shape_num_surf=self._sh.num_surf, d_tensor= self._sh.flags['I_tensor'], mass = _t_m)
@@ -477,8 +513,10 @@ class BuildHoomdXML(object):
                         for i in range(self._sh.I_fixer.types.__len__() ):
                             self.beads.append(CoarsegrainedBead.bead(position = self._sh.I_fixer.positions[i], beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
                             self.pos = np.append(self.pos, [self._sh.I_fixer.positions[i]],axis =0)
+                            self.p_num.append(self.p_num[-1] + 1)
                             self.beads.append(CoarsegrainedBead.bead(position = list(-np.array(self._sh.I_fixer.positions[i])), beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
                             self.pos = np.append(self.pos, [-np.array(self._sh.I_fixer.positions[i])],axis =0)
+                            self.p_num.append(self.p_num[-1] + 1)
             except KeyError:
                 print 'Inertia tensor method not specified. Assuming simple I tensor'
                 self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = self.mass * 2.0 / 5.0)]
@@ -494,11 +532,13 @@ class BuildHoomdXML(object):
                 self._surf_cut = self._sh.flags['multiple_surface_types']
                 self.__build_multiple_surfaces()
                 self.flags['mst'] = True
-                if 'pdb_object' in self._sh.flags:
+                if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
                     init = 'pdb'
                 else:
                     init = 'mst'
             except KeyError:
+                if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
+                    init = 'pdb'
                 self.__build_surface()
                 self.flags['mst'] = False
 
@@ -657,8 +697,8 @@ class BuildHoomdXML(object):
         def __build_surface(self):
             self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
             for i in range(self._sh.pos.__len__()):
-                self.rem_list.append(i+1)
-                self.p_num.append(i+1)
+                self.rem_list.append(1+self.p_num[-1])
+                self.p_num.append(1+self.p_num[-1])
                 self.beads.append(CoarsegrainedBead.bead(position = copy.deepcopy(self._sh.pos[i] * self.size / (2*self.scale)), beadtype = self.s_type, body = 0, mass = self.s_mass))
 
         def __build_multiple_surfaces(self):
@@ -671,12 +711,16 @@ class BuildHoomdXML(object):
             for i in range(self._surf_cut.__len__()):
                 self.rem_list.append([])
                 for j in range(self._surf_cut[i]):
-                    self.rem_list[i].append(_c+1)
-                    self.p_num.append(_c+1)
+                    self.rem_list[i].append(1+self.p_num[-1])
+                    self.p_num.append(1+self.p_num[-1])
                     self.beads.append(CoarsegrainedBead.bead(position = self._sh.pos[_c]*self.size / (2*self.scale), beadtype=self.s_type[i], body =0, mass = self.s_mass))
                     _c += 1
 
         def pdb_DNA_keys(self):
+            if 'no_dna' in self._sh.keys:
+                offset = self._sh.keys['no_dna'].__len__()
+            else:
+                offset = 0
             for i in range(self._sh.keys['dna'].__len__()):
-                self.add_DNA(rem_id= i + self._sh.keys['no_dna'], **self._sh.keys['dna'][1])
+                self.add_DNA(rem_id= i + offset, scale = self.scale, **self._sh.keys['dna'][i][1])
 

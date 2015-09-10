@@ -63,7 +63,7 @@ F = 7.0  # :: Full length binding energies, usual = 7
 Dump = 2e5 #dump period for dcd
 
 options.target_dim = 55.0
-options.scale_factor = 5.0
+options.scale_factor = 1.0
 
 options.target_temp = 1.60
 options.target_temp_1 = 0.70
@@ -93,16 +93,19 @@ options.z_m = 1.0 # box z multiplier for surface energy calculations.
 ## derived values from these as well as shape generation. Code should allow mixing such as cubes + octahedron. Some options
 ## are not used for some geometrical functions in genshape, but must still be defined.
 ##################################################################################################################
-options.size = [28.5]
+options.size = [28.5, 28.5, 28.5]
+options.num_particles = [10, 10, 10]
+options.center_types = ['W1', 'W2', 'W3'] #Should be labeled starting with 'W', must have distinct names
+
+
+
 options.corner_rad = [2.5]
-options.num_particles = [10]
 options.n_double_stranded = [5]
 options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain. Does not return any error if there
 # is no flexor, but options.flag_flexor_angle will stay false
 options.n_single_stranded = [3]
-options.sticky_ends = [['X','Y']]
-options.center_types = ['W'] #Should be labeled starting with 'W', must have distinct names
-options.surface_types = ['P'] # Should be labeled starting with 'P'
+options.sticky_ends = [['X','X', 'X'], ['Y', 'Y']]
+options.surface_types = ['P1', 'P2'] # Should be labeled starting with 'P'
 options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2)] # initial approximation for # of beads on surface
 options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
 options.volume = options.densities[:] # temp value, is set by genshape
@@ -169,9 +172,25 @@ else:
 
 
 
-shapes = []
-shapes.append(GenShape.shape(options=options, curr_block =0))
-shapes[0].sphere()
+#shapes = []
+#shapes.append(GenShape.shape(options=options, curr_block =0))
+#shapes[0].sphere()
+
+shapes = [GenShape.shape()]
+shapes[0].parse_pdb_protein(filename='4BLC.pdb')
+shapes[0].will_build_from_shapes(properties = {'surf_type' : 'P1'})
+shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 10, s_end = ['X','X'], p_flex = array([-1]), num = 60)
+shapes[0].pdb_build_table()
+shapes.append(GenShape.shape())
+shapes[1].parse_pdb_protein(filename='4BLC.pdb')
+shapes[1].will_build_from_shapes(properties = {'surf_type' : 'P2'})
+shapes[1].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM' : 'NZ'}, n_ss = 2, n_ds = 3, s_end = ['Y', 'Y'], p_flex = array([-1]), num = 30)
+shapes[1].pdb_build_table()
+shapes.append(GenShape.shape())
+shapes[2].sphere(Num=200)
+shapes[2].will_build_from_shapes(properties = {'size' : 10.0, 'surf_type' : 'P3', 'density' : 14.08})
+shapes[2].set_dna(n_ss = 2, n_ds = 3, s_end = ['Y', 'Y'], p_flex = array([-1]), num = 30)
+
 
 #dict0 = {'tensor_name' : 'mi_all.dat', 'mass' : 325.45}
 #shapes.append(GenShape.shape(properties = dict0))
@@ -220,7 +239,7 @@ else:
 ################################
 # Making buildobj
 ################################
-buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options)
+buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
 buildobj.set_rotation_function()
 buildobj.write_to_file(z_box_multi=options.z_m)
 options.sys_box = buildobj.sys_box
@@ -233,6 +252,8 @@ options.ang_types = buildobj.ang_types
 system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
+
+raise StandardError
 
 Lx0 = options.sys_box[0]
 Ly0 = options.sys_box[1]

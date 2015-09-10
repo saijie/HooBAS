@@ -83,7 +83,7 @@ class shape(object):
         self.flags['hard_core_safe_dist'] = 0
         self.keys = {}
         self._pdb = []
-        self.mkeys = {'C' : 12.011, 'O' : 15.999, 'H' : 1.008, 'N' : 14.007}
+        self.mkeys = {'C' : 12.011, 'O' : 15.999, 'H' : 1.008, 'N' : 14.007, 'S' : 32.06}
 
         if lattice is None :
             self.__lattice = [1, 1, 1]
@@ -183,8 +183,7 @@ class shape(object):
 
 
         for i in range(0, Num):
-            if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
-                self.__table = np.append(self.__table, np.array([[(1-z[i]**2)**0.5*cos(th[i]), (1-z[i]**2)**0.5*sin(th[i]),z[i]]]),axis=0)
+            self.__table = np.append(self.__table, np.array([[(1-z[i]**2)**0.5*cos(th[i]), (1-z[i]**2)**0.5*sin(th[i]),z[i]]]),axis=0)
 
         self.flags['normalized'] = True
         self.flags['hard_core_safe_dist'] = 1
@@ -709,7 +708,7 @@ class shape(object):
             _t.append(_c)
         self.flags['multiple_surface_types'] = _t
 
-    def parse_pdbml_protein(self, filename = None):
+    def parse_pdb_protein(self, filename = None):
         """
         Parses a pdbml protein
         :param filename:
@@ -721,25 +720,38 @@ class shape(object):
 
         with open(filename, 'r') as f:
             self._pdb = f.readlines()
-            _m =0.0
-            # inertia vector : ixx, iyy, izz, ixy, ixz, iyz
-            _i_v = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-            _com = np.array([0.0, 0.0, 0.0])
+        del f
 
-            for _line in self._pdb:
-                _s = _line.strip().split()
-                if _s[0]=='ATOM':
-                    _m_l = self.mkeys[_s[-1]]
-                    _m += _m_l
-                    _p = np.array([float(_s[7]), float(_s[8]), float(_s[9])])
-                    _com += _p *_m_l
-                    _i_v += np.array([_s[1]*_s[2], _s[0]*_s[2], _s[0]*_s[1], -_s[0]*_s[1], -_s[0]*_s[2], -_s[1]*_s[2]])*_m_l
-            _com /= _m
+        _m =0.0
+        # inertia vector : ixx, iyy, izz, ixy, ixz, iyz
+        _i_v = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        _com = np.array([0.0, 0.0, 0.0])
+        _geo_c = np.array([0.0, 0.0, 0.0])
+        _cnt = 0
+
+        for _line in self._pdb:
+            _s = _line.strip().split()
+            if _s[0]=='ATOM':
+                _m_l = self.mkeys[_s[-1]]
+                _m += _m_l
+                _p = np.array([float(_s[6])/20.0, float(_s[7])/20.0, float(_s[8])/20.0])
+                _com += _p *_m_l
+                _geo_c += _p
+                _cnt += 1
+        _com /= _m
+        _geo_c /= _cnt
+        for _line in self._pdb:
+            _s = _line.strip().split()
+            if _s[0]=='ATOM':
+                _m_l = self.mkeys[_s[-1]]
+                _p = np.array([float(_s[6])/20.0, float(_s[7])/20.0, float(_s[8])/20.0])-_com
+                _i_v += np.array([_p[1]**2 + _p[2]**2, _p[0]**2 + _p[2]**2, _p[0]**2 + _p[1]**2, -_p[0]*_p[1], -_p[0]*_p[2], -_p[1]*_p[2]])*_m_l
+
 
         self.flags['normalized'] = False
         self.flags['mass'] = _m / 650.0
         self.flags['simple_I_tensor'] = False
-        self.flags['I_tensor'] = _i_v / 650.0 / 20.0**2.0
+        self.flags['I_tensor'] = _i_v / 650.0
         self.flags['center_of_mass'] = _com
         self.flags['pdb_object'] = True
 
@@ -748,8 +760,8 @@ class shape(object):
         Keys some dna to pdb parsed protein
 
         The key speficies whatever is parsed by parse_pdb_protein, rest is DNA options. Multiple DNAs can be keyed to the same site.
-        :param key: dictionary specifying columns to match in the pdb file. Standard use would be {'RES' : 'LY', 'TYPE' : 'N'}. Always searches in 'ATOM'
-        supports 'RES' for residue name, 'TYPE' for atom type, 'CHAIN' for chain identifier, 'OCC' for occupancy, 'TYPE' includes charge (e.g. 'N1+')
+        :param key: dictionary specifying columns to match in the pdb file. Standard use would be {'RES' : 'LYS', 'ATOM' : 'N'}. Always searches in 'ATOM'
+        supports 'RES' for residue name, 'TYPE' for atom element, 'CHAIN' for chain identifier, 'OCC' for occupancy, 'TYPE' includes charge (e.g. 'N1+')
         :param n_ss:
         :param n_ds:
         :param s_end:
@@ -757,7 +769,7 @@ class shape(object):
         :return:
         """
 
-        pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 4, 'OCC' : 10}
+        pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 4, 'OCC' : 10, 'ATOM' : 2}
 
         # case of no_dna key
 
@@ -783,7 +795,6 @@ class shape(object):
             except KeyError:
                 self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
 
-
     def pdb_build_table(self):
         """
         creates the list for build, keeping only keyed particles.
@@ -791,22 +802,38 @@ class shape(object):
         Use add_pdb_dna_key(key = 'A') to keep 'A' sites, without adding DNA
         :return:
         """
-
+        com = self.flags['center_of_mass']
+        self.__table = np.zeros((0,3))
         _t = []
         _cnt = 0
-        for _k in self.keys['no_dna'].__len__():
-            for _kk in self.keys['no_dna'][_k].__len__():
-                self.__table = np.append(self.__table, [self.keys['no_dna'][_k][0][_kk][0], self.keys['no_dna'][_k][0][_kk][1], self.keys['no_dna'][_k][0][_kk][2]], axis = 0)
-                _cnt += 1
-            _t.append(_cnt)
-        for _k in self.keys['dna'].__len__():
-            for _kk in self.keys['dna'][_k][0].__len__():
-                self.__table = np.append(self.__table, [self.keys['dna'][_k][0][_kk][0], self.keys['dna'][_k][0][_kk][1], self.keys['dna'][_k][0][_kk][2]], axis = 0)
-                _cnt += 1
-            _t.append(_cnt)
+        if 'no_dna' in self.keys:
+            for _k in range(self.keys['no_dna'].__len__()):
+                for _kk in range(self.keys['no_dna'][_k].__len__()):
+                    self.__table = np.append(self.__table, [np.array([self.keys['no_dna'][_k][0][_kk][0], self.keys['no_dna'][_k][0][_kk][1], self.keys['no_dna'][_k][0][_kk][2]])-com], axis = 0)
+                    _cnt += 1
+                _t.append(_cnt)
+        if 'dna' in self.keys:
+            for _k in range(self.keys['dna'].__len__()):
+                for _kk in range(self.keys['dna'][_k][0].__len__()):
+                    self.__table = np.append(self.__table, [np.array([self.keys['dna'][_k][0][_kk][0], self.keys['dna'][_k][0][_kk][1], self.keys['dna'][_k][0][_kk][2]])-com], axis = 0)
+                    _cnt += 1
+                _t.append(_cnt)
 
         if _t.__len__() > 1:
             self.flags['multiple_surface_types'] = _t
+
+    def will_build_from_shapes(self, properties = None):
+        self.flags.update(properties)
+        self.flags['pdb_object'] = True
+
+
+    def set_dna(self, key = None, n_ss = None, n_ds = None, s_end = None, p_flex = None, num =None):
+        _l_list = []
+        for i in range(self.__table.__len__()):
+            _l_list.append([self.__table[0, 0], self.__table[0, 1], self.__table[0, 2]])
+
+        self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
+
 
     def rotate(self):
         try:
