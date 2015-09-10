@@ -4,6 +4,7 @@ __author__ = 'martin'
 from math import *
 import numpy as np
 from fractions import gcd
+import Moment_Fixer
 
 class vec(object):
         """
@@ -51,19 +52,38 @@ class shape(object):
     Shape object containing self.__table, which is a list of all the points in the base object. Any new shape can be
     added by adding def name and making the new method generate a numpy array of size (N,3) where N is the number of
     particles. A volume should be set by the method. Class supports a rotation matrix method.
+
+    properties is a dict object for additional properties useful for non-trivial cases (read xyz / pdb parsed files):
+    'surface' : Used for DNA coverage specifications
+    'density' : used for mass calculations
+    'volume' : Used for mass calculation if a density is given
+    'mass' : if volume is not specified
+    'size' : as old options.size, if the shape is to be scaled by some constant, this is it.
+
+    ### Only for surface representations
+    'normalized' : set to either True or False, build will either multiply dimensions by size (True) or not (False)
+    'tensor_name' : filename or path to filename to the tensor of inertia of the real molecule.
+
+    ## For loading everything from pdb; attachment sites are provided by 'AS_#' where # is an integer number <- feature to be added
+
+
     """
 
-    def __init__(self, curr_block, options, surf_plane = None, lattice = None):
+    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None):
 
         self.__curr_block = curr_block
         self.__options = options
         self.__table = np.zeros((0,3))
         self.__need_normalization = True
 
-        self.flags = {}
+        if properties is None:
+            self.flags = {}
+        else :
+            self.flags = properties
         self.flags['hard_core_safe_dist'] = 0
-
-
+        self.keys = {}
+        self._pdb = []
+        self.mkeys = {'C' : 12.011, 'O' : 15.999, 'H' : 1.008, 'N' : 14.007}
 
         if lattice is None :
             self.__lattice = [1, 1, 1]
@@ -76,6 +96,9 @@ class shape(object):
             self.__rot_mat = self.__get_rot_mat(surf_plane)
             self.__surf_plane = vec(surf_plane)
             self.__n_plane = vec(r_vec)
+        elif surf_plane is None :
+            self.__surf_plane = vec([0.0, 0.0, 1.0])
+            self.__n_plane = vec([0.0, 0.0, 1.0])
 
     @property
     def opts(self):
@@ -91,7 +114,10 @@ class shape(object):
 
     @property
     def volume(self):
-        return self.__options.volume[self.__curr_block]
+        try:
+            return self.flags['volume']
+        except KeyError:
+            return None
 
     @property
     def pos(self):
@@ -121,7 +147,10 @@ class shape(object):
 
     @property
     def unit_shape(self):
-        return self.__need_normalization
+        try:
+            return self.flags['normalized']
+        except KeyError:
+            return None
 
     @staticmethod
     def __get_rot_mat(cubic_plane):
@@ -143,10 +172,32 @@ class shape(object):
 
         return  _id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2)
 
-    def cube(self):
-        Num = self.__options.num_surf[self.__curr_block]
-        #filename = options.off_name
-        Radius = self.__options.corner_rad[self.__curr_block]*2 / self.__options.size[self.__curr_block]
+    def sphere(self,  Num = None):
+        # a sphere of r = 1
+        if Num is None:
+            Num = self.__options.num_surf[self.__curr_block]
+        self.__table = np.zeros((0,3))
+        gold_ang = pi*(3-5**0.5)
+        th = gold_ang*np.arange(Num)
+        z = np.linspace(1-1.0/Num, 1.0/Num -1, Num)
+
+
+        for i in range(0, Num):
+            if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
+                self.__table = np.append(self.__table, np.array([[(1-z[i]**2)**0.5*cos(th[i]), (1-z[i]**2)**0.5*sin(th[i]),z[i]]]),axis=0)
+
+        self.flags['normalized'] = True
+        self.flags['hard_core_safe_dist'] = 1
+        self.flags['surface'] = 4*pi
+        self.flags['volume'] = (4.0/3.0)*pi
+        self.flags['simple_I_tensor'] = True
+
+    def cube(self, Num = None, Radius = None):
+
+        if Num is None:
+            Num = self.__options.num_surf[self.__curr_block]
+        if Radius is None:
+            Radius = self.__options.corner_rad[self.__curr_block]*2 / self.__options.size[self.__curr_block]
         NumSide = int(round((Num * (1-Radius)**2/6)**0.5))
 
         #Create 6 faces, with range (-1+Radius) to (1-Radius), NumSide**2 points on each
@@ -183,11 +234,6 @@ class shape(object):
         for i in range(0, PtVertice):
             if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
                 TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*(1-z[i]**2)**0.5*cos(th[i]), (1-Radius)+Radius*(1-z[i]**2)**0.5*sin(th[i]),(1-Radius)+Radius*z[i]]]),axis=0)
-
-
-        #for i in range(PtTheta):
-        #    for j in range(PtPhi):
-        #        TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*cos(PhRange[j+1])*sin(TheRange[i+1]), (1-Radius)+Radius*sin(PhRange[j+1])*sin(TheRange[i+1]),(1-Radius)+Radius*cos(TheRange[i+1])]]),axis=0)
 
         #Write 6 faces
         for i in range(Tablexy.__len__()):
@@ -230,6 +276,7 @@ class shape(object):
             self.__table = np.append(self.__table, [[-TableVert[i,0],-TableVert[i,1], TableVert[i,2]]], axis = 0)
             self.__table = np.append(self.__table, [[-TableVert[i,0],-TableVert[i,1],-TableVert[i,2]]], axis = 0)
 
+        self.flags['normalized'] = True
         self.flags['hard_core_safe_dist'] = 3**0.5
         self.flags['volume'] = 2**3
         self.flags['surface'] = 6*2**2
@@ -577,17 +624,31 @@ class shape(object):
                 self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
         self.__options.num_surf[self.__curr_block] = self.__table.__len__()
 
-    def load_file(self):
+    def load_file(self, parser = None, file_name = None):
 
-        self.__need_normalization = False
-        with open(self.__options.off_name[self.__curr_block], 'r') as f :
-            lines = f.readlines()
-            for line in lines:
-                l = line.strip().split()
-                self.__table = np.append(self.__table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
-        self.__options.num_surf[self.__curr_block] = self.__table.__len__()
+        self.flags['normalized'] = False
+        self.flags['simple_I_tensor'] = False
 
-    def load_file_Angstrom_m(self, parser = None):
+        if (parser is None or parser == 'xyz') and file_name is None:
+
+            with open(self.__options.off_name[self.__curr_block], 'r') as f :
+                lines = f.readlines()
+                for line in lines:
+                    l = line.strip().split()
+                    self.__table = np.append(self.__table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
+            self.__options.num_surf[self.__curr_block] = self.__table.__len__()
+
+        elif parser is None or parser == 'xyz':
+            with open(file_name, 'r') as f :
+                lines = f.readlines()
+                for line in lines:
+                    l = line.strip().split()
+                    self.__table = np.append(self.__table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
+
+
+        self.flags['hard_core_safe_dist'] = np.amax(self.__table)
+
+    def load_file_Angstrom_m(self, parser = None, files = None):
         """
         Load multiple different files for surfaces, i.e., make proteins with different dnas attached to different sites.
         off_name[curr_block] has to be a list of M elements, where M is the number different attachment sites.
@@ -595,9 +656,8 @@ class shape(object):
         """
 
 
-
-        if parser is None:
-            self.__need_normalization = False
+        if (parser is None or parser == 'xyz') and files is None:
+            #self.__need_normalization = False
             _t = []
             for i in range(self.__options.off_name[self.__curr_block].__len__()):
                 with open(self.__options.off_name[self.__curr_block][i], 'r') as f :
@@ -609,7 +669,29 @@ class shape(object):
                         _c += 1
                 del f
                 _t.append(_c)
+
             self.flags['multiple_surface_types'] = _t
+            self.flags['hard_core_safe_dist'] = np.amax(self.__table)
+            self.flags['simple_I_tensor'] = False
+
+        elif parser is None or parser == 'xyz':
+            _t = []
+            for i in range(files.__len__()):
+                with open(files[i], 'r') as f :
+                    lines = f.readlines()
+                    _c = 0
+                    for line in lines:
+                        l = line.strip().split()
+                        self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
+                        _c += 1
+                del f
+                _t.append(_c)
+            self.flags['multiple_surface_types'] = _t
+            self.flags['hard_core_safe_dist'] = np.amax(self.__table)
+            self.flags['simple_I_tensor'] = False
+
+        else:
+            raise ImportError('unknown parse method')
 
     def load_file_multiple(self):
 
@@ -627,6 +709,105 @@ class shape(object):
             _t.append(_c)
         self.flags['multiple_surface_types'] = _t
 
+    def parse_pdbml_protein(self, filename = None):
+        """
+        Parses a pdbml protein
+        :param filename:
+        :return:
+        """
+        if filename is None:
+            filename = self.__options.xyz_name[self.__curr_block]
+
+
+        with open(filename, 'r') as f:
+            self._pdb = f.readlines()
+            _m =0.0
+            # inertia vector : ixx, iyy, izz, ixy, ixz, iyz
+            _i_v = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            _com = np.array([0.0, 0.0, 0.0])
+
+            for _line in self._pdb:
+                _s = _line.strip().split()
+                if _s[0]=='ATOM':
+                    _m_l = self.mkeys[_s[-1]]
+                    _m += _m_l
+                    _p = np.array([float(_s[7]), float(_s[8]), float(_s[9])])
+                    _com += _p *_m_l
+                    _i_v += np.array([_s[1]*_s[2], _s[0]*_s[2], _s[0]*_s[1], -_s[0]*_s[1], -_s[0]*_s[2], -_s[1]*_s[2]])*_m_l
+            _com /= _m
+
+        self.flags['normalized'] = False
+        self.flags['mass'] = _m / 650.0
+        self.flags['simple_I_tensor'] = False
+        self.flags['I_tensor'] = _i_v / 650.0 / 20.0**2.0
+        self.flags['center_of_mass'] = _com
+        self.flags['pdb_object'] = True
+
+    def add_pdb_dna_key(self, key, n_ss = None, n_ds = None, s_end = None, p_flex = None, num =None):
+        """
+        Keys some dna to pdb parsed protein
+
+        The key speficies whatever is parsed by parse_pdb_protein, rest is DNA options. Multiple DNAs can be keyed to the same site.
+        :param key: dictionary specifying columns to match in the pdb file. Standard use would be {'RES' : 'LY', 'TYPE' : 'N'}. Always searches in 'ATOM'
+        supports 'RES' for residue name, 'TYPE' for atom type, 'CHAIN' for chain identifier, 'OCC' for occupancy, 'TYPE' includes charge (e.g. 'N1+')
+        :param n_ss:
+        :param n_ds:
+        :param s_end:
+        :param p_flex:
+        :return:
+        """
+
+        pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 4, 'OCC' : 10}
+
+        # case of no_dna key
+
+        _l_list = []
+
+        for _line in self._pdb:
+            _s = _line.strip().split()
+            if _s[0] == 'ATOM':
+                _l = True
+                for _k in key.iterkeys():
+                    _l = _l and _s[pdb_form[_k]] == key[_k]
+                if _l :
+                    _l_list.append([float(_s[6])/20.0, float(_s[7])/20.0,float(_s[8])/20.0])
+
+        if n_ss is None and n_ds is None and s_end is None and p_flex is None:
+            try:
+                self.keys['no_dna'].append([_l_list, key])
+            except KeyError:
+                self.keys['no_dna'] = [[_l_list, key]]
+        else:
+            try:
+                self.keys['dna'].append([_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex}])
+            except KeyError:
+                self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
+
+
+    def pdb_build_table(self):
+        """
+        creates the list for build, keeping only keyed particles.
+
+        Use add_pdb_dna_key(key = 'A') to keep 'A' sites, without adding DNA
+        :return:
+        """
+
+        _t = []
+        _cnt = 0
+        for _k in self.keys['no_dna'].__len__():
+            for _kk in self.keys['no_dna'][_k].__len__():
+                self.__table = np.append(self.__table, [self.keys['no_dna'][_k][0][_kk][0], self.keys['no_dna'][_k][0][_kk][1], self.keys['no_dna'][_k][0][_kk][2]], axis = 0)
+                _cnt += 1
+            _t.append(_cnt)
+        for _k in self.keys['dna'].__len__():
+            for _kk in self.keys['dna'][_k][0].__len__():
+                self.__table = np.append(self.__table, [self.keys['dna'][_k][0][_kk][0], self.keys['dna'][_k][0][_kk][1], self.keys['dna'][_k][0][_kk][2]], axis = 0)
+                _cnt += 1
+            _t.append(_cnt)
+
+        if _t.__len__() > 1:
+            self.flags['multiple_surface_types'] = _t
+
     def rotate(self):
         try:
             for i in range(self.__table.__len__()):
@@ -636,3 +817,4 @@ class shape(object):
                 del dmp_vec
         except AttributeError:
             pass
+

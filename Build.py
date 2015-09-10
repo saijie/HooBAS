@@ -11,6 +11,7 @@ import WriteXML
 import numpy as np
 import random
 import copy
+import Moment_Fixer
 from itertools import chain
 
 class vec(object):
@@ -162,6 +163,13 @@ class BuildHoomdXML(object):
             _d.append(self.__particles[i].ang_types)
         return list(set(list(chain.from_iterable(_d))))
 
+    @property
+    def center_types(self):
+        _ct = []
+        for i in range(self.__particles.__len__()):
+            _ct.append(self.__particles[i].center_type)
+        return list(set(list(chain.from_iterable(_ct))))
+
     def shift_pos(self, index, d):
         for i in range(self.__beads.__len__()):
             self.__beads[i].position[index] += d
@@ -287,17 +295,13 @@ class BuildHoomdXML(object):
             for j in range(self._c_pos[i].__len__()):
                 n_ind = self.__opts.center_types.index(self._c_t[i])
 
-                if not self.__opts.non_centrosymmetric_moment:
-                    _i_corr = self.__opts.Inertia_Corrections[i]
-                else:
-                    _i_corr = None
 
                 self.__particles.append(BuildHoomdXML.Particle(size = self.__opts.size[n_ind], center_type = self.__opts.center_types[n_ind],
                                                                surf_type = self.__opts.surface_types[n_ind], loc_sh_obj = self._sh_obj[n_ind],
                                                                scale = self.__opts.scale_factor, n_ds = self.__opts.n_double_stranded[n_ind],
                                                                n_ss = self.__opts.n_single_stranded[n_ind], p_flex = self.__opts.flexor[n_ind],
-                                                               s_end = self.__opts.sticky_ends[n_ind], num = self.__opts.dna_coverage[n_ind],
-                                                               c_mass = self.__opts.m_w[n_ind], s_mass = self.__opts.m_surf[n_ind], inertia_corr = _i_corr))
+                                                               s_end = self.__opts.sticky_ends[n_ind], num = self.__opts.dna_coverage[n_ind]
+                                                               ))
                 self.__types.append(self.__opts.genshapecall)
                 self.__particles[-1].center_position = self._c_pos[i][j,:]
                 self.__particles[-1].body = b_cnt
@@ -406,7 +410,7 @@ class BuildHoomdXML(object):
 
         """
         def __init__(self, size, center_type, surf_type, loc_sh_obj, scale, n_ds = None, n_ss = None, p_flex = None,
-                     s_end = None, num = None, c_mass = 1.0, s_mass = 1.0, init = None, inertia_corr = None):
+                     s_end = None, num = None, init = None):
             self.pos = np.zeros((1,3))
             self.bonds = []
             self.angles = []
@@ -414,8 +418,6 @@ class BuildHoomdXML(object):
             self.p_num = [0]
             self.scale = scale
             self.size = size
-            self.s_mass = s_mass
-            self.c_mass = c_mass
             self.c_type = center_type
             self.s_type = surf_type
             self.body_num = 0
@@ -426,27 +428,63 @@ class BuildHoomdXML(object):
             self.rem_list = []
             self.att_list = [] #table of tables
 
-            if not self._sh.unit_shape:
-                self.size = 2.0
+            ## get mass from shape object
+            try:
+                _t_m = self._sh.flags['mass']
+            except KeyError:
+                try:
+                    _t_m = self._sh.flags['density'] * self._sh.flags['volume'] * (self.size / 2.0)**3
+                except KeyError:
+                    print 'Unable to determine solid body mass, using value of 10, something is wrong here'
+                    _t_m = 10.0
 
-            if not inertia_corr is None:
+            self.mass = _t_m
+            self.s_mass = self.mass * 3.0 / 5.0
+
+            try:
+                if not self._sh.flags['normalized']:
+                    self.size = 2.0
+            except KeyError:
+                print 'normalized key inexistant in shape. Assuming normalized shape'
+
+            try:
+                if self._sh.flags['simple_I_tensor']:
+                    self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = self.mass * 2.0 / 5.0)]
+                else:
+                    try:
+                        self.types+=self._sh.I_fixer.types
+                        self.c_type=[self.c_type] + self._sh.I_fixer.types
+                        self.s_mass = self._sh.I_fixer.masses[0]
+                        self.c_mass = 1.0
+                        self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = 1.0)]
+
+                        for i in range(self._sh.I_fixer.types.__len__() ):
+                            self.beads.append(CoarsegrainedBead.bead(position = self._sh.I_fixer.positions[i], beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
+                            self.pos = np.append(self.pos, [self._sh.I_fixer.positions[i]],axis =0)
+                            self.beads.append(CoarsegrainedBead.bead(position = list(-np.array(self._sh.I_fixer.positions[i])), beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
+                            self.pos = np.append(self.pos, [-np.array(self._sh.I_fixer.positions[i])],axis =0)
+                    except AttributeError:
+                        try :
+                            self._sh.I_fixer = Moment_Fixer.Added_Beads(c_type=center_type, shape_pos=self._sh.pos, shape_num_surf=self._sh.num_surf, d_tensor= self._sh.flags['I_tensor'], mass = _t_m)
+                        except KeyError:
+                            self._sh.I_fixer = Moment_Fixer.Added_Beads(c_type=center_type, shape_pos=self._sh.pos, shape_num_surf=self._sh.num_surf, f_name=self._sh.flags['tensor_name'], mass = _t_m)
+                        self.types+=self._sh.I_fixer.types
+                        self.c_type= [self.c_type]+self._sh.I_fixer.types[:]
+                        self.s_mass = self._sh.I_fixer.masses[0]
+                        self.c_mass = 1.0
+                        self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = 1.0)]
+
+                        for i in range(self._sh.I_fixer.types.__len__() ):
+                            self.beads.append(CoarsegrainedBead.bead(position = self._sh.I_fixer.positions[i], beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
+                            self.pos = np.append(self.pos, [self._sh.I_fixer.positions[i]],axis =0)
+                            self.beads.append(CoarsegrainedBead.bead(position = list(-np.array(self._sh.I_fixer.positions[i])), beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
+                            self.pos = np.append(self.pos, [-np.array(self._sh.I_fixer.positions[i])],axis =0)
+            except KeyError:
+                print 'Inertia tensor method not specified. Assuming simple I tensor'
+                self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = self.mass * 2.0 / 5.0)]
 
 
 
-                self.types+=inertia_corr.types
-
-                self.s_mass = inertia_corr.masses[0]
-                self.c_mass = 0.0
-                self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = 1.0)]
-
-                for i in range(inertia_corr.types.__len__() ):
-                    self.beads.append(CoarsegrainedBead.bead(position = inertia_corr.positions[i], beadtype = self.types[i+1], body = 0, mass = inertia_corr.masses[i+1]))
-                    self.pos = np.append(self.pos, [inertia_corr.positions[i]],axis =0)
-                    self.beads.append(CoarsegrainedBead.bead(position = list(-np.array(inertia_corr.positions[i])), beadtype = self.types[i+1], body = 0, mass = inertia_corr.masses[i+1]))
-                    self.pos = np.append(self.pos, [-np.array(inertia_corr.positions[i])],axis =0)
-                # also append to pos
-            else:
-                self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = c_mass)]
 
             if self.orientation is None:
                 self.orientation = [0, 0, 1]
@@ -455,8 +493,11 @@ class BuildHoomdXML(object):
             try:
                 self._surf_cut = self._sh.flags['multiple_surface_types']
                 self.__build_multiple_surfaces()
-                init = 'mst'
                 self.flags['mst'] = True
+                if 'pdb_object' in self._sh.flags:
+                    init = 'pdb'
+                else:
+                    init = 'mst'
             except KeyError:
                 self.__build_surface()
                 self.flags['mst'] = False
@@ -465,7 +506,10 @@ class BuildHoomdXML(object):
                 self.add_DNA(n_ds = n_ds, n_ss = n_ss, p_flex = p_flex, s_end = s_end, num = num, scale = self.scale)
             elif init == 'mst':
                 for i in range(n_ds.__len__()):
-                    self.add_DNA(n_ds = n_ds[i], n_ss = n_ss[i], p_flex = p_flex[i], s_end = s_end[i], num = num[i], scale = self.scale, rem_id=i)
+                    if n_ds[i] >0:
+                        self.add_DNA(n_ds = n_ds[i], n_ss = n_ss[i], p_flex = p_flex[i], s_end = s_end[i], num = num[i], scale = self.scale, rem_id=i)
+            elif init == 'pdb':
+                self.pdb_DNA_keys()
             # need to add a method for diferent surfaces + diff dna to each surface
 
         @property
@@ -493,11 +537,11 @@ class BuildHoomdXML(object):
                 self.beads[i+1].beadtype = val
         @property
         def center_type(self):
-            return self.center_type
-        @center_type.setter
-        def center_type(self, val):
-            self.center_type = val
-            self.beads[0].beadtype = val
+            return self.c_type
+        #@center_type.setter
+        #def center_type(self, val):
+        #    self.center_type = val
+        #    self.beads[0].beadtype = val
         @property
         def body(self):
             return self.body_num
@@ -551,13 +595,6 @@ class BuildHoomdXML(object):
             for i in range(self.angles.__len__()):
                 _d.append(self.angles[i][0])
             return list(set(_d))
-
-
-        def tensor_of_intertiaxx(self):
-            _t = 0
-            for i in range(self.beads.__len__()):
-                _t += self.beads[i].mass * (self.beads[i].position[1]**2 + self.beads[i].position[2]**2)
-            return _t
 
         def rotate(self, r_mat):
             _t = self.pos[0,:]
@@ -627,6 +664,10 @@ class BuildHoomdXML(object):
         def __build_multiple_surfaces(self):
             self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
             _c = 0
+            if self.s_type.__len__() != self._surf_cut.__len__():
+                _st_temp = self.s_type
+                self.s_type = [_st_temp + str(i) for i in range(self._surf_cut.__len__())]
+
             for i in range(self._surf_cut.__len__()):
                 self.rem_list.append([])
                 for j in range(self._surf_cut[i]):
@@ -634,3 +675,8 @@ class BuildHoomdXML(object):
                     self.p_num.append(_c+1)
                     self.beads.append(CoarsegrainedBead.bead(position = self._sh.pos[_c]*self.size / (2*self.scale), beadtype=self.s_type[i], body =0, mass = self.s_mass))
                     _c += 1
+
+        def pdb_DNA_keys(self):
+            for i in range(self._sh.keys['dna'].__len__()):
+                self.add_DNA(rem_id= i + self._sh.keys['no_dna'], **self._sh.keys['dna'][1])
+

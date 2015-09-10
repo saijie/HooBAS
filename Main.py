@@ -95,7 +95,7 @@ options.z_m = 1.0 # box z multiplier for surface energy calculations.
 ##################################################################################################################
 options.size = [28.5]
 options.corner_rad = [2.5]
-options.num_particles = [3]
+options.num_particles = [10]
 options.n_double_stranded = [5]
 options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain. Does not return any error if there
 # is no flexor, but options.flag_flexor_angle will stay false
@@ -117,26 +117,7 @@ options.lattice_multi = [1.0, 1.0, 3.0]
 # Special moment of inertia for non-centrosymmetric stuff, i.e. needs different corrections
 #####################################################
 
-options.non_centrosymmetric_moment = True
-if not options.non_centrosymmetric_moment:
 
-    options.Ixx = []
-    options.Ixy = []
-    options.Ixz = []
-    options.Iyy = []
-    options.Izz = []
-    options.Iyz = []
-
-    tensor_reader = Moment_Fixer.Import_moment()
-    tensor_reader.read_tensor('tensor.xyz')
-
-    options.Ixx.append(tensor_reader.Ixx)
-    options.Ixy.append(tensor_reader.Ixy)
-    options.Ixz.append(tensor_reader.Ixz)
-    options.Iyy.append(tensor_reader.Iyy)
-    options.Izz.append(tensor_reader.Izz)
-    options.Iyz.append(tensor_reader.Iyz)
-    options.mass = [325]
 
 #################################################################################
 ## shape function used; options are 'cube' 'cube6f' for 6 points on cubic faces, 'octahedron', 'dodecahedron', additional
@@ -189,18 +170,24 @@ else:
 
 
 shapes = []
-if options.flag_surf_energy:
-    for i in range(options.size.__len__()):
-        shapes.append(GenShape.shape(curr_block = i, options = options, surf_plane = options.exposed_surf, lattice = options.lattice_multi))
-        getattr(shapes[i],  options.genshapecall[i])()
-        options = shapes[i].opts
-else:
-    for i in range(options.size.__len__()):
-        shapes.append(GenShape.shape(curr_block = i, options = options, surf_plane = [random.randint(-3,3), random.randint(-3,3), 1]))
-        getattr(shapes[i],  options.genshapecall[i])()
-        options = shapes[i].opts
+shapes.append(GenShape.shape(options=options, curr_block =0))
+shapes[0].sphere()
 
+#dict0 = {'tensor_name' : 'mi_all.dat', 'mass' : 325.45}
+#shapes.append(GenShape.shape(properties = dict0))
+#shapes[0].load_file(file_name='coord.dat')
+#if options.flag_surf_energy:
+#    for i in range(options.size.__len__()):
+#        shapes.append(GenShape.shape(curr_block = i, options = options, surf_plane = options.exposed_surf, lattice = options.lattice_multi))
+#        getattr(shapes[i],  options.genshapecall[i])()
+#        options = shapes[i].opts
+#else:
+#    for i in range(options.size.__len__()):
+#        shapes.append(GenShape.shape(curr_block = i, options = options, surf_plane = [random.randint(-3,3), random.randint(-3,3), 1]))
+#        getattr(shapes[i],  options.genshapecall[i])()
+#        options = shapes[i].opts
 
+options.non_centrosymmetric_moment = True
 
 if options.non_centrosymmetric_moment:
     options.mass = []
@@ -209,13 +196,6 @@ if options.non_centrosymmetric_moment:
     options.dna_coverage = []
 else:
     options.dna_coverage = [10] # total number of DNA chains
-    options.m_w = [1]
-    options.m_surf = [1]
-    options.Inertia_Corrections = []
-#    options.center_types = []
-    for i in range(options.size.__len__()):
-        options.Inertia_Corrections.append(Moment_Fixer.Added_Beads(options, i, shapes))
-        options.center_types.append(options.Inertia_Corrections[i].types)
 
 ##################################################################################################################
 ## Derived quantities, volumes are calculated in genshape functions.
@@ -227,7 +207,10 @@ if options.non_centrosymmetric_moment:
         options.m_w.append(options.mass[i]*2.0 / 5.0)
         options.m_surf.append(options.mass[i]*3.0 / 5.0 / options.num_surf[i])
         options.box_size_packing += 2.5*options.size[i] / options.scale_factor # special
+
         options.dna_coverage.append(int(round(0.17*(options.size[i]*2.0 / options.scale_factor)**2 * 6)))
+
+        options.dna_coverage[0] = int(round(0.17 * options.size[0]*2.0*4*pi))
 else:
     for i in range(options.volume.__len__()):
         options.box_size_packing += 2.5*amax(abs(array(shapes[i].pos)))*2.0 / options.scale_factor
@@ -241,13 +224,11 @@ buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opt
 buildobj.set_rotation_function()
 buildobj.write_to_file(z_box_multi=options.z_m)
 options.sys_box = buildobj.sys_box
+options.center_types = buildobj.center_types
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
 
-
-
-raise StandardError
 
 system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
@@ -319,7 +300,7 @@ def repulse(a,b,sigma=1.0,epsilon = 1.0):
 
 radius = [['S', 0.5], ['A', 1.0], ['B', 0.5], ['FL', 0.3]]
 
-c_uniques = list(set(list(itertools.chain(*options.center_types))))
+c_uniques = options.center_types
 for i in range(c_uniques.__len__()):
     radius.append([c_uniques[i],1.0])
 surf_uniques = list(set(options.surface_types))
