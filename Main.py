@@ -256,7 +256,7 @@ system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
 
-raise StandardError
+
 
 Lx0 = options.sys_box[0]
 Ly0 = options.sys_box[1]
@@ -331,7 +331,7 @@ surf_uniques = options.surface_types
 for i in range(surf_uniques.__len__()):
     radius.append([surf_uniques[i], 1.0])
 # need to flatten list
-
+sticky_uniques = options.sticky_types
 for i in range(options.sticky_types.__len__()):
     radius.append([options.sticky_types[i], 0.3])
 
