@@ -11,6 +11,7 @@ import WriteXML
 import numpy as np
 import random
 import copy
+import types
 import Moment_Fixer
 from itertools import chain
 
@@ -173,8 +174,31 @@ class BuildHoomdXML(object):
     def center_types(self):
         _ct = []
         for i in range(self.__particles.__len__()):
-            _ct.append(self.__particles[i].center_type)
+            if not isinstance(self.__particles[i].center_type, types.StringTypes):
+                _ct.append(self.__particles[i].center_type)
+            else:
+                _ct.append([self.__particles[i].center_type])
         return list(set(list(chain.from_iterable(_ct))))
+
+    @property
+    def surface_types(self):
+        _st = []
+        for i in range(self.__particles.__len__()):
+            if not isinstance(self.__particles[i].surface_type, types.StringTypes):
+                _st.append(self.__particles[i].surface_type)
+            else:
+                _st.append([self.__particles[i].surface_type])
+        return list(set(list(chain.from_iterable(_st))))
+
+    @property
+    def sticky_types(self):
+        _st = []
+        for i in range(self.__particles.__len__()):
+            if not isinstance(self.__particles[i].sticky_types, types.StringTypes):
+                _st.append(self.__particles[i].sticky_types)
+            else:
+                _st.append([self.__particles[i].sticky_types])
+        return list(set(list(chain.from_iterable(_st))))
 
     def shift_pos(self, index, d):
         for i in range(self.__beads.__len__()):
@@ -457,6 +481,8 @@ class BuildHoomdXML(object):
             self.body_num = 0
             self.flags = {}
 
+            self.sticky_used = []
+
             self._sh = copy.deepcopy(loc_sh_obj)
             self.orientation = self._sh.n_plane
             self.rem_list = []
@@ -569,12 +595,12 @@ class BuildHoomdXML(object):
                 self.beads[i+1].mass = val
         @property
         def surface_type(self):
-            return self.surface_type
-        @surface_type.setter
-        def surface_type(self, val):
-            self.surface_type = val
-            for i in range(self._sh.pos.__len__()):
-                self.beads[i+1].beadtype = val
+            return self.s_type
+
+        @property
+        def sticky_types(self):
+            return list(set(list(chain.from_iterable(self.sticky_used))))
+
         @property
         def center_type(self):
             return self.c_type
@@ -657,6 +683,8 @@ class BuildHoomdXML(object):
                     raise ValueError('DNA chain number greater than number of surface beads')
             elif num > self.rem_list.__len__():
                 raise ValueError('DNA chain number greater than number of surface beads')
+
+            self.sticky_used.append(s_end)
 
             _tmp_a_list = []
             while _tmp_a_list.__len__() < num:

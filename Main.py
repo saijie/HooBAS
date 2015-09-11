@@ -244,6 +244,9 @@ buildobj.set_rotation_function()
 buildobj.write_to_file(z_box_multi=options.z_m)
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
+options.surface_types = buildobj.surface_types
+options.sticky_types = buildobj.sticky_types
+
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
@@ -324,13 +327,13 @@ radius = [['S', 0.5], ['A', 1.0], ['B', 0.5], ['FL', 0.3]]
 c_uniques = options.center_types
 for i in range(c_uniques.__len__()):
     radius.append([c_uniques[i],1.0])
-surf_uniques = list(set(options.surface_types))
+surf_uniques = options.surface_types
 for i in range(surf_uniques.__len__()):
     radius.append([surf_uniques[i], 1.0])
 # need to flatten list
-sticky_uniques = list(set(list(itertools.chain(*options.sticky_ends))))
-for i in range(sticky_uniques.__len__()):
-    radius.append([sticky_uniques[i], 0.3])
+
+for i in range(options.sticky_types.__len__()):
+    radius.append([options.sticky_types[i], 0.3])
 
 
 ##############################################################
