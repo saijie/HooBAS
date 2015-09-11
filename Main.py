@@ -93,9 +93,10 @@ options.z_m = 1.0 # box z multiplier for surface energy calculations.
 ## derived values from these as well as shape generation. Code should allow mixing such as cubes + octahedron. Some options
 ## are not used for some geometrical functions in genshape, but must still be defined.
 ##################################################################################################################
+
 options.size = [28.5, 28.5, 28.5]
-options.num_particles = [10, 10, 10]
-options.center_types = ['W1', 'W2', 'W3'] #Should be labeled starting with 'W', must have distinct names
+options.num_particles = [16, 16]
+options.center_types = ['W1', 'W2'] #Should be labeled starting with 'W', must have distinct names
 
 
 
@@ -179,17 +180,17 @@ else:
 shapes = [GenShape.shape()]
 shapes[0].parse_pdb_protein(filename='4BLC.pdb')
 shapes[0].will_build_from_shapes(properties = {'surf_type' : 'P1'})
-shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 10, s_end = ['X','X'], p_flex = array([-1]), num = 60)
+shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 10, s_end = ['X','Y', 'X'], p_flex = array([-1]), num = 60)
 shapes[0].pdb_build_table()
 shapes.append(GenShape.shape())
 shapes[1].parse_pdb_protein(filename='4BLC.pdb')
 shapes[1].will_build_from_shapes(properties = {'surf_type' : 'P2'})
-shapes[1].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM' : 'NZ'}, n_ss = 2, n_ds = 3, s_end = ['Y', 'Y'], p_flex = array([-1]), num = 30)
+shapes[1].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM' : 'NZ'}, n_ss = 2, n_ds = 3, s_end = ['Y', 'X', 'Y'], p_flex = array([-1]), num = 30)
 shapes[1].pdb_build_table()
-shapes.append(GenShape.shape())
-shapes[2].sphere(Num=200)
-shapes[2].will_build_from_shapes(properties = {'size' : 10.0, 'surf_type' : 'P3', 'density' : 14.08})
-shapes[2].set_dna(n_ss = 2, n_ds = 3, s_end = ['Y', 'Y'], p_flex = array([-1]), num = 30)
+#shapes.append(GenShape.shape())
+#shapes[2].sphere(Num=200)
+#shapes[2].will_build_from_shapes(properties = {'size' : 10.0, 'surf_type' : 'P3', 'density' : 14.08})
+#shapes[2].set_dna(n_ss = 2, n_ds = 3, s_end = ['Y', 'Y'], p_flex = array([-1]), num = 30)
 
 
 #dict0 = {'tensor_name' : 'mi_all.dat', 'mass' : 325.45}
