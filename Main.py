@@ -94,7 +94,7 @@ options.z_m = 1.0 # box z multiplier for surface energy calculations.
 ## are not used for some geometrical functions in genshape, but must still be defined.
 ##################################################################################################################
 
-options.size = [28.5, 28.5, 28.5]
+options.size = [28.5, 28.5]
 options.num_particles = [16, 16]
 options.center_types = ['W1', 'W2'] #Should be labeled starting with 'W', must have distinct names
 
@@ -187,6 +187,7 @@ shapes[1].parse_pdb_protein(filename='4BLC.pdb')
 shapes[1].will_build_from_shapes(properties = {'surf_type' : 'P2'})
 shapes[1].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM' : 'NZ'}, n_ss = 2, n_ds = 3, s_end = ['Y', 'X', 'Y'], p_flex = array([-1]), num = 30)
 shapes[1].pdb_build_table()
+
 #shapes.append(GenShape.shape())
 #shapes[2].sphere(Num=200)
 #shapes[2].will_build_from_shapes(properties = {'size' : 10.0, 'surf_type' : 'P3', 'density' : 14.08})
