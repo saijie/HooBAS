@@ -200,6 +200,33 @@ class BuildHoomdXML(object):
                 _st.append([self.__particles[i].sticky_types])
         return list(set(list(chain.from_iterable(_st))))
 
+    @property
+    def dna_tags(self):
+        _d = []
+        for i in range(self.__particles.__len__()):
+            _d.append(self.__particles[i].sticky_tags)
+        return _d
+
+    @property
+    def center_tags(self):
+        _tags = []
+        for i in range(self.__particles.__len__()):
+            _tags.append(self.__particles[i].pnum_offset)
+        return _tags
+
+
+    def sticky_excluded(self, sticky_pair, r_cut = None):
+        #######
+        # Generates exclusion list for hoomd
+        #######
+        _exl = []
+        for i in range(self.__particles.__len__()):
+            _exl.append(self.__particles[i].sticky_excluded(_types = sticky_pair, _rc = r_cut))
+        for i in range(_exl.__len__()):
+            for j in range(_exl[i].__len__()):
+                self.__bonds.append(['UselessBond'] + _exl[i][j])
+        return _exl
+
     def shift_pos(self, index, d):
         for i in range(self.__beads.__len__()):
             self.__beads[i].position[index] += d
@@ -321,16 +348,19 @@ class BuildHoomdXML(object):
 
     def __build_from_shapes(self):
         b_cnt = 0
-        for i in range(self._c_t.__len__()):
+        for i in range(self._c_pos.__len__()):
             for j in range(self._c_pos[i].__len__()):
-                n_ind = self.__opts.center_types.index(self._c_t[i])
+                n_ind = i
 
 
                 self.__particles.append(BuildHoomdXML.Particle(center_type = self.__opts.center_types[n_ind],
                                                                loc_sh_obj = self._sh_obj[n_ind],
                                                                scale = self.__opts.scale_factor, **self._sh_obj[i].flags
                                                                ))
-                self.__types.append(self.__opts.genshapecall)
+                try:
+                    self.__types.append(self.flags['call'])
+                except KeyError:
+                    self.__types.append('unknown')
                 self.__particles[-1].center_position = self._c_pos[i][j,:]
                 self.__particles[-1].body = b_cnt
                 b_cnt += 1
@@ -662,6 +692,30 @@ class BuildHoomdXML(object):
                 _d.append(self.angles[i][0])
             return list(set(_d))
 
+        @property
+        def sticky_tags(self):
+            _tag = []
+            for j in range(self.sticky_types.__len__()):
+                _loc_tag = []
+                for i in range(self.beads.__len__()):
+                    if self.beads[i].beadtype == self.sticky_types[j]:
+                        _loc_tag.append(self.p_num[i])
+                _tag+=_loc_tag
+            return _tag
+        def sticky_excluded(self, _types, _rc = None):
+            _exclusion_list = []
+            for i in range(self.beads.__len__()):
+                for j in range(i+1, self.beads.__len__()):
+                    if ((self.beads[i].beadtype == _types[0] and self.beads[j].beadtype == _types[1]) or (self.beads[j].beadtype == _types[0] and self.beads[i].beadtype == _types[1])) and abs(i - j) != 3:
+                        if _rc is None:
+                            _exclusion_list.append([self.p_num[i],self.p_num[j]])
+                            self.bonds.append(['UselessBond', self.p_num[i], self.p_num[j]])
+                        elif np.sum((self.beads[i].position - self.beads[j].position)**2)**0.5 < _rc:
+                            _exclusion_list.append([self.p_num[i],self.p_num[j]])
+                            self.bonds.append(['UselessBond', self.p_num[i], self.p_num[j]])
+
+            return _exclusion_list
+
         def rotate(self, r_mat):
             _t = self.pos[0,:]
             self.pos = self.pos - _t
@@ -701,12 +755,12 @@ class BuildHoomdXML(object):
                 _dump_copy = copy.deepcopy(dna_obj)
                 _p_off = self.p_num[-1]+1
                 _att_vec = vec(copy.deepcopy(self.pos[self.att_list[-1][i],:] - self.pos[0,:]))
-                _rot_matrix = BuildHoomdXML.get_rot_mat(_att_vec.array+np.array([random.uniform(0,1), random.uniform(0,1), random.uniform(0,1)])*1e-1)
+                _rot_matrix = BuildHoomdXML.get_rot_mat(_att_vec.array+np.array([random.uniform(0,1), random.uniform(0,1), random.uniform(0,1)])*2e-1)
 
                 for j in range(_dump_copy.beads_in_oneDNAchain.__len__()):
                     _v = vec(_dump_copy.beads_in_oneDNAchain[j].position)
                     _v.rot(mat = _rot_matrix)
-                    _dump_copy.beads_in_oneDNAchain[j].position = self.pos[0,:] + _v.array + _att_vec.array + 0.8 * _att_vec.array / _att_vec.__norm__()+np.array([random.uniform(0,1),random.uniform(0,1),random.uniform(0,1)])*random.uniform(0, 1e-2)
+                    _dump_copy.beads_in_oneDNAchain[j].position = self.pos[0,:] + _v.array + _att_vec.array + 0.8 * _att_vec.array / _att_vec.__norm__()+np.array([random.uniform(0,1),random.uniform(0,1),random.uniform(0,1)])*random.uniform(0, 2e-1)
                     del _v
                     self.pos = np.append(self.pos, np.array([_dump_copy.beads_in_oneDNAchain[j].position[:]]), axis = 0)
                     self.beads.append(_dump_copy.beads_in_oneDNAchain[j])

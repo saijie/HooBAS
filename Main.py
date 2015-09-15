@@ -17,6 +17,7 @@ import Build
 import random
 import Moment_Fixer
 from hoomd_script import *
+import time
 
 def c_hoomd_box(v, int_bounds, z_multi =1.00):
     vx = v[0][:]
@@ -42,6 +43,19 @@ def c_hoomd_box(v, int_bounds, z_multi =1.00):
 
     return [lx,ly,lz, xy, xz, yz]
 
+def get_nn(_c_pos, _box):
+    ## assuming cubic box cause im lazy
+    _nn = zeros((_c_pos.__len__(), 12), dtype = int)
+    _dist_m_sq = zeros((_c_pos.__len__(), _c_pos.__len__()), dtype=float)
+    for ii in range(_c_pos.__len__()):
+        for jj in range(_c_pos.__len__()):
+            for KK in range(3):
+                _dist_m_sq[ii,jj] += min([(_c_pos[ii,KK] - _c_pos[jj,KK])**2, (_c_pos[ii,KK] - _c_pos[jj,KK] + _box[KK])**2, (_c_pos[ii,KK] - _c_pos[jj,KK] - _box[KK])**2])
+    for ii in range(_c_pos.__len__()):
+        _c_sort = argsort(_dist_m_sq[ii,:], kind='mergesort')
+        _nn[ii,:] = _c_sort[1:13]
+    return _nn
+
 ###########################################
 # List of future improvements :
 ###########################################
@@ -62,20 +76,23 @@ options = Simulation_options.simulation_options()
 F = 7.0  # :: Full length binding energies, usual = 7
 Dump = 2e5 #dump period for dcd
 
-options.target_dim = 55.0
+options.Um = 1.0
+
+
+options.target_dim = 52.0
 options.scale_factor = 1.0
 
 options.target_temp = 1.60
-options.target_temp_1 = 0.70
-options.target_temp_2 = 0.50
+options.target_temp_1 = 1.4
+options.target_temp_2 = 1.39
 options.mixing_temp = 4.0
 options.freeze_flag = False
 options.freeze_temp = 1.0
-options.box_size = [4, 4, 4] # box dimensions in units of target_dim
+options.box_size = [3, 3, 3] # box dimensions in units of target_dim
 options.run_time = 1e7 #usual 2e7
 options.mix_time = 3e6 #usual 3e6
 options.cool_time = 2e7 #usual 2e7
-options.step_size = 0.0020
+options.step_size = 0.005
 options.size_time = 6e6
 options.box_size_packing = 0 # leave to 0, calculated further in, initialization needed
 options.coarse_grain_power = int(0) ## coarsens DNA scaling by a power of 2. 0 is regular model. Possible to uncoarsen the regular model
@@ -83,20 +100,65 @@ options.flag_surf_energy = False ## check for surface energy calculations; expos
 options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
+options.special = 13
 
-
-options.center_sec_factor = (3**0.5)*1.5 # security factor for center-center. min dist between particles in random config.
+options.center_sec_factor = (3**0.5)*1.35 # security factor for center-center. min dist between particles in random config.
 options.z_m = 1.0 # box z multiplier for surface energy calculations.
 
 ###################################################################################################################
-## All list options are specified by type and allow mixing, but all list lengths must be the same. Special cases for
-## derived values from these as well as shape generation. Code should allow mixing such as cubes + octahedron. Some options
-## are not used for some geometrical functions in genshape, but must still be defined.
+## Code allows for mixing any number of composite shapes. size / num_particles / center_types / shapes must be lists of equal length,
+## with length of the number of species of building blocks
 ##################################################################################################################
+options.size = [28.5 for i in range(options.special)]
+options.num_particles = [1 for i in range(options.special)]
+options.center_types = ['W' for i in range(options.special)] #Should be labeled starting with 'W', must have distinct names
 
-options.size = [28.5, 28.5]
-options.num_particles = [16, 16]
-options.center_types = ['W1', 'W2'] #Should be labeled starting with 'W', must have distinct names
+options.filenameformat = 'Simulation-Test-64 diff pots -- ' + str(options.target_dim)
+
+
+shapes = []
+#shapes[0].parse_pdb_protein(filename='4BLC.pdb')
+#shapes[0].will_build_from_shapes(properties = {'surf_type' : 'P1'})
+#shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 10, s_end = ['X','Y', 'X'], p_flex = array([-1]), num = 60)
+#shapes[0].pdb_build_table()
+#shapes.append(GenShape.shape())
+#shapes[1].parse_pdb_protein(filename='4BLC.pdb')
+#shapes[1].will_build_from_shapes(properties = {'surf_type' : 'P2'})
+#shapes[1].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM' : 'NZ'}, n_ss = 2, n_ds = 3, s_end = ['Y', 'X', 'Y'], p_flex = array([-1]), num = 30)
+#shapes[1].pdb_build_table()
+i_cut = 12
+for i in range(options.special):
+    shapes.append(GenShape.shape())
+    shapes[-1].cube(Num=200, Radius = 2.5/28.5)
+    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.08})
+    if i < i_cut:
+        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X' + str(i)], p_flex = array([4]), num = 133)
+    else:
+        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X12'], p_flex = array([4]), num = 133)
+
+
+######################################################################
+### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
+######################################################################
+options.sticky_pairs = []
+#options.sticky_pairs = [['X0', 'X0']]
+for i in range(13):
+    for j in range(i, 13):
+        if i != j:
+            options.sticky_pairs.append(['X'+str(i), 'X' + str(j)])
+#options.sticky_pairs = [['X', 'Y']] #<- which pairs are attractive. Non-physical pairs can be included. Defined as list of lists of 2 particles [['X', 'Y'], ['T', 'G'], ['M', 'N']] for instance
+# for tracking purposes, each list means a potential energy is computed, by taking all pair interactions from the sticky
+# pairs included in the track list.
+options.sticky_track = []
+
+
+###########################
+## Generally one does not have to really change
+## code below this unless for some specific hoomd
+## temperature control, at the end of the file
+## some options are obsolete.
+###########################
+
 
 
 
@@ -107,7 +169,7 @@ options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain
 options.n_single_stranded = [3]
 options.sticky_ends = [['X','X', 'X'], ['Y', 'Y']]
 options.surface_types = ['P1', 'P2'] # Should be labeled starting with 'P'
-options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2)] # initial approximation for # of beads on surface
+options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2) for i in range(64)] # initial approximation for # of beads on surface
 options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
 options.volume = options.densities[:] # temp value, is set by genshape
 options.p_surf = options.densities[:] # same
@@ -117,42 +179,6 @@ options.exposed_surf = [1, 0, 1] ## z component must not be zero
 options.lattice_multi = [1.0, 1.0, 3.0]
 
 
-#####################################################
-# Special moment of inertia for non-centrosymmetric stuff, i.e. needs different corrections
-#####################################################
-
-
-
-#################################################################################
-## shape function used; options are 'cube' 'cube6f' for 6 points on cubic faces, 'octahedron', 'dodecahedron', additional
-## stuff can be included in the genshape function
-#################################################################################
-options.genshapecall = ['cube']
-#options.genshapecall = ['load_file']
-
-#All filenames will be generated using options.filenameformat. For output purposes only
-Shapename = 'Size'+str(options.size)+'Target'+str(round(options.target_dim,2))+'NDS'+str(options.n_double_stranded)\
-            +'Scale'+str(options.scale_factor)+'Ti'+str(options.target_temp_1)+\
-            'Tf'+str(options.target_temp_2)+'shape'+options.genshapecall[0]
-
-options.filenameformat = 'Surface_Energies_'+Shapename
-options.off_name = ['coord.dat']
-options.xyz_name = options.filenameformat + '.xyz'
-
-
-
-######################################################################
-### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
-######################################################################
-options.sticky_pairs = [['X', 'Y']] #<- which pairs are attractive. Non-physical pairs can be included.
-# for tracking purposes, each list means a potential energy is computed, by taking all pair interactions from the sticky
-# pairs included in the track list.
-options.sticky_track = [['X', 'Y']]
-
-
-
-# Estimate number of particles on surfaces for genshape calls. Changed inside genshape to real value, which is dependant
-# on the geometry
 
 if options.flag_surf_energy:
     center_file_object = CenterFile.CenterFile(options, init = None, surf_plane = options.exposed_surf, Lattice = options.lattice_multi)
@@ -165,48 +191,11 @@ if options.flag_surf_energy:
 
 else:
     center_file_object = CenterFile.CenterFile(options)
-    center_file_object.write_table()
     TargetBx = options.box_size[0]*options.target_dim/options.scale_factor
     TargetBy = options.box_size[1]*options.target_dim/options.scale_factor
     TargetBz = options.box_size[2]*options.target_dim/options.scale_factor
     options.target_dims = [TargetBx, TargetBy, TargetBz]
 
-
-
-#shapes = []
-#shapes.append(GenShape.shape(options=options, curr_block =0))
-#shapes[0].sphere()
-
-shapes = [GenShape.shape()]
-shapes[0].parse_pdb_protein(filename='4BLC.pdb')
-shapes[0].will_build_from_shapes(properties = {'surf_type' : 'P1'})
-shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 10, s_end = ['X','Y', 'X'], p_flex = array([-1]), num = 60)
-shapes[0].pdb_build_table()
-shapes.append(GenShape.shape())
-shapes[1].parse_pdb_protein(filename='4BLC.pdb')
-shapes[1].will_build_from_shapes(properties = {'surf_type' : 'P2'})
-shapes[1].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM' : 'NZ'}, n_ss = 2, n_ds = 3, s_end = ['Y', 'X', 'Y'], p_flex = array([-1]), num = 30)
-shapes[1].pdb_build_table()
-
-#shapes.append(GenShape.shape())
-#shapes[2].sphere(Num=200)
-#shapes[2].will_build_from_shapes(properties = {'size' : 10.0, 'surf_type' : 'P3', 'density' : 14.08})
-#shapes[2].set_dna(n_ss = 2, n_ds = 3, s_end = ['Y', 'Y'], p_flex = array([-1]), num = 30)
-
-
-#dict0 = {'tensor_name' : 'mi_all.dat', 'mass' : 325.45}
-#shapes.append(GenShape.shape(properties = dict0))
-#shapes[0].load_file(file_name='coord.dat')
-#if options.flag_surf_energy:
-#    for i in range(options.size.__len__()):
-#        shapes.append(GenShape.shape(curr_block = i, options = options, surf_plane = options.exposed_surf, lattice = options.lattice_multi))
-#        getattr(shapes[i],  options.genshapecall[i])()
-#        options = shapes[i].opts
-#else:
-#    for i in range(options.size.__len__()):
-#        shapes.append(GenShape.shape(curr_block = i, options = options, surf_plane = [random.randint(-3,3), random.randint(-3,3), 1]))
-#        getattr(shapes[i],  options.genshapecall[i])()
-#        options = shapes[i].opts
 
 options.non_centrosymmetric_moment = True
 
@@ -228,10 +217,7 @@ if options.non_centrosymmetric_moment:
         options.m_w.append(options.mass[i]*2.0 / 5.0)
         options.m_surf.append(options.mass[i]*3.0 / 5.0 / options.num_surf[i])
         options.box_size_packing += 2.5*options.size[i] / options.scale_factor # special
-
         options.dna_coverage.append(int(round(0.17*(options.size[i]*2.0 / options.scale_factor)**2 * 6)))
-
-        options.dna_coverage[0] = int(round(0.17 * options.size[0]*2.0*4*pi))
 else:
     for i in range(options.volume.__len__()):
         options.box_size_packing += 2.5*amax(abs(array(shapes[i].pos)))*2.0 / options.scale_factor
@@ -242,12 +228,18 @@ else:
 # Making buildobj
 ################################
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
-buildobj.set_rotation_function()
+buildobj.set_rotation_function(mode = 'random')
+
+d_tags = buildobj.dna_tags
+c_tags = buildobj.center_tags
+
 buildobj.write_to_file(z_box_multi=options.z_m)
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
 options.surface_types = buildobj.surface_types
 options.sticky_types = buildobj.sticky_types
+
+#options.sticky_exclusions = buildobj.sticky_excluded(['X', 'X0'], r_cut = 1.50)
 
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
@@ -258,7 +250,7 @@ system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
 
-
+del buildobj, shapes, center_file_object
 
 Lx0 = options.sys_box[0]
 Ly0 = options.sys_box[1]
@@ -279,6 +271,8 @@ harmonic.set_coeff('B-C', k=330.0, r0=0.84*0.5 )
 harmonic.set_coeff('C-FL', k=330.0, r0=0.84*0.5 )
 harmonic.set_coeff('B-FL', k=330.0, r0=0.84*0.5*1.4)
 harmonic.set_coeff('C-C', k=330.0, r0=0.84*0.5)  # align the linker C-G
+#harmonic.set_coeff('UselessBond', k= 0.0, r0 = 0.0)
+
 
 #No.2 Stiffness of a chain
 Sangle = angle.harmonic()
@@ -310,7 +304,7 @@ lj.set_params(mode="shift")
 
 def attract(a,b,sigma=1.0,epsilon=1.0):
     #sigma = 'effective radius'
-    lj.pair_coeff.set(a,b,epsilon=epsilon*1.0 / options.scale_factor,
+    lj.pair_coeff.set(a,b,epsilon=epsilon*1.0*options.Um / options.scale_factor,
                       sigma=sigma*1.0 ,
                       r_cut = 2.0)
 
@@ -366,7 +360,7 @@ for i in range(options.sticky_track.__len__()):
             cond_1 = cond_1 or options.sticky_track[i][k] == options.sticky_pairs[j][0]
             cond_2 = cond_2 or options.sticky_track[i][k] == options.sticky_pairs[j][1]
         if cond_1 and cond_2:
-            lja_list[i].pair_coeff.set(options.sticky_pairs[j][0],options.sticky_pairs[j][1], epsilon = F/options.scale_factor, sigma = 0.6, r_cut = 2.0)
+            lja_list[i].pair_coeff.set(options.sticky_pairs[j][0],options.sticky_pairs[j][1], epsilon = F/options.scale_factor*options.Um, sigma = 0.6, r_cut = 2.0)
 
 for i in range(lja_list.__len__()):
     lja_list[i].disable(log=True)
@@ -374,7 +368,7 @@ for i in range(lja_list.__len__()):
 
 #########################################################
 for i in range(len(radius)):
-    for j in range(i+1):
+    for j in range(i, len(radius)):
         # check which kind of interaction
         cond_complementary = False
         for k in range(options.sticky_pairs.__len__()):
@@ -382,50 +376,50 @@ for i in range(len(radius)):
 
         cond_stick_B = False
         for k in range(sticky_uniques.__len__()):
-            cond_stick_B = cond_stick_B or (radius[i][0] == sticky_uniques[k][0] and radius[j][0] == 'B') or (radius[j][0] == sticky_uniques[k][0] and radius[i][0] == 'B')
+            cond_stick_B = cond_stick_B or (radius[i][0] == sticky_uniques[k] and radius[j][0] == 'B') or (radius[j][0] == sticky_uniques[k] and radius[i][0] == 'B')
 
         cond_stick_A = False
         for k in range(sticky_uniques.__len__()):
-            cond_stick_A = cond_stick_A or (radius[i][0] == sticky_uniques[k][0] and radius[j][0] == 'A') or (radius[j][0] == sticky_uniques[k][0] and radius[i][0] == 'A')
+            cond_stick_A = cond_stick_A or (radius[i][0] == sticky_uniques[k] and radius[j][0] == 'A') or (radius[j][0] == sticky_uniques[k] and radius[i][0] == 'A')
         cond_stick_A = cond_stick_A or (radius[i][0] == 'FL' and radius[j][0] == 'A') or (radius[j][0] == 'FL' and radius[i][0] == 'A')
 
         cond_stick_FL = False
         for k in range(sticky_uniques.__len__()):
-            cond_stick_FL = cond_stick_FL or (radius[i][0] == sticky_uniques[k][0] and radius[j][0] == 'FL') or (radius[j][0] == sticky_uniques[k][0] and radius[i][0] == 'FL')
+            cond_stick_FL = cond_stick_FL or (radius[i][0] == sticky_uniques[k] and radius[j][0] == 'FL') or (radius[j][0] == sticky_uniques[k] and radius[i][0] == 'FL')
 
         cond_same_comp = False
         for k in range(sticky_uniques.__len__()):
-            cond_same_comp = cond_same_comp or (radius[i][0] == sticky_uniques[k][0] and radius[j][0] == sticky_uniques[k][0]) or (radius[j][0] == sticky_uniques[k][0] and radius[i][0] == sticky_uniques[k][0])
+            cond_same_comp = cond_same_comp or (radius[i][0] == sticky_uniques[k] and radius[j][0] == sticky_uniques[k]) or (radius[j][0] == sticky_uniques[k] and radius[i][0] == sticky_uniques[k])
 
         cond_surfaces = False
         for k in range(options.surface_types.__len__()):
             for kk in range(k, options.surface_types.__len__()):
-                cond_surfaces = cond_surfaces or (radius[i][0] == options.surface_types[k][0] and radius[j][0] == options.surface_types[kk][0]) or (radius[j][0] == options.surface_types[k][0] and radius[i][0] == options.surface_types[kk][0])
+                cond_surfaces = cond_surfaces or (radius[i][0] == options.surface_types[k] and radius[j][0] == options.surface_types[kk]) or (radius[j][0] == options.surface_types[k] and radius[i][0] == options.surface_types[kk])
 
         if cond_complementary:
             attract(radius[i][0], radius[j][0], radius[i][1]+radius[j][1], F)
             print radius[i][0], radius[j][0]
 
         elif cond_stick_B:
-            repulse(radius[i][0], radius[j][0], 0.6, epsilon = 1.0 / options.scale_factor)
-            #print 'sticky - B', radius[i][0], radius[j][0]
+            repulse(radius[i][0], radius[j][0], 0.6, epsilon = 1.0 / options.scale_factor * options.Um)
+            print 'sticky - B', radius[i][0], radius[j][0]
 
         elif cond_stick_FL:
-            repulse(radius[i][0], radius[j][0], 0.43, epsilon = 1.0 / options.scale_factor )
-            #print 'sticky - FL', radius[i][0], radius[j][0]
+            repulse(radius[i][0], radius[j][0], 0.43, epsilon = 1.0 / options.scale_factor * options.Um )
+            print 'sticky - FL', radius[i][0], radius[j][0]
         elif cond_stick_A:
             repulse(radius[i][0], radius[j][0], (radius[i][1]+radius[j][1])*0.35)
-            #print 'sticky - A', radius[i][0], radius[j][0]
+            print 'sticky - A', radius[i][0], radius[j][0]
         elif (radius[i][0]=='FL') & (radius[j][0]=='FL'):
-            repulse(radius[i][0], radius[j][0], 0.4, epsilon=1.0/options.scale_factor)
+            repulse(radius[i][0], radius[j][0], 0.4, epsilon=1.0/options.scale_factor * options.Um)
         elif cond_same_comp:
-            repulse(radius[i][0], radius[j][0], 1.0, epsilon = 1.0 / options.scale_factor )
-            #print 'same complementary', radius[i][0], radius[j][0]
+            repulse(radius[i][0], radius[j][0], 1.0, epsilon = 1.0 / options.scale_factor *options.Um)
+            print 'same complementary', radius[i][0], radius[j][0]
         elif cond_surfaces:
             repulse(radius[i][0], radius[j][0], 0.000005)
         else:
             repulse(radius[i][0], radius[j][0], (radius[i][1]+radius[j][1])*0.5)
-            #print 'unsorted', radius[i][0], radius[j][0]
+            print 'unsorted', radius[i][0], radius[j][0]
 # Generate string logged quantities argument
 
 Qlog = ['temperature', 'potential_energy', 'kinetic_energy', 'pair_lj_energy_lj', 'bond_harmonic_energy']
@@ -442,6 +436,10 @@ nonrigid = group.nonrigid()
 rigid = group.rigid()
 
 integrate.mode_standard(dt=0.005)
+
+nlist.set_params(check_period=1)
+nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
+
 nve = integrate.nve(group=nonrigid, limit=0.0005)
 keep_phys = update.zero_momentum(period=100)
 run(3e5)
@@ -467,8 +465,7 @@ dump.dcd(filename=options.filenameformat+'_dcd.dcd', period=Dump, overwrite = Tr
 #set integrate low so that system can equilibrate
 integrate.mode_standard(dt=0.000005)
 #set the check period very low to let the system equilibrate
-nlist.set_params(check_period=1)
-nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
+
 
 run(1e5)
 
@@ -483,7 +480,48 @@ integrate.mode_standard(dt=0.00025)
 
 rigid_integrator.set_params(T=variant.linear_interp(points=[(0, 0.1), (1e6, options.mixing_temp)]))
 nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, 0.1), (1e6, options.mixing_temp)]))
-run(1e6)
+
+#starting here we periodicaly update the nn table which changes DNA types
+options.tab_update = 2e3
+#curr_types = ['X'+str(i) for i in range(12)] + ['X12' for i in range(options.special - 12)]
+curr_types = concatenate((arange(12), 12*ones(options.special-12)))
+
+for i in range(int(1e6 / options.tab_update)):
+    t = time.time()
+    #grab centers
+    new_types = -ones(options.special, dtype = int)
+    new_types[0] = 0
+    c_pos = zeros((options.special, 3), dtype = float)
+    for j in range(options.special):
+        c_pos[j,:] = system.particles[c_tags[j]].position
+    locbox = system.box
+    nntab = get_nn(_c_pos = c_pos, _box=[locbox.Lx, locbox.Ly, locbox.Lz])
+    for j in range(1, 13):
+        new_types[nntab[0,j]] = j
+    for j in range(1, options.special):
+        applicable_list = range(13)
+        try:
+            applicable_list.remove(new_types[j])
+        except ValueError:
+            pass
+        for k in range(12):
+            try:
+                applicable_list.remove(new_types[nntab[j,k]])
+            except ValueError:
+                pass
+        if new_types[j] == -1:
+            new_types[j] = applicable_list.pop()
+        for k in range(12):
+            if new_types[nntab[j,k]] == -1:
+                new_types[nntab[j,k]] = applicable_list.pop()
+    for j in range(options.special):
+        l_str = 'X' + str(new_types[j])
+        for k in range(d_tags[j].__len__()):
+            system.particles[d_tags[j][k]].type = l_str
+    print time.time() - t
+    run(options.tab_update)
+
+#run(1e6)
 
 
 integrate.mode_standard(dt=0.0005)
@@ -501,7 +539,7 @@ run(options.size_time)
 BoxChange.disable()
 
 
-integrate.mode_standard(dt=0.0005)
+integrate.mode_standard(dt=0.002)
 rigid_integrator.set_params(T=options.mixing_temp)
 nonrigid_integrator.set_params(T=options.mixing_temp)
 run(options.mix_time)
@@ -510,9 +548,9 @@ run(options.mix_time)
 #set integrate back to standard dt
 integrate.mode_standard(dt=options.step_size)
 
-rigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (1e6, options.target_temp_1)]))
-nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (1e6, options.target_temp_1)]))
-run(6e6)
+rigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
+nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
+run(3e6)
 
 integrate.mode_standard(dt=options.step_size)
 rigid_integrator.set_params(T=options.target_temp_1)
@@ -525,11 +563,6 @@ integrate.mode_standard(dt=options.step_size)
 rigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
 nonrigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
 run(options.cool_time)
-
-if options.freeze_flag:
-    rigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_2), (options.cool_time/10, options.freeze_temp)]))
-    nonrigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_2), (options.cool_time/10, options.freeze_temp)]))
-    run(options.cool_time/10)
 
 
 mol2.write(filename='lastsnap-'+options.filenameformat+'.mol2')

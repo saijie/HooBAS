@@ -133,7 +133,7 @@ class CenterFile(object):
         initialize the tables from optinos w/ randomly placed beads
         :return: none
         """
-        self.__BoxSize = 1.7*self.__options.target_dim / self.__options.scale_factor
+        self.__BoxSize = 1.5*self.__options.target_dim / self.__options.scale_factor
         Table = [] # kth table contains (num_part(k),3) array of the kth particle type
         self.__rand_flag = True
         self.__table = []
@@ -158,7 +158,7 @@ class CenterFile(object):
                     for i in range(Table.__len__()-1):
                         for k in range(Table[i].__len__()):
                             value = (( (Table[j][PNum,0] - Table[i][k,0])**2 + (Table[j][PNum,1] - Table[i][k,1])**2 +(Table[j][PNum,2] - Table[i][k,2])**2 )**0.5)
-                            curr_list = curr_list or value < (self.__options.size[j] + self.__options.size[i]) * (3**0.5) * 1.5 / 2.0 / self.__options.scale_factor
+                            curr_list = curr_list or value < (self.__options.size[j] + self.__options.size[i]) * self.__options.center_sec_factor / 2.0 / self.__options.scale_factor
     
                     for i in range(0, PNum):
                         value = (( (Table[j][PNum,0] - Table[j][i,0])**2 + (Table[j][PNum,1] - Table[j][i,1])**2 +(Table[j][PNum,2] - Table[j][i,2])**2 )**0.5)

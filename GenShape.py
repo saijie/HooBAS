@@ -53,6 +53,8 @@ class shape(object):
     added by adding def name and making the new method generate a numpy array of size (N,3) where N is the number of
     particles. A volume should be set by the method. Class supports a rotation matrix method.
 
+    flags serve as directives for the build ohject.
+
     properties is a dict object for additional properties useful for non-trivial cases (read xyz / pdb parsed files):
     'surface' : Used for DNA coverage specifications
     'density' : used for mass calculations
@@ -222,17 +224,18 @@ class shape(object):
                 TableEdge = np.append(TableEdge, np.array([[(1-Radius)+Radius*cos(AngleRange[i+1]),Gridbase[j], (1-Radius)+Radius*sin(AngleRange[i+1])]]),axis =0)
 
         #XYZ vertice
-        PtVertice = int(NumSide**2 *(4*pi*Radius**2/8) / (2*(1-Radius))**2)
+        PtVertice = NumSide**2 *(4*pi*Radius**2/8) / (2*(1-Radius))**2
         TableVert = np.zeros((0,3))
-        PtVertice *= 8
+        PtVertice = int(PtVertice*8)
         gold_ang = pi*(3-5**0.5)
         th = gold_ang*np.arange(PtVertice)
-        z = np.linspace(1-1.0/PtVertice, 1.0/PtVertice -1, PtVertice)
-
-
-        for i in range(0, PtVertice):
-            if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
-                TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*(1-z[i]**2)**0.5*cos(th[i]), (1-Radius)+Radius*(1-z[i]**2)**0.5*sin(th[i]),(1-Radius)+Radius*z[i]]]),axis=0)
+        if PtVertice>1:
+            z = np.linspace(1-1.0/PtVertice, 1.0/PtVertice -1, PtVertice)
+            for i in range(0, PtVertice):
+                if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
+                    TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*(1-z[i]**2)**0.5*cos(th[i]), (1-Radius)+Radius*(1-z[i]**2)**0.5*sin(th[i]),(1-Radius)+Radius*z[i]]]),axis=0)
+        elif PtVertice == 1 :
+            TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*3**0.5, (1-Radius)+Radius*3**0.5,(1-Radius)+Radius*3**0.5]]),axis=0)
 
         #Write 6 faces
         for i in range(Tablexy.__len__()):
@@ -280,11 +283,7 @@ class shape(object):
         self.flags['volume'] = 2**3
         self.flags['surface'] = 6*2**2
         self.flags['simple_I_tensor'] = True
-
-        self.__options.num_surf[self.__curr_block] = (6*Tablexy.__len__() + 12*TableEdge.__len__() + 8*TableVert.__len__())
-        self.__options.volume[self.__curr_block] = (self.__options.size[self.__curr_block]*2.0 / self.__options.scale_factor)**3
-        self.__options.p_surf[self.__curr_block] = 6*(self.__options.size[self.__curr_block]*2.0 / self.__options.scale_factor)**2
-        #return options
+        self.flags['call'] = 'cube'
 
     def dodecahedron(self):
         #Generate one face
