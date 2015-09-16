@@ -228,7 +228,6 @@ class CenterFile(object):
             self.__table[i] = _tmp_table[_permute_list[i]]
             self.__built_centers = _tmp_centers[_permute_list[i]]
 
-
     def __cubic_lattice_table(self):
         """
         initializes the table on a cubic lattice, given by options. assuming multiple components are in intertwined lattice
@@ -257,8 +256,6 @@ class CenterFile(object):
                 for k in range(Lat_z.__len__()-1):
                     Table[count % self.__options.num_particles.__len__()] = np.append(Table[count % self.__options.num_particles.__len__()], np.array([[Lat_x[i+0], Lat_y[j+0], Lat_z[k+0]]]), axis =0)
                     count += 1
-
-
 
         if self.__rot_flag:
             _b_x = CenterFile.vec([pitch, 0, 0])
@@ -464,7 +461,6 @@ class CenterFile(object):
                 for k in range(_mean.__len__()):
                     self.__table[i][j,k] -= _mean[k]
 
-
     def add_particles_at_random(self, num, center_type, particle_size, max_try=10000):
         """
         add a component to the tables, placed at random in the simulation domain
@@ -514,7 +510,6 @@ class CenterFile(object):
         if not flag:
             self.__table.append(new_table)
         self.__table_size += new_table.__len__()
-
 
     def _manual_rot_cut(self, int_bounds):
         """
@@ -594,7 +589,6 @@ class CenterFile(object):
         else:
             self.__table_size -= self.__table[drop_index].__len__()
             self.__table[drop_index] = np.zeros((0,3))
-
 
     def write_table(self):
         """

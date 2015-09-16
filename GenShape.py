@@ -53,7 +53,7 @@ class shape(object):
     added by adding def name and making the new method generate a numpy array of size (N,3) where N is the number of
     particles. A volume should be set by the method. Class supports a rotation matrix method.
 
-    flags serve as directives for the build ohject.
+    self.flags is a dictionary for building directives.
 
     properties is a dict object for additional properties useful for non-trivial cases (read xyz / pdb parsed files):
     'surface' : Used for DNA coverage specifications
@@ -109,26 +109,21 @@ class shape(object):
         :return: structure
         """
         return self.__options
-
     @property
     def num_surf(self):
         return self.__table.__len__()
-
     @property
     def volume(self):
         try:
             return self.flags['volume']
         except KeyError:
             return None
-
     @property
     def pos(self):
         return self.__table
-
     @property
     def s_plane(self):
         return self.__surf_plane
-
     @s_plane.setter
     def s_plane(self, surf_plane):
         if not (surf_plane is None) and surf_plane.__len__() == 3 and not (surf_plane[1] == surf_plane[0] ==0):
@@ -138,22 +133,18 @@ class shape(object):
             self.__n_plane = vec(r_vec)
             self.__rot_mat = self.__get_rot_mat(r_vec)
             self.__surf_plane = vec(surf_plane)
-
     @property
     def n_plane(self):
         return self.__n_plane
-
     @property
     def lattice_param(self):
         return self.__lattice
-
     @property
     def unit_shape(self):
         try:
             return self.flags['normalized']
         except KeyError:
             return None
-
     @staticmethod
     def __get_rot_mat(cubic_plane):
         #normalize plane orientation
@@ -825,14 +816,12 @@ class shape(object):
         self.flags.update(properties)
         self.flags['pdb_object'] = True
 
-
     def set_dna(self, key = None, n_ss = None, n_ds = None, s_end = None, p_flex = None, num =None):
         _l_list = []
         for i in range(self.__table.__len__()):
             _l_list.append([self.__table[0, 0], self.__table[0, 1], self.__table[0, 2]])
 
         self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
-
 
     def rotate(self):
         try:

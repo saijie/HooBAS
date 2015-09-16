@@ -260,6 +260,7 @@ else:
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
 buildobj.set_rotation_function(mode = 'random')
 
+#grabbing dna and center tags for reordering dna later on
 d_tags = buildobj.dna_tags
 c_tags = buildobj.center_tags
 
