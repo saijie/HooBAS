@@ -166,15 +166,16 @@ class CenterFile(object):
     
     
                     current_try += 1
-                    if current_try > 10000:
+                    if current_try > 1000:
                         PNum = 0
-                        break
+                        Table[j] = np.zeros((self.__options.num_particles[j],3))
+                        current_try = 0
+                        toplist_current_try += 1
+                        if toplist_current_try > 1000:
+                            j = 0
+                            Table = [np.zeros((self.__options.num_particles[j],3))]
+                            toplist_current_try = 0
                 PNum += 1
-            toplist_current_try += 1
-            if toplist_current_try > 1000:
-                j = 0
-                Table = []
-                break
             j += 1
     
         table_size = 0

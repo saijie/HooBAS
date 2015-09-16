@@ -17,7 +17,7 @@ import Build
 import random
 import Moment_Fixer
 from hoomd_script import *
-import time
+
 
 def c_hoomd_box(v, int_bounds, z_multi =1.00):
     vx = v[0][:]
@@ -56,6 +56,36 @@ def get_nn(_c_pos, _box):
         _nn[ii,:] = _c_sort[1:13]
     return _nn
 
+def reset_nblock_list():
+    new_types = -ones(options.special, dtype = int)
+    new_types[0] = 0
+    c_pos = zeros((options.special, 3), dtype = float)
+    for jj in range(options.special):
+        c_pos[jj,:] = system.particles[c_tags[jj]].position
+    locbox = system.box
+    nntab = get_nn(_c_pos = c_pos, _box=[locbox.Lx, locbox.Ly, locbox.Lz])
+    for jj in range(0, 12):
+        new_types[nntab[0,jj]] = jj+1
+    for jj in range(1, options.special):
+        applicable_list = range(13)
+        try:
+            applicable_list.remove(new_types[jj])
+        except ValueError:
+            pass
+        for kk in range(12):
+            try:
+                applicable_list.remove(new_types[nntab[jj,kk]])
+            except ValueError:
+                pass
+        if new_types[jj] == -1:
+            new_types[jj] = applicable_list.pop()
+        for kk in range(12):
+            if new_types[nntab[jj,kk]] == -1:
+                new_types[nntab[jj,kk]] = applicable_list.pop()
+    for jj in range(options.special):
+        l_str = 'X' + str(new_types[jj])
+        for kk in range(d_tags[jj].__len__()):
+            system.particles[d_tags[jj][kk]].type = l_str
 ###########################################
 # List of future improvements :
 ###########################################
@@ -79,20 +109,20 @@ Dump = 2e5 #dump period for dcd
 options.Um = 1.0
 
 
-options.target_dim = 52.0
+options.target_dim = 52.0 / 5.0
 options.scale_factor = 1.0
 
 options.target_temp = 1.60
 options.target_temp_1 = 1.4
 options.target_temp_2 = 1.39
-options.mixing_temp = 4.0
+options.mixing_temp = 2.5
 options.freeze_flag = False
 options.freeze_temp = 1.0
-options.box_size = [3, 3, 3] # box dimensions in units of target_dim
+options.box_size = [4, 4, 4] # box dimensions in units of target_dim
 options.run_time = 1e7 #usual 2e7
 options.mix_time = 3e6 #usual 3e6
 options.cool_time = 2e7 #usual 2e7
-options.step_size = 0.005
+options.step_size = 0.002
 options.size_time = 6e6
 options.box_size_packing = 0 # leave to 0, calculated further in, initialization needed
 options.coarse_grain_power = int(0) ## coarsens DNA scaling by a power of 2. 0 is regular model. Possible to uncoarsen the regular model
@@ -109,7 +139,7 @@ options.z_m = 1.0 # box z multiplier for surface energy calculations.
 ## Code allows for mixing any number of composite shapes. size / num_particles / center_types / shapes must be lists of equal length,
 ## with length of the number of species of building blocks
 ##################################################################################################################
-options.size = [28.5 for i in range(options.special)]
+options.size = [28.5/5.0 for i in range(options.special)]
 options.num_particles = [1 for i in range(options.special)]
 options.center_types = ['W' for i in range(options.special)] #Should be labeled starting with 'W', must have distinct names
 
@@ -129,12 +159,12 @@ shapes = []
 i_cut = 12
 for i in range(options.special):
     shapes.append(GenShape.shape())
-    shapes[-1].cube(Num=200, Radius = 2.5/28.5)
-    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.08})
+    shapes[-1].cube(Num=200, Radius = 2.5*2.0 / 28.5)
+    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
     if i < i_cut:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X' + str(i)], p_flex = array([4]), num = 133)
+        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X' + str(i), 'X' + str(i), 'X' + str(i)], p_flex = array([-1]), num = 133)
     else:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X12'], p_flex = array([4]), num = 133)
+        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X12', 'X12', 'X12'], p_flex = array([-1]), num = 133)
 
 
 ######################################################################
@@ -440,6 +470,12 @@ integrate.mode_standard(dt=0.005)
 nlist.set_params(check_period=1)
 nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
 
+
+
+reset_nblock_list()
+
+
+
 nve = integrate.nve(group=nonrigid, limit=0.0005)
 keep_phys = update.zero_momentum(period=100)
 run(3e5)
@@ -448,8 +484,8 @@ keep_phys.disable()
 
 
 
-rigid_integrator = integrate.nvt_rigid(group=rigid, T=0.1, tau=0.65)
-nonrigid_integrator = integrate.nvt(group=nonrigid, T=0.1, tau=0.65)
+rigid_integrator = integrate.nvt_rigid(group=rigid, T=logger.query('temperature'), tau=0.65)
+nonrigid_integrator = integrate.nvt(group=nonrigid, T=logger.query('temperature'), tau=0.65)
 
 #####################################################################################
 #              Dump File
@@ -478,47 +514,19 @@ run(1e5)
 #increase time step so system can mix up faster
 integrate.mode_standard(dt=0.00025)
 
-rigid_integrator.set_params(T=variant.linear_interp(points=[(0, 0.1), (1e6, options.mixing_temp)]))
-nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, 0.1), (1e6, options.mixing_temp)]))
+rigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
+nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
 
 #starting here we periodicaly update the nn table which changes DNA types
 options.tab_update = 2e3
 #curr_types = ['X'+str(i) for i in range(12)] + ['X12' for i in range(options.special - 12)]
-curr_types = concatenate((arange(12), 12*ones(options.special-12)))
+
 
 for i in range(int(1e6 / options.tab_update)):
-    t = time.time()
+
     #grab centers
-    new_types = -ones(options.special, dtype = int)
-    new_types[0] = 0
-    c_pos = zeros((options.special, 3), dtype = float)
-    for j in range(options.special):
-        c_pos[j,:] = system.particles[c_tags[j]].position
-    locbox = system.box
-    nntab = get_nn(_c_pos = c_pos, _box=[locbox.Lx, locbox.Ly, locbox.Lz])
-    for j in range(1, 13):
-        new_types[nntab[0,j]] = j
-    for j in range(1, options.special):
-        applicable_list = range(13)
-        try:
-            applicable_list.remove(new_types[j])
-        except ValueError:
-            pass
-        for k in range(12):
-            try:
-                applicable_list.remove(new_types[nntab[j,k]])
-            except ValueError:
-                pass
-        if new_types[j] == -1:
-            new_types[j] = applicable_list.pop()
-        for k in range(12):
-            if new_types[nntab[j,k]] == -1:
-                new_types[nntab[j,k]] = applicable_list.pop()
-    for j in range(options.special):
-        l_str = 'X' + str(new_types[j])
-        for k in range(d_tags[j].__len__()):
-            system.particles[d_tags[j][k]].type = l_str
-    print time.time() - t
+    reset_nblock_list()
+
     run(options.tab_update)
 
 #run(1e6)
@@ -528,41 +536,63 @@ integrate.mode_standard(dt=0.0005)
 
 rigid_integrator.set_params(T=options.mixing_temp)
 nonrigid_integrator.set_params(T=options.mixing_temp)
-run(6e6)
+
+for i in range(int(2e6 / options.tab_update)):
+    reset_nblock_list()
+    run(options.tab_update)
+
 
 
 integrate.mode_standard(dt=0.0010)
 BoxChange = update.box_resize(Lx=variant.linear_interp([(0, Lx0), (options.size_time, TargetBx)]),
                               Ly=variant.linear_interp([(0, Ly0), (options.size_time, TargetBy)]),
                               Lz=variant.linear_interp([(0, Lz0), (options.size_time, TargetBz)]), period=100)
-run(options.size_time)
+for i in range(int(options.size_time / options.tab_update)):
+    reset_nblock_list()
+    run(options.tab_update)
 BoxChange.disable()
 
 
 integrate.mode_standard(dt=0.002)
 rigid_integrator.set_params(T=options.mixing_temp)
 nonrigid_integrator.set_params(T=options.mixing_temp)
-run(options.mix_time)
+
+for i in range(int(options.mix_time/options.tab_update)):
+    reset_nblock_list()
+    run(options.tab_update)
 
 
-#set integrate back to standard dt
+
+
+
 integrate.mode_standard(dt=options.step_size)
-
 rigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
 nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
-run(3e6)
+
+for i in range(int(3e6 / options.tab_update)):
+    reset_nblock_list()
+    run(options.tab_update)
+
 
 integrate.mode_standard(dt=options.step_size)
 rigid_integrator.set_params(T=options.target_temp_1)
 nonrigid_integrator.set_params(T=options.target_temp_1)
-run(1e6)
+
+for i in range(int(1e6 / options.tab_update)):
+    reset_nblock_list()
+    run(options.tab_update)
+
 
 mol2.write(filename='BefCoolSnap'+options.filenameformat+'.mol2')
 
 integrate.mode_standard(dt=options.step_size)
 rigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
 nonrigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
-run(options.cool_time)
+
+for i in range(int(options.cool_time / options.tab_update)):
+    reset_nblock_list()
+    run(options.tab_update)
+
 
 
 mol2.write(filename='lastsnap-'+options.filenameformat+'.mol2')
