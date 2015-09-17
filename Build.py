@@ -576,7 +576,7 @@ class BuildHoomdXML(object):
                     _t_m = 10.0
 
             self.mass = _t_m
-            self.s_mass = self.mass * 3.0 / 5.0
+            self.s_mass = self.mass * 3.0 / 5.0 / self._sh.num_surf
 
             try:
                 if not self._sh.flags['normalized']:

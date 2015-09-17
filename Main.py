@@ -130,7 +130,7 @@ options.flag_surf_energy = False ## check for surface energy calculations; expos
 options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
-options.special = 13
+options.special = 15
 
 options.center_sec_factor = (3**0.5)*1.35 # security factor for center-center. min dist between particles in random config.
 options.z_m = 1.0 # box z multiplier for surface energy calculations.
@@ -162,9 +162,9 @@ for i in range(options.special):
     shapes[-1].cube(Num=200, Radius = 2.5*2.0 / 28.5)
     shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
     if i < i_cut:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X' + str(i), 'X' + str(i), 'X' + str(i)], p_flex = array([-1]), num = 133)
+        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X' + str(i), 'X' + str(i)], p_flex = array([-1]), num = 133)
     else:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X12', 'X12', 'X12'], p_flex = array([-1]), num = 133)
+        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X12', 'X12'], p_flex = array([-1]), num = 133)
 
 
 ######################################################################
