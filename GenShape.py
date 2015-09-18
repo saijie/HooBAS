@@ -66,7 +66,7 @@ class shape(object):
     'normalized' : set to either True or False, build will either multiply dimensions by size (True) or not (False)
     'tensor_name' : filename or path to filename to the tensor of inertia of the real molecule.
 
-    ## For loading everything from pdb; attachment sites are provided by 'AS_#' where # is an integer number <- feature to be added
+
 
 
     """
@@ -822,6 +822,48 @@ class shape(object):
             _l_list.append([self.__table[0, 0], self.__table[0, 1], self.__table[0, 2]])
 
         self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
+
+    def generate_surface_bonds(self, signature, num_nn = 3):
+
+        self.flags['soft_shell'] = True
+        self.flags['surface_bonds'] = []
+        self.flags['W-P_bonds'] = []
+
+        #construct a list of nn for each particle in the table, append [i, j, r0] to the surf bond list, where i-j are the nn couples and r0 is their distance
+        #dist table
+        _dist_sq = np.zeros((self.__table.__len__(), self.__table.__len__()))
+        _nn = np.zeros((self.__table.__len__(), num_nn))
+        for i in range(self.__table.__len__()):
+            for j in range(self.__table.__len__()):
+                for k in range(3):
+                    _dist_sq[i,j] += (self.__table[i,k] - self.__table[j,k])**2
+
+        for i in range(self.__table.__len__()):
+            _dumpsort = np.argsort(_dist_sq[i,:], kind = 'mergesort')
+
+            _ind_to_add = []
+
+            for j in range(1, _dumpsort.__len__()):
+                _curr = True
+                for k in range(self.flags['surface_bonds'].__len__()):
+                    if self.flags['surface_bonds'][k][0] == _dumpsort[j] and self.flags['surface_bonds'][k][1] == i:
+                        _curr = False
+                if _curr:
+                    _ind_to_add.append(_dumpsort[j])
+                if _ind_to_add.__len__() == num_nn:
+                    break
+
+
+            for j in range(_ind_to_add.__len__()):
+                self.flags['surface_bonds'].append([i, _ind_to_add[j], _dist_sq[i, _ind_to_add[j]]**0.5, signature + '_' + str(i) + '_' + str(j)])
+
+
+        for i in range(self.__table.__len__()):
+            self.flags['W-P_bonds'].append([(self.__table[i,0]**2 + self.__table[i,1]**2 + self.__table[i,2]**2)**0.5, signature + '_' + str(i)])
+
+        self.flags['soft_signature'] = signature
+
+
 
     def rotate(self):
         try:

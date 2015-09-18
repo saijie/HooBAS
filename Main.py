@@ -130,7 +130,7 @@ options.flag_surf_energy = False ## check for surface energy calculations; expos
 options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
-options.special = 15
+options.special = 1
 
 options.center_sec_factor = (3**0.5)*1.35 # security factor for center-center. min dist between particles in random config.
 options.z_m = 1.0 # box z multiplier for surface energy calculations.
@@ -146,36 +146,38 @@ options.center_types = ['W' for i in range(options.special)] #Should be labeled 
 options.filenameformat = 'Simulation-Test-64 diff pots -- ' + str(options.target_dim)
 
 
-shapes = []
-#shapes[0].parse_pdb_protein(filename='4BLC.pdb')
-#shapes[0].will_build_from_shapes(properties = {'surf_type' : 'P1'})
-#shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 10, s_end = ['X','Y', 'X'], p_flex = array([-1]), num = 60)
-#shapes[0].pdb_build_table()
+shapes = [GenShape.shape()]
+shapes[0].parse_pdb_protein(filename='4BLC.pdb')
+shapes[0].will_build_from_shapes(properties = {'surf_type' : 'P1'})
+shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 10, s_end = ['X','Y', 'X'], p_flex = array([-1]), num = 60)
+shapes[0].pdb_build_table()
+shapes[0].generate_surface_bonds(signature='P1', num_nn = 3)
+
 #shapes.append(GenShape.shape())
 #shapes[1].parse_pdb_protein(filename='4BLC.pdb')
 #shapes[1].will_build_from_shapes(properties = {'surf_type' : 'P2'})
 #shapes[1].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM' : 'NZ'}, n_ss = 2, n_ds = 3, s_end = ['Y', 'X', 'Y'], p_flex = array([-1]), num = 30)
 #shapes[1].pdb_build_table()
-i_cut = 12
-for i in range(options.special):
-    shapes.append(GenShape.shape())
-    shapes[-1].cube(Num=200, Radius = 2.5*2.0 / 28.5)
-    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
-    if i < i_cut:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X' + str(i), 'X' + str(i)], p_flex = array([-1]), num = 133)
-    else:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X12', 'X12'], p_flex = array([-1]), num = 133)
+#i_cut = 12
+#for i in range(options.special):
+#    shapes.append(GenShape.shape())
+#    shapes[-1].cube(Num=200, Radius = 2.5*2.0 / 28.5)
+#    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
+#    if i < i_cut:
+#        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X' + str(i), 'X' + str(i)], p_flex = array([-1]), num = 133)
+#    else:
+#        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X12', 'X12'], p_flex = array([-1]), num = 133)
 
 
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
 ######################################################################
-options.sticky_pairs = []
+options.sticky_pairs = [['X', 'Y']]
 #options.sticky_pairs = [['X0', 'X0']]
-for i in range(13):
-    for j in range(i, 13):
-        if i != j:
-            options.sticky_pairs.append(['X'+str(i), 'X' + str(j)])
+#for i in range(13):
+#    for j in range(i, 13):
+#        if i != j:
+#            options.sticky_pairs.append(['X'+str(i), 'X' + str(j)])
 #options.sticky_pairs = [['X', 'Y']] #<- which pairs are attractive. Non-physical pairs can be included. Defined as list of lists of 2 particles [['X', 'Y'], ['T', 'G'], ['M', 'N']] for instance
 # for tracking purposes, each list means a potential energy is computed, by taking all pair interactions from the sticky
 # pairs included in the track list.
@@ -264,6 +266,7 @@ buildobj.set_rotation_function(mode = 'random')
 d_tags = buildobj.dna_tags
 c_tags = buildobj.center_tags
 
+buildobj.rename_type_by_RE(pattern = 'W', new_type = 'W')
 buildobj.write_to_file(z_box_multi=options.z_m)
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
@@ -276,12 +279,10 @@ options.build_flags = buildobj.flags # none defined at the moment, for future us
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
 
-
 system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
 
-del buildobj, shapes, center_file_object
 
 Lx0 = options.sys_box[0]
 Ly0 = options.sys_box[1]
@@ -324,6 +325,14 @@ Sangle.set_coeff('A-B-C', k=120.0, t0=pi/2)
 Sangle.set_coeff('A-A-B', k=2.0, t0=pi)
 Sangle.set_coeff('A-B-B', k=2.0, t0=pi)
 Sangle.set_coeff('C-C-endFL', k=50.0, t0=pi)
+
+ktyp = 150.00
+for sh in range(shapes.__len__()):
+    for i in range(shapes[sh].flags['surface_bonds'].__len__()):
+        harmonic.set_coeff(shapes[0].flags['surface_bonds'][i][3], k = ktyp, r0 = shapes[0].flags['surface_bonds'][i][2])
+    for i in range(shapes[sh].flags['W-P_bonds'].__len__()):
+        harmonic.set_coeff(shapes[0].flags['W-P_bonds'][i][1], k = ktyp, r0 = shapes[0].flags['W-P_bonds'][i][0])
+
 
 ##################################################################################
 #     Lennard-jones potential---- attraction and repulsion parameters
@@ -473,7 +482,7 @@ nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
 
 
 
-reset_nblock_list()
+#reset_nblock_list()
 
 
 

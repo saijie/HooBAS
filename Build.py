@@ -13,6 +13,7 @@ import random
 import copy
 import types
 import Moment_Fixer
+import re
 from itertools import chain
 
 class vec(object):
@@ -62,7 +63,11 @@ class BuildHoomdXML(object):
     """
     This object is a collection of hoomds lists: positions, bonds, angles, p_num (particle #); and
     objects : particles (defined from class Particle further down), types (similar to shapes), shapecalls. Also uses center_obj as input object to
-    grab center positions (_c_pos) and types (_c_t). Normal call is init set to None which also calls __build_from_options
+    grab center positions (_c_pos) and types (_c_t).
+
+    Call to init set to None is no longer recommended, rather put directives inside shape object and call init = 'from_shapes'.
+
+    Normal call is init set to None which also calls __build_from_options
     which builds the whole lists from the objects. Use write_to_XML to write down to XML file. Possible to pass None for
     center object and shapes if init is not set to None.
 
@@ -114,6 +119,12 @@ class BuildHoomdXML(object):
     fix_overlapping(mdist = 1e-5)
         iterates through all beads, checking for distances that are smaller than mdist and shifts them in random directions. Extremely slow
         method
+
+    rename_type(initial_type, new_type)
+        iterates through the beadlist and renames all beads of type initial_type to beads of type new_type
+
+    rename_type_by_RE(pattern, new_type, RE_flags = None)
+        same as rename_type, but uses a regular expression through re.match(pattern, ..., RE_flags) to search the beadtype strings
 
     __build_from_X
         where X is either options or shapes. Old implementation is from options which will pull all particle properties from the options list. Called automatically
@@ -455,6 +466,27 @@ class BuildHoomdXML(object):
                 for k in range(self.__particles[-1].beads.__len__()):
                     self.__beads.append(self.__particles[-1].beads[k])
 
+    def rename_type(self, initial_type, new_type):
+        _indices = []
+        for i in range(self.__beads.__len__()):
+            if self.__beads[i].beadtype == initial_type:
+                self.__beads[i].beadtype = new_type
+                _indices.append(i)
+        return _indices
+
+    def rename_type_by_RE(self, pattern, new_type, RE_flags = None):
+        _indices = []
+        for i in range(self.__beads.__len__()):
+            if RE_flags is None:
+                match = re.match(pattern, self.__beads[i].beadtype)
+            else:
+                match = re.match(pattern, self.__beads[i].beadtype, RE_flags)
+            if match is not None:
+                self.__beads[i].beadtype = new_type
+                _indices.append(i)
+            del match
+        return _indices
+
     def fix_overlapping(self, _m_dist = 1e-5):
         # fixes overlapping of beads by setting the min dist between them to _m_dist, by shifting coords of one of them by 1/3 m_dist in the i-j direction. This is extremely slow
 
@@ -560,7 +592,7 @@ class BuildHoomdXML(object):
 
             self.sticky_used = []
 
-            self._sh = copy.deepcopy(loc_sh_obj)
+            self._sh = copy.deepcopy(loc_sh_obj) # associated shape, contains list of surface, and directives in .flags
             self.orientation = self._sh.n_plane
             self.rem_list = []
             self.att_list = [] #table of tables
@@ -570,7 +602,7 @@ class BuildHoomdXML(object):
                 _t_m = self._sh.flags['mass']
             except KeyError:
                 try:
-                    _t_m = self._sh.flags['density'] * self._sh.flags['volume'] * (self.size / 2.0)**3
+                    _t_m = self._sh.flags['density'] * self._sh.flags['volume'] * (self.size/2.0)**3
                 except KeyError:
                     print 'Unable to determine solid body mass, using value of 10, something is wrong here'
                     _t_m = 10.0
@@ -630,20 +662,36 @@ class BuildHoomdXML(object):
             if self.orientation is None:
                 self.orientation = [0, 0, 1]
 
+            if not ('soft_shell' in self._sh.flags and self._sh.flags['soft_shell'] is True):
+                try:
+                    self._surf_cut = self._sh.flags['multiple_surface_types']
+                    self.__build_multiple_surfaces()
+                    self.flags['mst'] = True
+                    if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
+                        init = 'pdb'
+                    else:
+                        init = 'mst'
+                except KeyError:
+                    if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
+                        init = 'pdb'
+                    self.__build_surface()
+                    self.flags['mst'] = False
+            else:
 
-            try:
-                self._surf_cut = self._sh.flags['multiple_surface_types']
-                self.__build_multiple_surfaces()
-                self.flags['mst'] = True
-                if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
-                    init = 'pdb'
+                if 'multiple_surface_types' in self._sh.flags:
+                    self.__build_soft_shells() #unimplemented
+                    self.flags['mst'] = True
+                    if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
+                        init = 'pdb'
+                    else:
+                        init = 'mst'
                 else:
-                    init = 'mst'
-            except KeyError:
-                if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
-                    init = 'pdb'
-                self.__build_surface()
-                self.flags['mst'] = False
+                    self.__build_soft_shell()
+                    self.flags['mst'] = False
+                    if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
+                        init = 'pdb'
+                    else:
+                        init = None
 
             if init is None:
                 self.add_DNA(n_ds = n_ds, n_ss = n_ss, p_flex = p_flex, s_end = s_end, num = num, scale = self.scale)
@@ -658,10 +706,10 @@ class BuildHoomdXML(object):
         @property
         def center_mass(self):
             return self.c_mass
-        @center_mass.setter
-        def center_mass(self, val):
-            self.c_mass = val
-            self.beads[0].mass = val
+        #@center_mass.setter
+        #def center_mass(self, val):
+        #    self.c_mass = val
+        #    self.beads[0].mass = val
         @property
         def surface_mass(self):
             return self.s_mass
@@ -669,7 +717,7 @@ class BuildHoomdXML(object):
         def surface_mass(self, val):
             self.s_mass = val
             for i in range(self._sh.pos.__len__()):
-                self.beads[i+1].mass = val
+                self.beads[i+self.c_type.__len__()].mass = val
         @property
         def surface_type(self):
             return self.s_type
@@ -852,4 +900,17 @@ class BuildHoomdXML(object):
                 offset = 0
             for i in range(self._sh.keys['dna'].__len__()):
                 self.add_DNA(rem_id= i + offset, scale = self.scale, **self._sh.keys['dna'][i][1])
+
+        def __build_soft_shell(self):
+            self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
+            pnum_offset = self.p_num[-1]
+            for i in range(self._sh.pos.__len__()):
+                self.rem_list.append(1+self.p_num[-1])
+                self.p_num.append(1+self.p_num[-1])
+                self.beads.append(CoarsegrainedBead.bead(position = copy.deepcopy(self._sh.pos[i] * self.size / (2*self.scale)), beadtype = self.s_type, body = -1, mass = self.s_mass))
+                self.bonds.append([self._sh.flags['W-P_bonds'][i][1], self.p_num[0], self.p_num[-1]])
+            for i in range(self._sh.flags['surface_bonds'].__len__()):
+                self.bonds.append([self._sh.flags['surface_bonds'][i][3],
+                                   self._sh.flags['surface_bonds'][i][0] + pnum_offset,
+                                   self._sh.flags['surface_bonds'][i][1] + pnum_offset])
 
