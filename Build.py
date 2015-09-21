@@ -581,6 +581,7 @@ class BuildHoomdXML(object):
             self.pos = np.zeros((1,3))
             self.bonds = []
             self.angles = []
+            self.dihedrals = []
             self.types = [center_type]
             self.p_num = [0]
             self.scale = scale
@@ -653,7 +654,7 @@ class BuildHoomdXML(object):
                             self.pos = np.append(self.pos, [-np.array(self._sh.I_fixer.positions[i])],axis =0)
                             self.p_num.append(self.p_num[-1] + 1)
             except KeyError:
-                print 'Inertia tensor method not specified. Assuming simple I tensor'
+                print 'Inertia tensor method not specified. Assuming simple I tensor (legacy shapes will throw this)'
                 self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = self.mass * 2.0 / 5.0)]
 
 
@@ -678,14 +679,16 @@ class BuildHoomdXML(object):
                     self.flags['mst'] = False
             else:
 
-                if 'multiple_surface_types' in self._sh.flags:
-                    self.__build_soft_shells() #unimplemented
+                if 'multiple_surface_types' in self._sh.flags and self._sh.flags['multiple_surface_types'].__len__()>1:
+                    self.__build_soft_shells() #unimplemented yet
                     self.flags['mst'] = True
                     if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
                         init = 'pdb'
                     else:
                         init = 'mst'
                 else:
+                    for i in range(self.beads.__len__()):
+                        self.beads[i].body = -1
                     self.__build_soft_shell()
                     self.flags['mst'] = False
                     if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
@@ -721,11 +724,9 @@ class BuildHoomdXML(object):
         @property
         def surface_type(self):
             return self.s_type
-
         @property
         def sticky_types(self):
             return list(set(list(chain.from_iterable(self.sticky_used))))
-
         @property
         def center_type(self):
             return self.c_type
@@ -786,7 +787,6 @@ class BuildHoomdXML(object):
             for i in range(self.angles.__len__()):
                 _d.append(self.angles[i][0])
             return list(set(_d))
-
         @property
         def sticky_tags(self):
             _tag = []
@@ -797,6 +797,7 @@ class BuildHoomdXML(object):
                         _loc_tag.append(self.p_num[i])
                 _tag+=_loc_tag
             return _tag
+
         def sticky_excluded(self, _types, _rc = None):
             _exclusion_list = []
             for i in range(self.beads.__len__()):
@@ -913,4 +914,3 @@ class BuildHoomdXML(object):
                 self.bonds.append([self._sh.flags['surface_bonds'][i][3],
                                    self._sh.flags['surface_bonds'][i][0] + pnum_offset,
                                    self._sh.flags['surface_bonds'][i][1] + pnum_offset])
-

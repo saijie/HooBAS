@@ -66,7 +66,6 @@ class CenterFile(object):
         :return: structure options
         """
         return self.__options
-
     @property
     def rot_crystal_box(self):
         """
@@ -74,7 +73,6 @@ class CenterFile(object):
         :return:
         """
         return self.vx, self.vy, self.vz
-
     @property
     def rotation_matrix(self):
         """
@@ -82,7 +80,6 @@ class CenterFile(object):
         :return:
         """
         return self.__rot_mat
-
     @property
     def surface_plane(self):
         """
@@ -90,12 +87,10 @@ class CenterFile(object):
         :return: list
         """
         return list(self.__surf_plane.array)
-
     @surface_plane.setter
     def surface_plane(self, sp):
         self.__surf_plane = CenterFile.vec(sp)
         self.__rot_mat = self.__get_rot_mat(sp)
-
     @property
     def particle_number(self):
         """
@@ -103,11 +98,9 @@ class CenterFile(object):
         :return: int size
         """
         return self.__table_size
-
     @property
     def built_types(self):
         return self.__built_centers
-
     @property
     def positions(self):
         """
@@ -115,7 +108,6 @@ class CenterFile(object):
         :return: table of arrays of positions
         """
         return self.__table
-
     @property
     def latt(self):
         return self.__lattice

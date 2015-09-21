@@ -86,6 +86,7 @@ class shape(object):
         self.keys = {}
         self._pdb = []
         self.mkeys = {'C' : 12.011, 'O' : 15.999, 'H' : 1.008, 'N' : 14.007, 'S' : 32.06}
+        self.I_fixer = None
 
         if lattice is None :
             self.__lattice = [1, 1, 1]
@@ -863,7 +864,15 @@ class shape(object):
 
         self.flags['soft_signature'] = signature
 
-
+    def reduce_degenerate_surface_bonds(self, n_rel_tol = 1e-2):
+        try:
+            for i in range(self.flags['surface_bonds'].__len__()):
+                for j in range(i+1, self.flags['surface_bonds'].__len__()):
+                    if abs(self.flags['surface_bonds'][i][2] - self.flags['surface_bonds'][j][2]) < n_rel_tol * 0.5 * (self.flags['surface_bonds'][i][2] + self.flags['surface_bonds'][j][2]):
+                        self.flags['surface_bonds'][j][2] = self.flags['surface_bonds'][i][2]
+                        self.flags['surface_bonds'][j][3] = self.flags['surface_bonds'][i][3]
+        except KeyError:
+            print 'Attempting to reduce degenerate bonds while no bonds are defined. Null operation'
 
     def rotate(self):
         try:

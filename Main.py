@@ -12,10 +12,7 @@ import GenShape
 import hoomd_XML_parser
 import Simulation_options
 import xml.etree.cElementTree as ET
-import itertools
 import Build
-import random
-import Moment_Fixer
 from hoomd_script import *
 
 
@@ -125,9 +122,7 @@ options.cool_time = 2e7 #usual 2e7
 options.step_size = 0.002
 options.size_time = 6e6
 options.box_size_packing = 0 # leave to 0, calculated further in, initialization needed
-options.coarse_grain_power = int(0) ## coarsens DNA scaling by a power of 2. 0 is regular model. Possible to uncoarsen the regular model
 options.flag_surf_energy = False ## check for surface energy calculations; exposed plane defined later. Turn to False for regular random
-options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
 options.special = 1
@@ -152,21 +147,6 @@ shapes[0].will_build_from_shapes(properties = {'surf_type' : 'P1'})
 shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 10, s_end = ['X','Y', 'X'], p_flex = array([-1]), num = 60)
 shapes[0].pdb_build_table()
 shapes[0].generate_surface_bonds(signature='P1', num_nn = 3)
-
-#shapes.append(GenShape.shape())
-#shapes[1].parse_pdb_protein(filename='4BLC.pdb')
-#shapes[1].will_build_from_shapes(properties = {'surf_type' : 'P2'})
-#shapes[1].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM' : 'NZ'}, n_ss = 2, n_ds = 3, s_end = ['Y', 'X', 'Y'], p_flex = array([-1]), num = 30)
-#shapes[1].pdb_build_table()
-#i_cut = 12
-#for i in range(options.special):
-#    shapes.append(GenShape.shape())
-#    shapes[-1].cube(Num=200, Radius = 2.5*2.0 / 28.5)
-#    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
-#    if i < i_cut:
-#        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X' + str(i), 'X' + str(i)], p_flex = array([-1]), num = 133)
-#    else:
-#        shapes[-1].set_dna(n_ss = 1, n_ds = 2, s_end = ['X12', 'X12'], p_flex = array([-1]), num = 133)
 
 
 ######################################################################
@@ -194,17 +174,7 @@ options.sticky_track = []
 
 
 
-options.corner_rad = [2.5]
-options.n_double_stranded = [5]
-options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain. Does not return any error if there
-# is no flexor, but options.flag_flexor_angle will stay false
-options.n_single_stranded = [3]
-options.sticky_ends = [['X','X', 'X'], ['Y', 'Y']]
-options.surface_types = ['P1', 'P2'] # Should be labeled starting with 'P'
-options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2) for i in range(64)] # initial approximation for # of beads on surface
-options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
-options.volume = options.densities[:] # temp value, is set by genshape
-options.p_surf = options.densities[:] # same
+
 options.int_bounds = [10, 2, 3] # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
 options.exposed_surf = [1, 0, 1] ## z component must not be zero
