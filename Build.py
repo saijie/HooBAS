@@ -905,6 +905,8 @@ class BuildHoomdXML(object):
                 self.add_DNA(rem_id= i + offset, scale = self.scale, **self._sh.keys['dna'][i][1])
 
         def __build_soft_shell(self):
+            for i in range(self.beads.__len__()):
+                self.beads[i].body = -1
             self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
             pnum_offset = self.p_num[-1]+1
             for i in range(self._sh.pos.__len__()):
@@ -916,3 +918,6 @@ class BuildHoomdXML(object):
                 self.bonds.append([self._sh.flags['surface_bonds'][i][3],
                                    self._sh.flags['surface_bonds'][i][0] + pnum_offset,
                                    self._sh.flags['surface_bonds'][i][1] + pnum_offset])
+            if 'fix_bonds' in self._sh.flags:
+                for i in range(1, 13):
+                    self.bonds.append([self._sh.flags['fix_bonds'][i-1], 0, i ])

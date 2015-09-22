@@ -889,6 +889,18 @@ class shape(object):
         except KeyError:
             print 'Attempting to reduce W-P bonds while no such bonds are defined. Null operation'
 
+    def fix_I_moment(self, c_type = 'W'):
+
+        self.I_fixer = Moment_Fixer.Added_Beads(c_type=c_type, shape_pos=self.__table, shape_num_surf=self.num_surf, d_tensor= self.flags['I_tensor'], mass =self.flags['mass'])
+        self.flags['fix_bonds'] = [self.flags['soft_signature']+'Wxx', self.flags['soft_signature']+'Wxx',
+                                   self.flags['soft_signature']+'Wxx',self.flags['soft_signature']+'Wxx',
+                                   self.flags['soft_signature']+'Wxx', self.flags['soft_signature']+'Wxx',
+                                   self.flags['soft_signature']+'Wxy',self.flags['soft_signature']+'Wxy',
+                                   self.flags['soft_signature']+'Wxy',self.flags['soft_signature']+'Wxy',
+                                   self.flags['soft_signature']+'Wxy',self.flags['soft_signature']+'Wxy']
+        self.flags['fix_dist'] = [1, 1, 1, 1, 1, 1, 2**0.5, 2**0.5, 2**0.5, 2**0.5, 2**0.5, 2**0.5 ]
+
+
     def rotate(self):
         try:
             for i in range(self.__table.__len__()):
