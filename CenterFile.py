@@ -66,7 +66,6 @@ class CenterFile(object):
         :return: structure options
         """
         return self.__options
-
     @property
     def rot_crystal_box(self):
         """
@@ -74,7 +73,6 @@ class CenterFile(object):
         :return:
         """
         return self.vx, self.vy, self.vz
-
     @property
     def rotation_matrix(self):
         """
@@ -82,7 +80,6 @@ class CenterFile(object):
         :return:
         """
         return self.__rot_mat
-
     @property
     def surface_plane(self):
         """
@@ -90,12 +87,10 @@ class CenterFile(object):
         :return: list
         """
         return list(self.__surf_plane.array)
-
     @surface_plane.setter
     def surface_plane(self, sp):
         self.__surf_plane = CenterFile.vec(sp)
         self.__rot_mat = self.__get_rot_mat(sp)
-
     @property
     def particle_number(self):
         """
@@ -103,11 +98,9 @@ class CenterFile(object):
         :return: int size
         """
         return self.__table_size
-
     @property
     def built_types(self):
         return self.__built_centers
-
     @property
     def positions(self):
         """
@@ -115,7 +108,6 @@ class CenterFile(object):
         :return: table of arrays of positions
         """
         return self.__table
-
     @property
     def latt(self):
         return self.__lattice
@@ -133,7 +125,7 @@ class CenterFile(object):
         initialize the tables from optinos w/ randomly placed beads
         :return: none
         """
-        self.__BoxSize = 1.7*self.__options.target_dim / self.__options.scale_factor
+        self.__BoxSize = 1.5*self.__options.target_dim / self.__options.scale_factor
         Table = [] # kth table contains (num_part(k),3) array of the kth particle type
         self.__rand_flag = True
         self.__table = []
@@ -158,7 +150,7 @@ class CenterFile(object):
                     for i in range(Table.__len__()-1):
                         for k in range(Table[i].__len__()):
                             value = (( (Table[j][PNum,0] - Table[i][k,0])**2 + (Table[j][PNum,1] - Table[i][k,1])**2 +(Table[j][PNum,2] - Table[i][k,2])**2 )**0.5)
-                            curr_list = curr_list or value < (self.__options.size[j] + self.__options.size[i]) * (3**0.5) * 1.5 / 2.0 / self.__options.scale_factor
+                            curr_list = curr_list or value < (self.__options.size[j] + self.__options.size[i]) * self.__options.center_sec_factor / 2.0 / self.__options.scale_factor
     
                     for i in range(0, PNum):
                         value = (( (Table[j][PNum,0] - Table[j][i,0])**2 + (Table[j][PNum,1] - Table[j][i,1])**2 +(Table[j][PNum,2] - Table[j][i,2])**2 )**0.5)
@@ -166,15 +158,16 @@ class CenterFile(object):
     
     
                     current_try += 1
-                    if current_try > 10000:
+                    if current_try > 1000:
                         PNum = 0
-                        break
+                        Table[j] = np.zeros((self.__options.num_particles[j],3))
+                        current_try = 0
+                        toplist_current_try += 1
+                        if toplist_current_try > 1000:
+                            j = 0
+                            Table = [np.zeros((self.__options.num_particles[j],3))]
+                            toplist_current_try = 0
                 PNum += 1
-            toplist_current_try += 1
-            if toplist_current_try > 1000:
-                j = 0
-                Table = []
-                break
             j += 1
     
         table_size = 0
@@ -227,7 +220,6 @@ class CenterFile(object):
             self.__table[i] = _tmp_table[_permute_list[i]]
             self.__built_centers = _tmp_centers[_permute_list[i]]
 
-
     def __cubic_lattice_table(self):
         """
         initializes the table on a cubic lattice, given by options. assuming multiple components are in intertwined lattice
@@ -256,8 +248,6 @@ class CenterFile(object):
                 for k in range(Lat_z.__len__()-1):
                     Table[count % self.__options.num_particles.__len__()] = np.append(Table[count % self.__options.num_particles.__len__()], np.array([[Lat_x[i+0], Lat_y[j+0], Lat_z[k+0]]]), axis =0)
                     count += 1
-
-
 
         if self.__rot_flag:
             _b_x = CenterFile.vec([pitch, 0, 0])
@@ -463,7 +453,6 @@ class CenterFile(object):
                 for k in range(_mean.__len__()):
                     self.__table[i][j,k] -= _mean[k]
 
-
     def add_particles_at_random(self, num, center_type, particle_size, max_try=10000):
         """
         add a component to the tables, placed at random in the simulation domain
@@ -513,7 +502,6 @@ class CenterFile(object):
         if not flag:
             self.__table.append(new_table)
         self.__table_size += new_table.__len__()
-
 
     def _manual_rot_cut(self, int_bounds):
         """
@@ -593,7 +581,6 @@ class CenterFile(object):
         else:
             self.__table_size -= self.__table[drop_index].__len__()
             self.__table[drop_index] = np.zeros((0,3))
-
 
     def write_table(self):
         """

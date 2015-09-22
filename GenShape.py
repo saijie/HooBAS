@@ -53,6 +53,8 @@ class shape(object):
     added by adding def name and making the new method generate a numpy array of size (N,3) where N is the number of
     particles. A volume should be set by the method. Class supports a rotation matrix method.
 
+    self.flags is a dictionary for building directives.
+
     properties is a dict object for additional properties useful for non-trivial cases (read xyz / pdb parsed files):
     'surface' : Used for DNA coverage specifications
     'density' : used for mass calculations
@@ -64,7 +66,7 @@ class shape(object):
     'normalized' : set to either True or False, build will either multiply dimensions by size (True) or not (False)
     'tensor_name' : filename or path to filename to the tensor of inertia of the real molecule.
 
-    ## For loading everything from pdb; attachment sites are provided by 'AS_#' where # is an integer number <- feature to be added
+
 
 
     """
@@ -84,6 +86,7 @@ class shape(object):
         self.keys = {}
         self._pdb = []
         self.mkeys = {'C' : 12.011, 'O' : 15.999, 'H' : 1.008, 'N' : 14.007, 'S' : 32.06}
+        self.I_fixer = None
 
         if lattice is None :
             self.__lattice = [1, 1, 1]
@@ -107,26 +110,21 @@ class shape(object):
         :return: structure
         """
         return self.__options
-
     @property
     def num_surf(self):
         return self.__table.__len__()
-
     @property
     def volume(self):
         try:
             return self.flags['volume']
         except KeyError:
             return None
-
     @property
     def pos(self):
         return self.__table
-
     @property
     def s_plane(self):
         return self.__surf_plane
-
     @s_plane.setter
     def s_plane(self, surf_plane):
         if not (surf_plane is None) and surf_plane.__len__() == 3 and not (surf_plane[1] == surf_plane[0] ==0):
@@ -136,22 +134,18 @@ class shape(object):
             self.__n_plane = vec(r_vec)
             self.__rot_mat = self.__get_rot_mat(r_vec)
             self.__surf_plane = vec(surf_plane)
-
     @property
     def n_plane(self):
         return self.__n_plane
-
     @property
     def lattice_param(self):
         return self.__lattice
-
     @property
     def unit_shape(self):
         try:
             return self.flags['normalized']
         except KeyError:
             return None
-
     @staticmethod
     def __get_rot_mat(cubic_plane):
         #normalize plane orientation
@@ -222,17 +216,18 @@ class shape(object):
                 TableEdge = np.append(TableEdge, np.array([[(1-Radius)+Radius*cos(AngleRange[i+1]),Gridbase[j], (1-Radius)+Radius*sin(AngleRange[i+1])]]),axis =0)
 
         #XYZ vertice
-        PtVertice = int(NumSide**2 *(4*pi*Radius**2/8) / (2*(1-Radius))**2)
+        PtVertice = NumSide**2 *(4*pi*Radius**2/8) / (2*(1-Radius))**2
         TableVert = np.zeros((0,3))
-        PtVertice *= 8
+        PtVertice = int(PtVertice*8)
         gold_ang = pi*(3-5**0.5)
         th = gold_ang*np.arange(PtVertice)
-        z = np.linspace(1-1.0/PtVertice, 1.0/PtVertice -1, PtVertice)
-
-
-        for i in range(0, PtVertice):
-            if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
-                TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*(1-z[i]**2)**0.5*cos(th[i]), (1-Radius)+Radius*(1-z[i]**2)**0.5*sin(th[i]),(1-Radius)+Radius*z[i]]]),axis=0)
+        if PtVertice>1:
+            z = np.linspace(1-1.0/PtVertice, 1.0/PtVertice -1, PtVertice)
+            for i in range(0, PtVertice):
+                if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
+                    TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*(1-z[i]**2)**0.5*cos(th[i]), (1-Radius)+Radius*(1-z[i]**2)**0.5*sin(th[i]),(1-Radius)+Radius*z[i]]]),axis=0)
+        elif PtVertice == 1 :
+            TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*3**0.5, (1-Radius)+Radius*3**0.5,(1-Radius)+Radius*3**0.5]]),axis=0)
 
         #Write 6 faces
         for i in range(Tablexy.__len__()):
@@ -280,11 +275,7 @@ class shape(object):
         self.flags['volume'] = 2**3
         self.flags['surface'] = 6*2**2
         self.flags['simple_I_tensor'] = True
-
-        self.__options.num_surf[self.__curr_block] = (6*Tablexy.__len__() + 12*TableEdge.__len__() + 8*TableVert.__len__())
-        self.__options.volume[self.__curr_block] = (self.__options.size[self.__curr_block]*2.0 / self.__options.scale_factor)**3
-        self.__options.p_surf[self.__curr_block] = 6*(self.__options.size[self.__curr_block]*2.0 / self.__options.scale_factor)**2
-        #return options
+        self.flags['call'] = 'cube'
 
     def dodecahedron(self):
         #Generate one face
@@ -826,7 +817,6 @@ class shape(object):
         self.flags.update(properties)
         self.flags['pdb_object'] = True
 
-
     def set_dna(self, key = None, n_ss = None, n_ds = None, s_end = None, p_flex = None, num =None):
         _l_list = []
         for i in range(self.__table.__len__()):
@@ -834,6 +824,55 @@ class shape(object):
 
         self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
 
+    def generate_surface_bonds(self, signature, num_nn = 3):
+
+        self.flags['soft_shell'] = True
+        self.flags['surface_bonds'] = []
+        self.flags['W-P_bonds'] = []
+
+        #construct a list of nn for each particle in the table, append [i, j, r0] to the surf bond list, where i-j are the nn couples and r0 is their distance
+        #dist table
+        _dist_sq = np.zeros((self.__table.__len__(), self.__table.__len__()))
+        _nn = np.zeros((self.__table.__len__(), num_nn))
+        for i in range(self.__table.__len__()):
+            for j in range(self.__table.__len__()):
+                for k in range(3):
+                    _dist_sq[i,j] += (self.__table[i,k] - self.__table[j,k])**2
+
+        for i in range(self.__table.__len__()):
+            _dumpsort = np.argsort(_dist_sq[i,:], kind = 'mergesort')
+
+            _ind_to_add = []
+
+            for j in range(1, _dumpsort.__len__()):
+                _curr = True
+                for k in range(self.flags['surface_bonds'].__len__()):
+                    if self.flags['surface_bonds'][k][0] == _dumpsort[j] and self.flags['surface_bonds'][k][1] == i:
+                        _curr = False
+                if _curr:
+                    _ind_to_add.append(_dumpsort[j])
+                if _ind_to_add.__len__() == num_nn:
+                    break
+
+
+            for j in range(_ind_to_add.__len__()):
+                self.flags['surface_bonds'].append([i, _ind_to_add[j], _dist_sq[i, _ind_to_add[j]]**0.5, signature + '_' + str(i) + '_' + str(j)])
+
+
+        for i in range(self.__table.__len__()):
+            self.flags['W-P_bonds'].append([(self.__table[i,0]**2 + self.__table[i,1]**2 + self.__table[i,2]**2)**0.5, signature + '_' + str(i)])
+
+        self.flags['soft_signature'] = signature
+
+    def reduce_degenerate_surface_bonds(self, n_rel_tol = 1e-2):
+        try:
+            for i in range(self.flags['surface_bonds'].__len__()):
+                for j in range(i+1, self.flags['surface_bonds'].__len__()):
+                    if abs(self.flags['surface_bonds'][i][2] - self.flags['surface_bonds'][j][2]) < n_rel_tol * 0.5 * (self.flags['surface_bonds'][i][2] + self.flags['surface_bonds'][j][2]):
+                        self.flags['surface_bonds'][j][2] = self.flags['surface_bonds'][i][2]
+                        self.flags['surface_bonds'][j][3] = self.flags['surface_bonds'][i][3]
+        except KeyError:
+            print 'Attempting to reduce degenerate bonds while no bonds are defined. Null operation'
 
     def rotate(self):
         try:

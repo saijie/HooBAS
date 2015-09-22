@@ -1,6 +1,5 @@
-class bead():
-  '''This is a coarse grained bead'''
-  '''Attributes'''
+class bead(object):
+  """This is a coarse grained bead"""
   def __init__(self, position, beadtype='notype', mass=1.0, body=-1, image=[0, 0, 0]):
     self.beadtype = beadtype
     self.mass = mass
