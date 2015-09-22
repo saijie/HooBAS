@@ -883,7 +883,7 @@ class shape(object):
         try:
             for i in range(self.flags['W-P_bonds'].__len__()):
                 for j in range(i, self.flags['W-P_bonds'].__len__()):
-                    if abs(self.flags['W-P_bonds'][i][0] - self.flags['W-P_bonds'][j][0] < n_rel_tol * 0.5 * (self.flags['W-P_bonds'][i][0] + self.flags['W-P_bonds'][j][0])):
+                    if abs(self.flags['W-P_bonds'][i][0] - self.flags['W-P_bonds'][j][0]) < n_rel_tol * 0.5 * (self.flags['W-P_bonds'][i][0] + self.flags['W-P_bonds'][j][0]):
                         self.flags['W-P_bonds'][j][0] = self.flags['W-P_bonds'][i][0]
                         self.flags['W-P_bonds'][j][1] = self.flags['W-P_bonds'][i][1]
         except KeyError:
