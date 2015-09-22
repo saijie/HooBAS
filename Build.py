@@ -591,6 +591,8 @@ class BuildHoomdXML(object):
             self.body_num = 0
             self.flags = {}
 
+            self.surf_tags = []
+
             self.sticky_used = []
 
             self._sh = copy.deepcopy(loc_sh_obj) # associated shape, contains list of surface, and directives in .flags
@@ -865,7 +867,7 @@ class BuildHoomdXML(object):
                     _dump_copy.harmonic_bonds_in_oneDNAchain[j][1] += _p_off
                     _dump_copy.harmonic_bonds_in_oneDNAchain[j][2] += _p_off
                     self.bonds.append(_dump_copy.harmonic_bonds_in_oneDNAchain[j])
-                    self.bonds.append(['S-NP', self.att_list[-1][i], _p_off])
+                self.bonds.append(['S-NP', self.att_list[-1][i], _p_off])
                 for j in range(_dump_copy.angles_in_oneDNAchain.__len__()):
                     for k in range(_dump_copy.angles_in_oneDNAchain[j].__len__()-1):
                         _dump_copy.angles_in_oneDNAchain[j][k+1] += _p_off
@@ -904,7 +906,7 @@ class BuildHoomdXML(object):
 
         def __build_soft_shell(self):
             self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
-            pnum_offset = self.p_num[-1]
+            pnum_offset = self.p_num[-1]+1
             for i in range(self._sh.pos.__len__()):
                 self.rem_list.append(1+self.p_num[-1])
                 self.p_num.append(1+self.p_num[-1])

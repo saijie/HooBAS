@@ -826,6 +826,11 @@ class shape(object):
 
     def generate_surface_bonds(self, signature, num_nn = 3):
 
+        try:
+            multi = self.flags['size'] / 2.0
+        except KeyError:
+            multi = 1.0
+
         self.flags['soft_shell'] = True
         self.flags['surface_bonds'] = []
         self.flags['W-P_bonds'] = []
@@ -856,11 +861,11 @@ class shape(object):
 
 
             for j in range(_ind_to_add.__len__()):
-                self.flags['surface_bonds'].append([i, _ind_to_add[j], _dist_sq[i, _ind_to_add[j]]**0.5, signature + '_' + str(i) + '_' + str(j)])
+                self.flags['surface_bonds'].append([i, _ind_to_add[j], _dist_sq[i, _ind_to_add[j]]**0.5 * multi, signature + '_' + str(i) + '_' + str(j)])
 
 
         for i in range(self.__table.__len__()):
-            self.flags['W-P_bonds'].append([(self.__table[i,0]**2 + self.__table[i,1]**2 + self.__table[i,2]**2)**0.5, signature + '_' + str(i)])
+            self.flags['W-P_bonds'].append([(self.__table[i,0]**2 + self.__table[i,1]**2 + self.__table[i,2]**2)**0.5 * multi, signature + '_' + str(i)])
 
         self.flags['soft_signature'] = signature
 
@@ -873,6 +878,16 @@ class shape(object):
                         self.flags['surface_bonds'][j][3] = self.flags['surface_bonds'][i][3]
         except KeyError:
             print 'Attempting to reduce degenerate bonds while no bonds are defined. Null operation'
+
+    def reduce_degenerate_WP_bonds(self, n_rel_tol = 1e-2):
+        try:
+            for i in range(self.flags['W-P_bonds'].__len__()):
+                for j in range(i, self.flags['W-P_bonds'].__len__()):
+                    if abs(self.flags['W-P_bonds'][i][0] - self.flags['W-P_bonds'][j][0] < n_rel_tol * 0.5 * (self.flags['W-P_bonds'][i][0] + self.flags['W-P_bonds'][j][0])):
+                        self.flags['W-P_bonds'][j][0] = self.flags['W-P_bonds'][i][0]
+                        self.flags['W-P_bonds'][j][1] = self.flags['W-P_bonds'][i][1]
+        except KeyError:
+            print 'Attempting to reduce W-P bonds while no such bonds are defined. Null operation'
 
     def rotate(self):
         try:
