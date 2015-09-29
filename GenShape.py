@@ -47,13 +47,17 @@ class vec(object):
             return _c
 
 
-class shape(object):
+class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own classes, and inherit the shape class.
     """
     Shape object containing self.__table, which is a list of all the points in the base object. Any new shape can be
     added by adding def name and making the new method generate a numpy array of size (N,3) where N is the number of
     particles. A volume should be set by the method. Class supports a rotation matrix method.
 
     self.flags is a dictionary for building directives.
+
+    self.internal_bonds is a list of length N, containing N bonds in the form of [i, j, r0, type]
+    self.internal_angles is a list of length N, containing N angle potentials in the form [i, j, k, theta0, type]
+
 
     properties is a dict object for additional properties useful for non-trivial cases (read xyz / pdb parsed files):
     'surface' : Used for DNA coverage specifications
@@ -66,8 +70,48 @@ class shape(object):
     'normalized' : set to either True or False, build will either multiply dimensions by size (True) or not (False)
     'tensor_name' : filename or path to filename to the tensor of inertia of the real molecule.
 
+    basic shape types are not covered, since they are custom (cube, sphere etc.).
 
+    General methods :
 
+    write_table(filename = None)
+    writes the current surface table (not added beads) into an off file specified by filename. If left to None, the method
+    assume legacy functionality
+
+    load_file, load_file_Angstrom(parser = None, file_name = None)
+    loads a surface from a file. Current available parser is xyz, if left to None will default to it. If filename is not specified
+    method will assume legacy behavior
+
+    load_file_Anstrom_m(parser = None, files = None)
+    loads a surface given by multiple different files (multiple surface types). Will enable the 'mst' flag for building. files is a list of
+    filenames. If left to none, will assume legacy behavior.
+
+    parse_pdb_protein(filename = None)
+    will load a protein from a pdb file. Calculates mass, moment of inertia. If filename is left to none, assumes legacy filename behavior.
+
+    add_pdb_DNA_key(key, *DNA_args)
+    keys a type of DNA given by DNA_args to specific locations in the pdb files, given by keys.
+
+    will_build_from_shapes(properties)
+    sets the shape as a pdb object for the builder and updates the flag list from self.flags.update(properties). Need to call set_DNA afterwards
+    to have proper pdb type DNA keying for the builder.
+
+    set_DNA(*DNA_args)
+    sets DNA on the surface. Used to emulate pdb-like behavior in the builder.
+
+    generate_internal_bonds(signature, num_nn)
+    sets the internal surface bonds and center-surface bonds. Generic names are used for bonds and signature signs the names. If two different shapes
+    have the same signature, it is likely to result in overlapping bond names. num_nn is used for the number of nearest neighbours on the surface. Needs to be run
+    after fix_I_moment if additional beads are needed.
+
+    generate_surface_bonds(*args)
+    calls generate_internal_bonds(*args)
+
+    reduce_internal_DOF(n_rel_tol)
+    iterates over internal DOF (bonds, angles) and removes types that are less different than n_rel_tol
+
+    fix_I_moment
+    adds ficticious beads in the center of the shape to correct the moment of inertia
 
     """
 
@@ -75,16 +119,31 @@ class shape(object):
 
         self.__curr_block = curr_block
         self.__options = options
-        self.__table = np.zeros((0,3))
-        self.__need_normalization = True
+
+        self.__table = np.zeros((0,3), dtype=float)
+
+        #additional DOF for moment corrections
+        self.additional_points = np.zeros((1,3), dtype=float) # add the 0, 0, 0 position
+        self.masses = np.zeros((0), dtype = float)
+        self.type_suffix = ['']
+
+        #internal DOF for soft shells
+        self.internal_bonds = []
+        self.internal_angles = []
+
+
+
 
         if properties is None:
             self.flags = {}
         else :
             self.flags = properties
+
         self.flags['hard_core_safe_dist'] = 0
+
         self.keys = {}
         self._pdb = []
+        # keying atomic symbols to masses
         self.mkeys = {'C' : 12.011, 'O' : 15.999, 'H' : 1.008, 'N' : 14.007, 'S' : 32.06}
         self.I_fixer = None
 
@@ -595,8 +654,10 @@ class shape(object):
             #TotalTable = np.append(TotalTable, np.array([[TableVertRot[i,0], -TableVertRot[i,1], TableVertRot[i,2]]]),axis = 0)
             #TotalTable = np.append(TotalTable, np.array([[-TableVertRot[i,0], -TableVertRot[i,1], TableVertRot[i,2]]]),axis = 0)
 
-    def write_table(self):
-        with open(self.__options.off_name+'_'+str(self.__curr_block), 'w') as f:
+    def write_table(self, filename = None):
+        if filename is None :
+            filename = self.__options.off_name+'_'+str(self.__curr_block)
+        with open(filename, 'w') as f:
             f.write('OFF\n')
             f.write(str(self.__table.__len__())+' 0 0\n')
             f.write('0 0 0\n')
@@ -604,15 +665,25 @@ class shape(object):
             for i in range(self.__table.__len__()):
                 f.write(str(self.__table[i,0]) + ' ' + str(self.__table[i,1]) + ' ' + str(self.__table[i,2]) + '\n')
 
-    def load_file_Angstroms(self):
+    def load_file_Angstroms(self, parser = None, file_name = None):
 
-        self.__need_normalization = False
-        with open(self.__options.off_name[self.__curr_block], 'r') as f :
-            lines = f.readlines()
-            for line in lines:
-                l = line.strip().split()
-                self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
-        self.__options.num_surf[self.__curr_block] = self.__table.__len__()
+        self.flags['normalized'] = False
+        self.flags['simple_I_tensor'] = False
+
+        if (parser is None or parser == 'xyz') and file_name is None :
+
+            with open(self.__options.off_name[self.__curr_block], 'r') as f :
+                lines = f.readlines()
+                for line in lines:
+                    l = line.strip().split()
+                    self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
+            self.__options.num_surf[self.__curr_block] = self.__table.__len__()
+        elif parser is None or parser == 'xyz':
+            with open(file_name, 'r') as f:
+                lines = f.readlines()
+                for line in lines:
+                    l = line.strip().split()
+                    self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
 
     def load_file(self, parser = None, file_name = None):
 
@@ -647,7 +718,6 @@ class shape(object):
 
 
         if (parser is None or parser == 'xyz') and files is None:
-            #self.__need_normalization = False
             _t = []
             for i in range(self.__options.off_name[self.__curr_block].__len__()):
                 with open(self.__options.off_name[self.__curr_block][i], 'r') as f :
@@ -682,22 +752,6 @@ class shape(object):
 
         else:
             raise ImportError('unknown parse method')
-
-    def load_file_multiple(self):
-
-        self.__need_normalization = False
-        _t = []
-        for i in range(self.__options.off_name[self.__curr_block].__len__()):
-            with open(self.__options.off_name[self.__curr_block][i], 'r') as f :
-                lines = f.readlines()
-                _c = 0
-                for line in lines:
-                    l = line.strip().split()
-                    self.__table = np.append(self.__table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
-                    _c += 1
-            del f
-            _t.append(_c)
-        self.flags['multiple_surface_types'] = _t
 
     def parse_pdb_protein(self, filename = None):
         """
@@ -818,41 +872,59 @@ class shape(object):
         self.flags['pdb_object'] = True
 
     def set_dna(self, key = None, n_ss = None, n_ds = None, s_end = None, p_flex = None, num =None):
+        """
+        Emulates pdb type DNA keying for non-pdb shapes. Used after will_build_from_shapes
+        :param key:
+        :param n_ss:
+        :param n_ds:
+        :param s_end:
+        :param p_flex:
+        :param num:
+        :return:
+        """
         _l_list = []
         for i in range(self.__table.__len__()):
             _l_list.append([self.__table[0, 0], self.__table[0, 1], self.__table[0, 2]])
 
         self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
 
-    def generate_surface_bonds(self, signature, num_nn = 3):
-
+    def generate_surface_bonds(self, *args):
+        #old name for this function
+        self.generate_internal_bonds(*args)
+    def generate_internal_bonds(self, signature, num_nn = 3):
+        """
+        Generates surface bonds for the num_nn nearest neighbours on the surface. Also adds one bond per surface atom between the center and the surface. Note
+        that this has to be run after the additional beads are created from the moment of inertia fixer or the indices will be wrong.
+        :param signature: internal DOF-wide generic name. Making two shapes with same signature will most likely generate overlapping bond types
+        :param num_nn: number of neighbours to consider when creating surface bonds
+        :return:
+        """
         try:
             multi = self.flags['size'] / 2.0
         except KeyError:
             multi = 1.0
 
         self.flags['soft_shell'] = True
-        self.flags['surface_bonds'] = []
-        self.flags['W-P_bonds'] = []
+
+        _offset = self.additional_points.__len__()
 
         #construct a list of nn for each particle in the table, append [i, j, r0] to the surf bond list, where i-j are the nn couples and r0 is their distance
-        #dist table
-        _dist_sq = np.zeros((self.__table.__len__(), self.__table.__len__()))
-        _nn = np.zeros((self.__table.__len__(), num_nn))
+        _dist_sq = np.zeros((self.__table.__len__(), self.__table.__len__())) # table of distances between i-j squared
+        _nn = np.zeros((self.__table.__len__(), num_nn)) # table of nearest neighbours
         for i in range(self.__table.__len__()):
             for j in range(self.__table.__len__()):
                 for k in range(3):
-                    _dist_sq[i,j] += (self.__table[i,k] - self.__table[j,k])**2
+                    _dist_sq[i,j] += (self.__table[i,k] - self.__table[j,k])**2 # calculate rij **2
 
         for i in range(self.__table.__len__()):
-            _dumpsort = np.argsort(_dist_sq[i,:], kind = 'mergesort')
 
-            _ind_to_add = []
+            _dumpsort = np.argsort(_dist_sq[i,:], kind = 'mergesort') # sort the indices
+            _ind_to_add = [] # initialize the indices to add
 
             for j in range(1, _dumpsort.__len__()):
                 _curr = True
-                for k in range(self.flags['surface_bonds'].__len__()):
-                    if self.flags['surface_bonds'][k][0] == _dumpsort[j] and self.flags['surface_bonds'][k][1] == i:
+                for k in range(self.internal_bonds.__len__()): # check whether we already appended this bond
+                    if self.internal_bonds[k][0] == _dumpsort[j] and self.internal_bonds[k][1] == i:
                         _curr = False
                 if _curr:
                     _ind_to_add.append(_dumpsort[j])
@@ -861,45 +933,61 @@ class shape(object):
 
 
             for j in range(_ind_to_add.__len__()):
-                self.flags['surface_bonds'].append([i, _ind_to_add[j], _dist_sq[i, _ind_to_add[j]]**0.5 * multi, signature + '_' + str(i) + '_' + str(j)])
+                self.internal_bonds.append([i + _offset, _ind_to_add[j] +_offset, _dist_sq[i, _ind_to_add[j]]**0.5 * multi, signature + '_' + str(i) + '_' + str(j)])
 
 
         for i in range(self.__table.__len__()):
-            self.flags['W-P_bonds'].append([(self.__table[i,0]**2 + self.__table[i,1]**2 + self.__table[i,2]**2)**0.5 * multi, signature + '_' + str(i)])
+            self.internal_bonds.append([0, i +_offset, (self.__table[i,0]**2 + self.__table[i,1]**2 + self.__table[i,2]**2)**0.5 * multi, signature + '_' + str(i)])
 
         self.flags['soft_signature'] = signature
 
-    def reduce_degenerate_surface_bonds(self, n_rel_tol = 1e-2):
-        try:
-            for i in range(self.flags['surface_bonds'].__len__()):
-                for j in range(i+1, self.flags['surface_bonds'].__len__()):
-                    if abs(self.flags['surface_bonds'][i][2] - self.flags['surface_bonds'][j][2]) < n_rel_tol * 0.5 * (self.flags['surface_bonds'][i][2] + self.flags['surface_bonds'][j][2]):
-                        self.flags['surface_bonds'][j][2] = self.flags['surface_bonds'][i][2]
-                        self.flags['surface_bonds'][j][3] = self.flags['surface_bonds'][i][3]
-        except KeyError:
-            print 'Attempting to reduce degenerate bonds while no bonds are defined. Null operation'
+    def reduce_internal_DOF(self, n_rel_tol = 1e-2):
+        """
+        Reduces the number of internal DOF by comparing each DOF parameters (r0 for bonds, theta0 for angles) and eliminating
+        one type if is it within n_rel_tol of the other one. Comparison is done by |r0i - r0j| < n_rel_tol * (r0i + r0j)/2
+        :param n_rel_tol: relative tolerance of the comparison
+        :return:
+        """
 
-    def reduce_degenerate_WP_bonds(self, n_rel_tol = 1e-2):
-        try:
-            for i in range(self.flags['W-P_bonds'].__len__()):
-                for j in range(i, self.flags['W-P_bonds'].__len__()):
-                    if abs(self.flags['W-P_bonds'][i][0] - self.flags['W-P_bonds'][j][0]) < n_rel_tol * 0.5 * (self.flags['W-P_bonds'][i][0] + self.flags['W-P_bonds'][j][0]):
-                        self.flags['W-P_bonds'][j][0] = self.flags['W-P_bonds'][i][0]
-                        self.flags['W-P_bonds'][j][1] = self.flags['W-P_bonds'][i][1]
-        except KeyError:
-            print 'Attempting to reduce W-P bonds while no such bonds are defined. Null operation'
+        for i in range(self.internal_bonds.__len__()):
+            for j in range(i+1, self.internal_bonds.__len__()):
+                if abs(self.internal_bonds[i][-2] - self.internal_bonds[j][-2]) < n_rel_tol * 0.5 * (self.internal_bonds[i][-2] + self.internal_bonds[j][-2]):
+                    self.internal_bonds[j][-1] = self.internal_bonds[i][-1]
+                    self.internal_bonds[j][-2] = self.internal_bonds[j][-2]
 
-    def fix_I_moment(self, c_type = 'W'):
+        for i in range(self.internal_angles.__len__()):
+            for j in range(i+1, self.internal_angles.__len__()):
+                if abs(self.internal_angles[i][-2] - self.internal_angles[j][-2]) < n_rel_tol * 0.5 * (self.internal_angles[i][-2] + self.internal_angles[j][-2]):
+                    self.internal_angles[j][-1] = self.internal_angles[i][-1]
+                    self.internal_angles[j][-2] = self.internal_angles[j][-2]
+
+    def fix_I_moment(self, c_type = ''):
+        """
+        Fixes the moment of inertia of the shape by adding 12 ficticious particles in the middle. Some directives needs to be
+        defined or this will throw an error. Self.flags['mass'] must be set to some value and self.flags['I_tensor'] must be defined.
+        Note that using parse pdb will create those values from the pdb file.
+        :param c_type: prefix to add to ficticious types. Default is empty string
+        :return:
+        """
 
         self.I_fixer = Moment_Fixer.Added_Beads(c_type=c_type, shape_pos=self.__table, shape_num_surf=self.num_surf, d_tensor= self.flags['I_tensor'], mass =self.flags['mass'])
-        self.flags['fix_bonds'] = [self.flags['soft_signature']+'Wxx', self.flags['soft_signature']+'Wxx',
-                                   self.flags['soft_signature']+'Wxx',self.flags['soft_signature']+'Wxx',
-                                   self.flags['soft_signature']+'Wxx', self.flags['soft_signature']+'Wxx',
-                                   self.flags['soft_signature']+'Wxy',self.flags['soft_signature']+'Wxy',
-                                   self.flags['soft_signature']+'Wxy',self.flags['soft_signature']+'Wxy',
-                                   self.flags['soft_signature']+'Wxy',self.flags['soft_signature']+'Wxy']
-        self.flags['fix_dist'] = [1, 1, 1, 1, 1, 1, 2**0.5, 2**0.5, 2**0.5, 2**0.5, 2**0.5, 2**0.5 ]
 
+        #change the I_fixer until the masses values are fine by using self.I_fixer.cmass = x, where x ranges from 0 to self.flags['mass']. 
+
+        _offset = self.additional_points.__len__()
+
+        self.additional_points = np.append(self.additional_points, self.I_fixer.intertwined_positions, axis = 0)
+
+        self.masses[0] = 1.0 # the I_fixer assumes a center_mass of 1
+        self.masses=np.append(self.masses, self.I_fixer.intertwined_masses[1:])
+
+        self.type_suffix += self.I_fixer.types
+
+        if 'soft_shell' in self.flags and self.flags['soft_shell'] is True:
+            for i in range(6):
+                self.internal_bonds.append([0, i + _offset, 1.0, self.flags['soft_signature']+'_IF_xx'])
+            for i in range(6, 12):
+                self.internal_bonds.append([0, i + _offset, 2.0**0.5, self.flags['soft_signature']+'_IF_xy'])
 
     def rotate(self):
         try:

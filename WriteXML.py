@@ -3,7 +3,7 @@ from headxml import *
 import CoarsegrainedBead
 
 '''Read in classes of beads, bonds and angles, write xml file for HOOMD'''
-def write_xml (filename, All_beads, All_bonds, All_angles, L=[100, 100, 100]):
+def write_xml (filename, All_beads, All_bonds, All_angles, L=[100, 100, 100], export_charge= False):
     print 'output filename=', filename
     fw = open(filename, 'a')
     xmlhead(filename, L)
@@ -40,6 +40,12 @@ def write_xml (filename, All_beads, All_bonds, All_angles, L=[100, 100, 100]):
     for i in range (len(All_beads)):
         fw.write('%d\n' %(All_beads[i].body))
     fw.write('</body>\n')
+## charges ##
+    if export_charge:
+        fw.write('<charge>\n')
+        for i in range(len(All_beads)):
+            fw.write('%f\n' %All_beads[i].charge)
+        fw.write('</charge>\n')
 
 #### Bond ###
 #    print All_bonds

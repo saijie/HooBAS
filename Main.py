@@ -14,7 +14,7 @@ import Simulation_options
 import xml.etree.cElementTree as ET
 import Build
 from hoomd_script import *
-
+import time
 
 def c_hoomd_box(v, int_bounds, z_multi =1.00):
     vx = v[0][:]
@@ -41,9 +41,9 @@ def c_hoomd_box(v, int_bounds, z_multi =1.00):
     return [lx,ly,lz, xy, xz, yz]
 
 def get_nn(_c_pos, _box):
-    ## assuming cubic box cause im lazy
+    ## assuming cubic box cause im lazy, this returns the list of 12 nearest neighbors, so its a N x 12 list. Uses mergesort for N logN speed, but quicksort might be better here
     _nn = zeros((_c_pos.__len__(), 12), dtype = int)
-    _dist_m_sq = zeros((_c_pos.__len__(), _c_pos.__len__()), dtype=float)
+    _dist_m_sq = zeros((_c_pos.__len__(), _c_pos.__len__()), dtype=float) #matrix of squared distances. no need to calculate square roots here, min(x) = min(x**2)**0.5 if x > 0
     for ii in range(_c_pos.__len__()):
         for jj in range(_c_pos.__len__()):
             for KK in range(3):
@@ -57,8 +57,14 @@ def reset_nblock_list():
     new_types = -ones(options.special, dtype = int)
     new_types[0] = 0
     c_pos = zeros((options.special, 3), dtype = float)
+
+    _dump_snap = system.take_snapshot()
+    _tag_list = _dump_snap.particles.charge.astype(int)
+    _tag_sort = argsort(_tag_list, kind = 'mergesort') # the sorted tag list acts as a pointer array where _tag_sort[c_tag[j]] will point to the original c_tag[j]. Mergesort is N log N
+
     for jj in range(options.special):
-        c_pos[jj,:] = system.particles[c_tags[jj]].position
+        c_pos[jj,:] = _dump_snap.particles.position[_tag_sort[c_tags[jj]]]
+
     locbox = system.box
     nntab = get_nn(_c_pos = c_pos, _box=[locbox.Lx, locbox.Ly, locbox.Lz])
     for jj in range(0, 12):
@@ -80,9 +86,10 @@ def reset_nblock_list():
             if new_types[nntab[jj,kk]] == -1:
                 new_types[nntab[jj,kk]] = applicable_list.pop()
     for jj in range(options.special):
-        l_str = 'X' + str(new_types[jj])
+        l_str = ''.join(['X', str(new_types[jj])]) # string to pass as new tag
         for kk in range(d_tags[jj].__len__()):
-            system.particles[d_tags[jj][kk]].type = l_str
+            system.particles[_tag_sort[d_tags[jj][kk]]].type = l_str
+
 ###########################################
 # List of future improvements :
 ###########################################
@@ -101,31 +108,33 @@ options = Simulation_options.simulation_options()
 ############################################################################
 
 F = 7.0  # :: Full length binding energies, usual = 7
-Dump = 1e2 #dump period for dcd
+Dump = 2e5 #dump period for dcd
 
-options.Um = 1.0
+options.Um = 0.5
 
 
-options.target_dim = 75.00
-options.scale_factor = 1.0
+options.target_dim = 12.60
+options.scale_factor = 0.5
 
 options.target_temp = 1.60
 options.target_temp_1 = 1.4
-options.target_temp_2 = 1.39
-options.mixing_temp = 2.0
+options.target_temp_2 = options.target_temp_1 - 0.01
+options.mixing_temp = 4.0
 options.freeze_flag = False
 options.freeze_temp = 1.0
-options.box_size = [1, 1, 1] # box dimensions in units of target_dim
+options.box_size = [3, 3, 3] # box dimensions in units of target_dim
 options.run_time = 1e7 #usual 2e7
 options.mix_time = 3e6 #usual 3e6
-options.cool_time = 2e7 #usual 2e7
-options.step_size = 0.002
+options.cool_time = 4e7 #usual 2e7
+options.step_size = 0.0005
 options.size_time = 6e6
 options.box_size_packing = 0 # leave to 0, calculated further in, initialization needed
+options.coarse_grain_power = int(0) ## coarsens DNA scaling by a power of 2. 0 is regular model. Possible to uncoarsen the regular model
 options.flag_surf_energy = False ## check for surface energy calculations; exposed plane defined later. Turn to False for regular random
+options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
-options.special = 1
+options.special = 27
 
 options.center_sec_factor = (3**0.5)*1.35 # security factor for center-center. min dist between particles in random config.
 options.z_m = 1.0 # box z multiplier for surface energy calculations.
@@ -138,28 +147,30 @@ options.size = [28.5/5.0 for i in range(options.special)]
 options.num_particles = [1 for i in range(options.special)]
 options.center_types = ['W' for i in range(options.special)] #Should be labeled starting with 'W', must have distinct names
 
-options.filenameformat = 'test' + str(options.target_dim)
+llen = 2
+dsL = 5
+options.filenameformat = 'Test_dt_'+str(options.step_size)+'_Um_'+str(options.Um)+'_temp_'+str(options.target_temp_1)+'_dims_'+str(options.target_dim)+'_dsL'+str(dsL)
 
+shapes = []
+i_cut = 12
+for i in range(options.special):
+    shapes.append(GenShape.shape())
+    shapes[-1].cube(Num=800, Radius = 2.5*2.0 / 28.5)
+    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
+    if i < i_cut:
+        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X' + str(i) for j in range(llen) ], p_flex = array([1]), num = 133)
+    else:
+        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X12' for j in range(llen)], p_flex = array([1]), num = 133)
 
-shapes = [GenShape.shape()]
-shapes[0].parse_pdb_protein(filename='4BLC.pdb')
-shapes[0].will_build_from_shapes(properties = {'surf_type' : 'P','simple_I_tensor':True})
-shapes[0].add_pdb_dna_key(key = {'RES' : 'LYS', 'ATOM': 'NZ'}, n_ss = 3, n_ds = 0, s_end = ['X','Y'], p_flex = array([-1]), num = 30)
-shapes[0].pdb_build_table()
-shapes[0].generate_surface_bonds(signature='P1', num_nn = 3)
-shapes[0].reduce_degenerate_surface_bonds(1e-3)
-shapes[0].reduce_degenerate_WP_bonds(1e-3)
-shapes[0].fix_I_moment()
 
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
 ######################################################################
-options.sticky_pairs = [['X', 'Y']]
-#options.sticky_pairs = [['X0', 'X0']]
-#for i in range(13):
-#    for j in range(i, 13):
-#        if i != j:
-#            options.sticky_pairs.append(['X'+str(i), 'X' + str(j)])
+options.sticky_pairs = []
+for i in range(13):
+    for j in range(i, 13):
+        if i != j:
+            options.sticky_pairs.append(['X'+str(i), 'X' + str(j)])
 #options.sticky_pairs = [['X', 'Y']] #<- which pairs are attractive. Non-physical pairs can be included. Defined as list of lists of 2 particles [['X', 'Y'], ['T', 'G'], ['M', 'N']] for instance
 # for tracking purposes, each list means a potential energy is computed, by taking all pair interactions from the sticky
 # pairs included in the track list.
@@ -176,7 +187,17 @@ options.sticky_track = []
 
 
 
-
+options.corner_rad = [2.5]
+options.n_double_stranded = [5]
+options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain. Does not return any error if there
+# is no flexor, but options.flag_flexor_angle will stay false
+options.n_single_stranded = [3]
+options.sticky_ends = [['X','X', 'X'], ['Y', 'Y']]
+options.surface_types = ['P1', 'P2'] # Should be labeled starting with 'P'
+options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2) for i in range(64)] # initial approximation for # of beads on surface
+options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
+options.volume = options.densities[:] # temp value, is set by genshape
+options.p_surf = options.densities[:] # same
 options.int_bounds = [10, 2, 3] # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
 options.exposed_surf = [1, 0, 1] ## z component must not be zero
@@ -215,16 +236,16 @@ else:
 ## Derived quantities, volumes are calculated in genshape functions.
 #################################################################################################################
 
-#if options.non_centrosymmetric_moment:
-#    for i in range(options.volume.__len__()):
-#        options.mass.append(options.densities[i] * options.volume[i])
-#        options.m_w.append(options.mass[i]*2.0 / 5.0)
-#        options.m_surf.append(options.mass[i]*3.0 / 5.0 / options.num_surf[i])
-#        options.box_size_packing += 2.5*options.size[i] / options.scale_factor # special
-#        options.dna_coverage.append(int(round(0.17*(options.size[i]*2.0 / options.scale_factor)**2 * 6)))
-#else:
- #   for i in range(options.volume.__len__()):
-  #      options.box_size_packing += 2.5*amax(abs(array(shapes[i].pos)))*2.0 / options.scale_factor
+if options.non_centrosymmetric_moment:
+    for i in range(options.volume.__len__()):
+        options.mass.append(options.densities[i] * options.volume[i])
+        options.m_w.append(options.mass[i]*2.0 / 5.0)
+        options.m_surf.append(options.mass[i]*3.0 / 5.0 / options.num_surf[i])
+        options.box_size_packing += 2.5*options.size[i] / options.scale_factor # special
+        options.dna_coverage.append(int(round(0.17*(options.size[i]*2.0 / options.scale_factor)**2 * 6)))
+else:
+    for i in range(options.volume.__len__()):
+        options.box_size_packing += 2.5*amax(abs(array(shapes[i].pos)))*2.0 / options.scale_factor
 
 
 # Target box sizes
@@ -234,11 +255,11 @@ else:
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
 buildobj.set_rotation_function(mode = 'random')
 
-#grabbing dna and center tags for reordering dna later on
 d_tags = buildobj.dna_tags
 c_tags = buildobj.center_tags
+d_tags_len = d_tags.__len__()
+d_tags_loc_len = d_tags[0].__len__()
 
-buildobj.rename_type_by_RE(pattern = 'W', new_type = 'W')
 buildobj.write_to_file(z_box_multi=options.z_m)
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
@@ -251,14 +272,12 @@ options.build_flags = buildobj.flags # none defined at the moment, for future us
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
 
-system = init.read_xml(filename=options.filenameformat+'.xml')
-#system = init.read_xml('init.xml')
-#system.replicate(nx=2,ny=1,nz=1)
-xml = dump.xml(filename="new_init.xml",vis=True)
 
+system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
 
+del buildobj, shapes, center_file_object
 
 Lx0 = options.sys_box[0]
 Ly0 = options.sys_box[1]
@@ -269,16 +288,16 @@ Lz0 = options.sys_box[2]
 ####################################################################################
 #No.1 covelent bond, could be setup w/ dict
 harmonic = bond.harmonic()
-harmonic.set_coeff('S-NP', k=1.0, r0=0.84)
-harmonic.set_coeff('S-S', k=1.0, r0=0.84*0.5)
-harmonic.set_coeff('S-A', k=1.0, r0=0.84*0.75)
-harmonic.set_coeff('backbone', k=10.0, r0=0.84)
-harmonic.set_coeff('A-B', k=1.0, r0=0.84*0.75)
-harmonic.set_coeff('B-B', k=1.0, r0=0.84*0.5 )
-harmonic.set_coeff('B-C', k=1.0, r0=0.84*0.5 )
-harmonic.set_coeff('C-FL', k=1.0, r0=0.84*0.5 )
-harmonic.set_coeff('B-FL', k=1.0, r0=0.84*0.5*1.4)
-harmonic.set_coeff('C-C', k=1.0, r0=0.84*0.5)  # align the linker C-G
+harmonic.set_coeff('S-NP', k=330.0, r0=0.84)
+harmonic.set_coeff('S-S', k=330.0, r0=0.84*0.5)
+harmonic.set_coeff('S-A', k=330.0, r0=0.84*0.75)
+harmonic.set_coeff('backbone', k=330.0, r0=0.84)
+harmonic.set_coeff('A-B', k=330.0, r0=0.84*0.75)
+harmonic.set_coeff('B-B', k=330.0, r0=0.84*0.5 )
+harmonic.set_coeff('B-C', k=330.0, r0=0.84*0.5 )
+harmonic.set_coeff('C-FL', k=330.0, r0=0.84*0.5 )
+harmonic.set_coeff('B-FL', k=330.0, r0=0.84*0.5*1.4)
+harmonic.set_coeff('C-C', k=330.0, r0=0.84*0.5)  # align the linker C-G
 #harmonic.set_coeff('UselessBond', k= 0.0, r0 = 0.0)
 
 
@@ -288,56 +307,49 @@ Sangle = angle.harmonic()
 ## need to replace this with dict structure
 for i in range(options.ang_types.__len__()):
     if options.ang_types[i] == 'flexor':
-        Sangle.set_coeff('flexor', k=1.0, t0=pi)
+        Sangle.set_coeff('flexor', k=2.0, t0=pi)
     if options.ang_types[i] == 'dsDNA':
-        Sangle.set_coeff('dsDNA', k=1.0, t0=pi)
+        Sangle.set_coeff('dsDNA', k=30.0, t0=pi)
     if options.ang_types[i] == 'C-C-C':
-        Sangle.set_coeff('C-C-C', k=1.0, t0=pi)
+        Sangle.set_coeff('C-C-C', k=10.0, t0=pi)
     if options.ang_types[i] == 'B-B-B':
-        Sangle.set_coeff('B-B-B', k=1.0, t0=pi)
+        Sangle.set_coeff('B-B-B', k=10.0, t0=pi)
 
-Sangle.set_coeff('FL-C-FL', k=1, t0=pi)
-Sangle.set_coeff('A-B-C', k=1, t0=pi/2)
-Sangle.set_coeff('A-A-B', k=1, t0=pi)
-Sangle.set_coeff('A-B-B', k=1, t0=pi)
-Sangle.set_coeff('C-C-endFL', k=1.0, t0=pi)
+Sangle.set_coeff('FL-C-FL', k=100.0, t0=pi)
+Sangle.set_coeff('A-B-C', k=120.0, t0=pi/2)
+Sangle.set_coeff('A-A-B', k=2.0, t0=pi)
+Sangle.set_coeff('A-B-B', k=2.0, t0=pi)
+Sangle.set_coeff('C-C-endFL', k=50.0, t0=pi)
 
-ktyp = 5000.00
 
-for i in range(options.bond_types.__len__()):
-    _ad = False
-    for sh in range(shapes.__len__()):
-        for j in range(shapes[sh].flags['surface_bonds'].__len__()):
-            if shapes[sh].flags['surface_bonds'][j][3] == options.bond_types[i]:
-                harmonic.set_coeff(options.bond_types[i], k = ktyp, r0 = shapes[sh].flags['surface_bonds'][j][2])
-                _ad = True
+ktyp = 1000.00
+try :
+    for i in range(options.bond_types.__len__()):
+        _ad = False
+        for sh in range(shapes.__len__()):
+            for j in range(shapes[sh].internal_bonds.__len__()):
+                if shapes[sh].internal_bonds[j][-1] == options.bond_types[i]:
+                    harmonic.set_coeff(options.bond_types[i], k = ktyp, r0 = shapes[sh].internal_bonds[j][-2])
+                    _ad = True
+                    break
+            if _ad:
                 break
-        for j in range(shapes[sh].flags['W-P_bonds'].__len__()):
-            if shapes[sh].flags['W-P_bonds'][j][1] == options.bond_types[i]:
-                harmonic.set_coeff(options.bond_types[i], k = ktyp, r0 = shapes[sh].flags['W-P_bonds'][j][0])
-                _ad = True
-                break
-        for j in range(shapes[sh].flags['fix_bonds'].__len__()):
-            if shapes[sh].flags['fix_bonds'][j] == options.bond_types[i]:
-                harmonic.set_coeff(options.bond_types[i], k = ktyp, r0 = shapes[sh].flags['fix_dist'][j])
-                _ad = True
-                break
-        if _ad:
-            break
-
+except AttributeError:
+    pass
 
 
 
 ##################################################################################
 #     Lennard-jones potential---- attraction and repulsion parameters
 ##################################################################################
+
 #force field setup
 lj = pair.lj(r_cut=1.5, name = 'lj')
 lj.set_params(mode="shift")
 
 def attract(a,b,sigma=1.0,epsilon=1.0):
     #sigma = 'effective radius'
-    lj.pair_coeff.set(a,b,epsilon=epsilon*1.0*options.Um / options.scale_factor,
+    lj.pair_coeff.set(a,b,epsilon=epsilon*1.0,
                       sigma=sigma*1.0 ,
                       r_cut = 2.0)
 
@@ -355,10 +367,10 @@ radius = [['S', 0.5], ['A', 1.0], ['B', 0.5], ['FL', 0.3]]
 
 c_uniques = options.center_types
 for i in range(c_uniques.__len__()):
-    radius.append([c_uniques[i],0.0001])
+    radius.append([c_uniques[i],1.0])
 surf_uniques = options.surface_types
 for i in range(surf_uniques.__len__()):
-    radius.append([surf_uniques[i], 0.0001])
+    radius.append([surf_uniques[i], 1.0])
 # need to flatten list
 sticky_uniques = options.sticky_types
 for i in range(options.sticky_types.__len__()):
@@ -430,37 +442,37 @@ for i in range(len(radius)):
                 cond_surfaces = cond_surfaces or (radius[i][0] == options.surface_types[k] and radius[j][0] == options.surface_types[kk]) or (radius[j][0] == options.surface_types[k] and radius[i][0] == options.surface_types[kk])
 
         if cond_complementary:
-            attract(radius[i][0], radius[j][0], radius[i][1]+radius[j][1], F)
-            print(radius[i][0], radius[j][0])
+            attract(radius[i][0], radius[j][0], radius[i][1]+radius[j][1], F *options.Um)
+            print radius[i][0], radius[j][0]
 
         elif cond_stick_B:
-            repulse(radius[i][0], radius[j][0], 0.6, epsilon = 1.0 / options.scale_factor * options.Um)
-            #print 'sticky - B', radius[i][0], radius[j][0]
+            repulse(radius[i][0], radius[j][0], 0.6, epsilon = 1.0 )
+            print 'sticky - B', radius[i][0], radius[j][0]
 
         elif cond_stick_FL:
-            repulse(radius[i][0], radius[j][0], 0.43, epsilon = 1.0 / options.scale_factor * options.Um )
-            #print 'sticky - FL', radius[i][0], radius[j][0]
+            repulse(radius[i][0], radius[j][0], 0.43, epsilon = 1.0 )
+            print 'sticky - FL', radius[i][0], radius[j][0]
         elif cond_stick_A:
             repulse(radius[i][0], radius[j][0], (radius[i][1]+radius[j][1])*0.35)
-            #print 'sticky - A', radius[i][0], radius[j][0]
+            print 'sticky - A', radius[i][0], radius[j][0]
         elif (radius[i][0]=='FL') & (radius[j][0]=='FL'):
-            repulse(radius[i][0], radius[j][0], 0.4, epsilon=1.0/options.scale_factor * options.Um)
+            repulse(radius[i][0], radius[j][0], 0.4, epsilon=1.0)
         elif cond_same_comp:
-            repulse(radius[i][0], radius[j][0], 1.0, epsilon = 1.0 / options.scale_factor *options.Um)
-            #print 'same complementary', radius[i][0], radius[j][0]
+            repulse(radius[i][0], radius[j][0], 1.0, epsilon = 1.0)
+            print 'same complementary', radius[i][0], radius[j][0]
         elif cond_surfaces:
             repulse(radius[i][0], radius[j][0], 0.000005)
         else:
             repulse(radius[i][0], radius[j][0], (radius[i][1]+radius[j][1])*0.5)
-            #print 'unsorted', radius[i][0], radius[j][0]
+            print 'unsorted', radius[i][0], radius[j][0]
 # Generate string logged quantities argument
 
-Qlog = ['temperature', 'potential_energy', 'kinetic_energy', 'pair_lj_energy_lj', 'bond_harmonic_energy']
+Qlog = ['temperature', 'potential_energy', 'kinetic_energy', 'pair_lj_energy_lj', 'bond_harmonic_energy', 'pressure']
 for s in range(lja_list.__len__()):
     Qlog.append('pair_lj_energy_'+lja_names[s])
 
 logger = analyze.log(quantities=Qlog,
-                     period=100, filename=options.filenameformat+'.log', overwrite=True)
+                     period=2000, filename=options.filenameformat+'.log', overwrite=True)
 
 ####################################################################################
 #    Make Groups  (of all rigid particles and of all nonrigid particles)
@@ -468,83 +480,31 @@ logger = analyze.log(quantities=Qlog,
 nonrigid = group.nonrigid()
 rigid = group.rigid()
 
-integrate.mode_standard(dt=0.001)
+integrate.mode_standard(dt=0.005)
 
-#nlist.set_params(check_period=1)
-#nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
-
-
-
-#reset_nblock_list()
-
-all = group.all()
-typeP = group.type("P")
-typeW = group.type("W")
-typeS = group.type("S")
-typeB = group.type("B")
-typeFL = group.type("FL")
-typeX = group.type("X")
-typeY = group.type("Y")
-typeDNA1 = group.union( name="DNA1", a = typeX , b = typeY)
-typeDNA2 = group.union( name="DNA2", a = typeDNA1 , b = typeFL)
-typeDNA3 = group.union( name="DNA3", a = typeDNA2 , b = typeB)
-typeDNA = group.union( name="DNA", a = typeDNA3 , b = typeS)
+nlist.set_params(check_period=1)
+nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
 
 
+part_len = system.particles.__len__() # avoid calls later to the system
+_t = time.time()
+reset_nblock_list()
+_t = time.time() - _t
+print 'reset_nblock_list() timing :'+str(_t)
 
 
-typeProtein = group.union(name="protein", a = typeP, b = typeW)
-dump.dcd(filename=options.filenameformat+'_dcd.dcd', period=Dump, overwrite = True) # dump a .dcd file for the trajectory
-nve = integrate.nve(group=typeDNA1, limit=0.0001)
-keep_phys = update.zero_momentum(period=1)
-run(5e4)
+nve = integrate.nve(group=nonrigid, limit=0.0005)
+keep_phys = update.zero_momentum(period=100)
+run(3e5)
 nve.disable()
-nvt = integrate.nvt(group=typeFL, T=0.0001 , tau=1 )
-run(5e4)
-nvt.disable()
-nve = integrate.nve(group=typeFL, limit=0.0001)
-keep_phys = update.zero_momentum(period=1)
-run(5e4)
-nve.disable()
-nve = integrate.nve(group=typeB, limit=0.0001)
-keep_phys = update.zero_momentum(period=1)
-run(5e4)
-nve.disable()
-quit()
-keep_phys.disable()
-nve = integrate.nve(group=typeS, limit=0.0001)
-keep_phys = update.zero_momentum(period=1)
-run(5e4)
-nve.disable()
-#nve = integrate.nve(group=typeDNA, limit=0.0001)
-#keep_phys = update.zero_momentum(period=1)
-#run(5e4)
-#nve.disable()
-nvt = integrate.nvt(group=typeDNA, T=0.0001 , tau=1 )
-run(5e4)
-nvt.disable()
-quit()
+#keep_phys.disable()
 
-nve = integrate.nve(group=typeProtein, limit=0.0001)
-keep_phys = update.zero_momentum(period=1)
-run(1e4)
-nve.disable()
+nonrigid_integrator = integrate.nvt(group=nonrigid, T=0.1, tau = 0.65)
+integrate.mode_standard(dt=0.00001)
+run(1e6)
 
-keep_phys = update.zero_momentum(period=1)
-nvt = integrate.nvt(group=typeProtein, T=0.0001 , tau=1 )
-run(1e4)
-nvt.disable()
-nvt = integrate.nvt(group=typeDNA, T=0.0001 , tau=1 )
-run(1e4)
-nvt.disable()
-nvt = integrate.nvt(group=all, T=0.0001 , tau=1 )
-run(1e5)
-nvt.disable()
-quit()
+rigid_integrator = integrate.nvt_rigid(group=rigid, T=0.1, tau = 0.65)
 
-
-rigid_integrator = integrate.nvt_rigid(group=rigid, T=logger.query('temperature'), tau=0.65)
-nonrigid_integrator = integrate.nvt(group=nonrigid, T=logger.query('temperature'), tau=0.65)
 
 #####################################################################################
 #              Dump File
@@ -553,16 +513,16 @@ nonrigid_integrator = integrate.nvt(group=nonrigid, T=logger.query('temperature'
 
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
+dump.dcd(filename=options.filenameformat+'_dcd.dcd', period=Dump, overwrite = True) # dump a .dcd file for the trajectory
 
 ###  Equilibrate System #################
 
 #set integrate low so that system can equilibrate
-integrate.mode_standard(dt=0.000005)
+integrate.mode_standard(dt=0.00001)
 #set the check period very low to let the system equilibrate
 
 
-run(1e5)
-quit()
+run(2e6)
 
 
 
@@ -571,24 +531,21 @@ quit()
 ##################################################################
 
 #increase time step so system can mix up faster
-integrate.mode_standard(dt=0.00025)
+integrate.mode_standard(dt=0.0002)
 
 rigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
 nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
 
 #starting here we periodicaly update the nn table which changes DNA types
-options.tab_update = 2e3
+options.tab_update = 1e3
 #curr_types = ['X'+str(i) for i in range(12)] + ['X12' for i in range(options.special - 12)]
 
 
 for i in range(int(1e6 / options.tab_update)):
 
-    #grab centers
     reset_nblock_list()
-
     run(options.tab_update)
 
-#run(1e6)
 
 
 integrate.mode_standard(dt=0.0005)
@@ -602,17 +559,17 @@ for i in range(int(2e6 / options.tab_update)):
 
 
 
-integrate.mode_standard(dt=0.0010)
+integrate.mode_standard(dt=0.0005)
 BoxChange = update.box_resize(Lx=variant.linear_interp([(0, Lx0), (options.size_time, TargetBx)]),
                               Ly=variant.linear_interp([(0, Ly0), (options.size_time, TargetBy)]),
-                              Lz=variant.linear_interp([(0, Lz0), (options.size_time, TargetBz)]), period=100)
+                              Lz=variant.linear_interp([(0, Lz0), (options.size_time, TargetBz)]), period=50)
 for i in range(int(options.size_time / options.tab_update)):
     reset_nblock_list()
     run(options.tab_update)
 BoxChange.disable()
+keep_phys.disable()
 
-
-integrate.mode_standard(dt=0.002)
+integrate.mode_standard(dt=0.0005)
 rigid_integrator.set_params(T=options.mixing_temp)
 nonrigid_integrator.set_params(T=options.mixing_temp)
 
@@ -651,29 +608,3 @@ nonrigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.tar
 for i in range(int(options.cool_time / options.tab_update)):
     reset_nblock_list()
     run(options.tab_update)
-
-
-
-mol2.write(filename='lastsnap-'+options.filenameformat+'.mol2')
-
-
-dump.xml(filename = options.filenameformat+'.xml', all = True)
-h_energy_structure = hoomd_XML_parser.get_hybridizations_from_XML(filename = options.filenameformat+'.xml', options = options)
-with open(options.filenameformat+'-hybrid.log','w') as f:
-    f.write('Particle_1 Particle_2 W-dist Hybridization_energy\n')
-    for i in range(h_energy_structure.energy.__len__()):
-        f.write(str(h_energy_structure.particle_1_name[i])+ ' '+str(h_energy_structure.particle_2_name[i])+' '+str(h_energy_structure.center_dist[i])+' '+str(h_energy_structure.energy[i])+'\n')
-
-# Printout simulation options
-
-
-root = ET.Element('root')
-properties = dir(options)
-l_xml = []
-
-for i in range(properties.__len__()):
-    if not properties[i][0] == '_':
-        l_xml.append(ET.SubElement(root, properties[i]))
-        l_xml[l_xml.__len__()-1].text = str(getattr(options,properties[i]))
-
-ET.ElementTree(root).write(options.filenameformat+'_options.xml')

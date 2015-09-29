@@ -151,7 +151,6 @@ class BuildHoomdXML(object):
         self.__p_num = []
         self.__obj_index = []
         self.__opts = opts
-        self.__lattice = opts.lattice_multi
         self.flaglist = {}
         if init is None:
             self._c_pos = center_obj.positions
@@ -265,6 +264,9 @@ class BuildHoomdXML(object):
             _tags.append(self.__particles[i].pnum_offset)
         return _tags
 
+    def set_charge_to_pnum(self):
+        for i in range(self.__beads.__len__()):
+            self.__beads[i].charge = float(self.__p_num[i])
 
     def sticky_excluded(self, sticky_pair, r_cut = None):
         #######
@@ -503,7 +505,7 @@ class BuildHoomdXML(object):
                             self.__beads[i].position[1] += _m_dist * np.sign(_dy) / 3.0
                             self.__beads[i].position[2] += _m_dist * np.sign(_dz) / 3.0
 
-    def write_to_file(self, z_box_multi = None):
+    def write_to_file(self, z_box_multi = None, export_charge = False):
         if self.__opts.flag_surf_energy:
             L = self.__opts.rot_box
             for i in range(self.__particles.__len__()):
@@ -531,7 +533,7 @@ class BuildHoomdXML(object):
             L = [2 * Mx * 1.1, 2 * My * 1.1, 2 * Mz *1.1]
         self.__opts.sys_box = L
 
-        WriteXML.write_xml(filename = self.__opts.filenameformat+'.xml', All_angles= self.__angles, All_beads=self.__beads, All_bonds=self.__bonds, L = L)
+        WriteXML.write_xml(filename = self.__opts.filenameformat+'.xml', All_angles= self.__angles, All_beads=self.__beads, All_bonds=self.__bonds, L = L, export_charge = export_charge)
 
     class Particle(object):
         """
@@ -590,7 +592,7 @@ class BuildHoomdXML(object):
             self.s_type = surf_type
             self.body_num = 0
             self.flags = {}
-
+            self.beads = []
             self.surf_tags = []
 
             self.sticky_used = []
@@ -619,46 +621,15 @@ class BuildHoomdXML(object):
             except KeyError:
                 print 'normalized key inexistant in shape. Assuming normalized shape'
 
-            try:
-                if self._sh.flags['simple_I_tensor']:
-                    self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = self.mass * 2.0 / 5.0)]
-                else:
-                    try:
-                        self.types+=self._sh.I_fixer.types
-                        self.c_type=[self.c_type] + self._sh.I_fixer.types
-                        self.s_mass = self._sh.I_fixer.masses[0]
-                        self.c_mass = 1.0
-                        self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = 1.0)]
 
-                        for i in range(self._sh.I_fixer.types.__len__() ):
-                            self.beads.append(CoarsegrainedBead.bead(position = self._sh.I_fixer.positions[i], beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
-                            self.pos = np.append(self.pos, [self._sh.I_fixer.positions[i]],axis =0)
-                            self.p_num.append(self.p_num[-1] + 1)
-                            self.beads.append(CoarsegrainedBead.bead(position = list(-np.array(self._sh.I_fixer.positions[i])), beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
-                            self.pos = np.append(self.pos, [-np.array(self._sh.I_fixer.positions[i])],axis =0)
-                            self.p_num.append(self.p_num[-1] + 1)
-                    except AttributeError:
-                        try :
-                            self._sh.I_fixer = Moment_Fixer.Added_Beads(c_type=center_type, shape_pos=self._sh.pos, shape_num_surf=self._sh.num_surf, d_tensor= self._sh.flags['I_tensor'], mass = _t_m)
-                        except KeyError:
-                            self._sh.I_fixer = Moment_Fixer.Added_Beads(c_type=center_type, shape_pos=self._sh.pos, shape_num_surf=self._sh.num_surf, f_name=self._sh.flags['tensor_name'], mass = _t_m)
-                        self.types+=self._sh.I_fixer.types
-                        self.c_type= [self.c_type]+self._sh.I_fixer.types[:]
-                        self.s_mass = self._sh.I_fixer.masses[0]
-                        self.c_mass = 1.0
-                        self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = 1.0)]
-
-                        for i in range(self._sh.I_fixer.types.__len__() ):
-                            self.beads.append(CoarsegrainedBead.bead(position = self._sh.I_fixer.positions[i], beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
-                            self.pos = np.append(self.pos, [self._sh.I_fixer.positions[i]],axis =0)
-                            self.p_num.append(self.p_num[-1] + 1)
-                            self.beads.append(CoarsegrainedBead.bead(position = list(-np.array(self._sh.I_fixer.positions[i])), beadtype = self.types[i+1], body = 0, mass = self._sh.I_fixer.masses[i+1]))
-                            self.pos = np.append(self.pos, [-np.array(self._sh.I_fixer.positions[i])],axis =0)
-                            self.p_num.append(self.p_num[-1] + 1)
-            except KeyError:
-                print 'Inertia tensor method not specified. Assuming simple I tensor (legacy shapes will throw this)'
+            # two cases, either we didnt care about masses in the shape and theres only 1 center bead, or we cared and theres multiples
+            if self._sh.additional_points.__len__() == 1 :
                 self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = self.mass * 2.0 / 5.0)]
-
+            else:
+                for i in range(self._sh.additional_points.__len__()):
+                    self.beads.append(CoarsegrainedBead.bead(position = self._sh.additional_points[i] * self.size / (2*self.scale), beadtype=center_type + self._sh.type_suffix[i], body = 0, mass = self._sh.masses[i]))
+                    self.p_num.append(self.p_num[-1]+1)
+                self.pos = np.append(self.pos, self._sh.additional_points * self.size / (2*self.scale), axis = 0)
 
 
 
@@ -708,13 +679,7 @@ class BuildHoomdXML(object):
                 self.pdb_DNA_keys()
             # need to add a method for diferent surfaces + diff dna to each surface
 
-        @property
-        def center_mass(self):
-            return self.c_mass
-        #@center_mass.setter
-        #def center_mass(self, val):
-        #    self.c_mass = val
-        #    self.beads[0].mass = val
+
         @property
         def surface_mass(self):
             return self.s_mass
@@ -908,16 +873,11 @@ class BuildHoomdXML(object):
             for i in range(self.beads.__len__()):
                 self.beads[i].body = -1
             self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
-            pnum_offset = self.p_num[-1]+1
+
             for i in range(self._sh.pos.__len__()):
                 self.rem_list.append(1+self.p_num[-1])
                 self.p_num.append(1+self.p_num[-1])
                 self.beads.append(CoarsegrainedBead.bead(position = copy.deepcopy(self._sh.pos[i] * self.size / (2*self.scale)), beadtype = self.s_type, body = -1, mass = self.s_mass))
-                self.bonds.append([self._sh.flags['W-P_bonds'][i][1], self.p_num[0], self.p_num[-1]])
-            for i in range(self._sh.flags['surface_bonds'].__len__()):
-                self.bonds.append([self._sh.flags['surface_bonds'][i][3],
-                                   self._sh.flags['surface_bonds'][i][0] + pnum_offset,
-                                   self._sh.flags['surface_bonds'][i][1] + pnum_offset])
-            if 'fix_bonds' in self._sh.flags:
-                for i in range(1, 13):
-                    self.bonds.append([self._sh.flags['fix_bonds'][i-1], 0, i ])
+            for i in range(self._sh.internal_bonds.__len__()):
+                self.bonds.append([self._sh.internal_bonds[i][-1], self._sh.internal_bonds[i][0], self._sh.internal_bonds[i][1]])
+
