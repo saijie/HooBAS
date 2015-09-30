@@ -151,12 +151,6 @@ llen = 2
 dsL = 5
 options.filenameformat = 'Test_dt_'+str(options.step_size)+'_Um_'+str(options.Um)+'_temp_'+str(options.target_temp_1)+'_dims_'+str(options.target_dim)+'_dsL'+str(dsL)
 
-a = GenShape.shape()
-a.parse_pdb_protein(filename='4BLC.pdb')
-a.add_pdb_dna_key(key = {'RES':'LYS', 'ATOM'  : 'NZ'}, n_ss = 1)
-a.pdb_build_table()
-a.fix_I_moment()
-
 shapes = []
 i_cut = 12
 for i in range(options.special):
@@ -164,9 +158,9 @@ for i in range(options.special):
     shapes[-1].cube(Num=800, Radius = 2.5*2.0 / 28.5)
     shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
     if i < i_cut:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X' + str(i) for j in range(llen) ], p_flex = array([1]), num = 133)
+        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X' + str(i) for j in range(llen) ], p_flex = array([0]), num = 133)
     else:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X12' for j in range(llen)], p_flex = array([1]), num = 133)
+        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X12' for j in range(llen)], p_flex = array([0]), num = 133)
 
 
 ######################################################################

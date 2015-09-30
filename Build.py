@@ -375,7 +375,7 @@ class BuildHoomdXML(object):
             gridphi = np.linspace(0, pi, 50)
             gridth = np.linspace(-pi, pi, 50)
 
-            # incomplete at the moment
+            # TODO : finish this stuff, incomplete at the moment
             ##############################################
             #iterates over all orientations, generates a new one with gaussian energy, min(v_n . v_1, v_n . v_2, ...), where
             # the v_1, v_2, ..., are the degenerated orientations (i.e., 6 for cubes). Iteration must be repeated untill all traces
@@ -477,6 +477,14 @@ class BuildHoomdXML(object):
         return _indices
 
     def rename_type_by_RE(self, pattern, new_type, RE_flags = None):
+        """
+        Changes all the beadtypes where the RE pattern match to the new_type type
+        :param pattern:
+        :param new_type:
+        :param RE_flags:
+        :return:
+        """
+
         _indices = []
         for i in range(self.__beads.__len__()):
             if RE_flags is None:
@@ -494,7 +502,6 @@ class BuildHoomdXML(object):
 
         for i in range(0,self.__beads.__len__()):
             if not (self.__beads[i].beadtype == 'P' or self.__beads[i].beadtype == 'W'):
-                print i
                 for j in range(i+1, self.__beads.__len__()):
                     if not (self.__beads[j].beadtype == 'P' or self.__beads[j].beadtype == 'W'):
                         _dx = (self.__beads[i].position[0] - self.__beads[j].position[0])

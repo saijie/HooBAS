@@ -907,7 +907,9 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
 
         self.flags['soft_shell'] = True
 
-        _offset = self.additional_points.__len__()
+        #_offset = self.additional_points.__len__() push the table onto additional points and store it on table. TODO : Make a nicer method, this is ugly
+        _offset = 1
+        self.__table = np.append(self.additional_points, self.__table, axis = 0)
 
         #construct a list of nn for each particle in the table, append [i, j, r0] to the surf bond list, where i-j are the nn couples and r0 is their distance
         _dist_sq = np.zeros((self.__table.__len__(), self.__table.__len__())) # table of distances between i-j squared
@@ -918,10 +920,8 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
                     _dist_sq[i,j] += (self.__table[i,k] - self.__table[j,k])**2 # calculate rij **2
 
         for i in range(self.__table.__len__()):
-
             _dumpsort = np.argsort(_dist_sq[i,:], kind = 'mergesort') # sort the indices
             _ind_to_add = [] # initialize the indices to add
-
             for j in range(1, _dumpsort.__len__()):
                 _curr = True
                 for k in range(self.internal_bonds.__len__()): # check whether we already appended this bond
@@ -931,16 +931,12 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
                     _ind_to_add.append(_dumpsort[j])
                 if _ind_to_add.__len__() == num_nn:
                     break
-
-
             for j in range(_ind_to_add.__len__()):
                 self.internal_bonds.append([i + _offset, _ind_to_add[j] +_offset, _dist_sq[i, _ind_to_add[j]]**0.5 * multi, signature + '_' + str(i) + '_' + str(j)])
-
-
         for i in range(self.__table.__len__()):
             self.internal_bonds.append([0, i +_offset, (self.__table[i,0]**2 + self.__table[i,1]**2 + self.__table[i,2]**2)**0.5 * multi, signature + '_' + str(i)])
-
         self.flags['soft_signature'] = signature
+        self.__table = np.delete(self.__table, range(self.additional_points.__len__()-1), axis = 0)
 
     def reduce_internal_DOF(self, n_rel_tol = 1e-2):
         """
