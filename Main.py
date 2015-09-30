@@ -114,7 +114,7 @@ options.Um = 0.5
 
 
 options.target_dim = 12.60
-options.scale_factor = 0.5
+options.scale_factor = 1.0
 
 options.target_temp = 1.60
 options.target_temp_1 = 1.4
@@ -130,7 +130,7 @@ options.step_size = 0.0005
 options.size_time = 6e6
 options.box_size_packing = 0 # leave to 0, calculated further in, initialization needed
 options.coarse_grain_power = int(0) ## coarsens DNA scaling by a power of 2. 0 is regular model. Possible to uncoarsen the regular model
-options.flag_surf_energy = False ## check for surface energy calculations; exposed plane defined later. Turn to False for regular random
+options.flag_surf_energy = True ## check for surface energy calculations; exposed plane defined later. Turn to False for regular random
 options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
@@ -143,9 +143,9 @@ options.z_m = 1.0 # box z multiplier for surface energy calculations.
 ## Code allows for mixing any number of composite shapes. size / num_particles / center_types / shapes must be lists of equal length,
 ## with length of the number of species of building blocks
 ##################################################################################################################
-options.size = [28.5/5.0 for i in range(options.special)]
-options.num_particles = [1 for i in range(options.special)]
-options.center_types = ['W' for i in range(options.special)] #Should be labeled starting with 'W', must have distinct names
+options.size = [28.5/5.0]
+options.num_particles = [27]
+options.center_types = ['W'] #Should be labeled starting with 'W', must have distinct names
 
 llen = 2
 dsL = 5
@@ -155,12 +155,16 @@ shapes = []
 i_cut = 12
 for i in range(options.special):
     shapes.append(GenShape.shape())
-    shapes[-1].cube(Num=800, Radius = 2.5*2.0 / 28.5)
+    shapes[-1].cube(Num=300, Radius = 2.5*2.0 / 28.5)
     shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
     if i < i_cut:
         shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X' + str(i) for j in range(llen) ], p_flex = array([0]), num = 133)
+        shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 2)
+        shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
     else:
         shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X12' for j in range(llen)], p_flex = array([0]), num = 133)
+        shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 2)
+        shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
 
 
 ######################################################################
@@ -198,22 +202,22 @@ options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2) f
 options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
 options.volume = options.densities[:] # temp value, is set by genshape
 options.p_surf = options.densities[:] # same
-options.int_bounds = [10, 2, 3] # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
+options.int_bounds = [2, 2, 2] # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
-options.exposed_surf = [1, 0, 1] ## z component must not be zero
-options.lattice_multi = [1.0, 1.0, 3.0]
+options.exposed_surf = [0, 0, 1] ## z component must not be zero
+options.lattice_multi = [1.0, 1.0, 1.0]
 
 
 
 if options.flag_surf_energy:
     center_file_object = CenterFile.CenterFile(options, init = None, surf_plane = options.exposed_surf, Lattice = options.lattice_multi)
     center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0, 0, 0])
-    center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0.5, 0.5, 0.5])
+#    center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0.5, 0.5, 0.5])
     center_file_object._manual_rot_cut(int_bounds = options.int_bounds)
     options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
     options.rotm = center_file_object.rotation_matrix
     options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds, z_multi=options.z_m)
-
+    center_file_object.expend_table()
 else:
     center_file_object = CenterFile.CenterFile(options)
     TargetBx = options.box_size[0]*options.target_dim/options.scale_factor
@@ -252,15 +256,20 @@ else:
 ################################
 # Making buildobj
 ################################
+options.center_types = ['W' for i in range(center_file_object.positions.__len__())]
+options.num_particles = [1 for i in range(center_file_object.positions.__len__())]
+for i in range(options.num_particles.__len__() - shapes.__len__()):
+    shapes.append(shapes[-1])
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
-buildobj.set_rotation_function(mode = 'random')
+buildobj.set_rotation_function()
 
 d_tags = buildobj.dna_tags
 c_tags = buildobj.center_tags
 d_tags_len = d_tags.__len__()
 d_tags_loc_len = d_tags[0].__len__()
 
-buildobj.write_to_file(z_box_multi=options.z_m)
+buildobj.set_charge_to_pnum()
+buildobj.write_to_file(z_box_multi=options.z_m, export_charge= True)
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
 options.surface_types = buildobj.surface_types
@@ -276,8 +285,6 @@ options.ang_types = buildobj.ang_types
 system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
-
-del buildobj, shapes, center_file_object
 
 Lx0 = options.sys_box[0]
 Ly0 = options.sys_box[1]

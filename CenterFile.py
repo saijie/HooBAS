@@ -120,6 +120,22 @@ class CenterFile(object):
         """
         self.__options.xyz_name = new_name
 
+    def contract_table(self):
+        """
+        contracts the whole table into a single list
+        :return:
+        """
+        while self.__table.__len__()>1:
+            self.__table[0] = np.append(self.__table[0], self.__table.pop(), axis = 0)
+
+    def expend_table(self):
+        counter = 0
+        while counter < self.__table.__len__():
+            for i in range(self.__table[counter].__len__()-1):
+                self.__table.append( np.resize(self.__table[counter][-1], new_shape=(1,3)))
+                self.__table[counter] = np.delete(self.__table[counter], -1, 0)
+            counter +=1
+
     def __random_table(self):
         """
         initialize the tables from optinos w/ randomly placed beads

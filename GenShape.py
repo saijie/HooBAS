@@ -909,7 +909,10 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
 
         #_offset = self.additional_points.__len__() push the table onto additional points and store it on table. TODO : Make a nicer method, this is ugly
         _offset = 1
-        self.__table = np.append(self.additional_points, self.__table, axis = 0)
+        if self.additional_points.__len__()>1:
+            self.__table = np.append(self.additional_points, self.__table, axis = 0)
+        else:
+            self.__table = np.append(self.additional_points[1:, :], self.__table, axis = 0)
 
         #construct a list of nn for each particle in the table, append [i, j, r0] to the surf bond list, where i-j are the nn couples and r0 is their distance
         _dist_sq = np.zeros((self.__table.__len__(), self.__table.__len__())) # table of distances between i-j squared
@@ -1036,7 +1039,7 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
                         self.internal_bonds.append([0, i+_offset, 1.0, self.flags['soft_signature']+'_IF_xx'])
                     else:
                         self.internal_bonds.append([0, i+_offset, 2**0.5, self.flags['soft_signature']+'_IF_xy'])
-        # TODO : Add a list that tracks the positions of the I_tensor beads so that we can remove them with another method.
+#TODO:Add a list that tracks the positions of the I_tensor beads so that we can remove them with another method
 
     def rotate(self):
         try:
