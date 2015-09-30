@@ -5,6 +5,7 @@ from math import *
 import numpy as np
 from fractions import gcd
 import Moment_Fixer
+from scipy.optimize import minimize
 
 class vec(object):
         """
@@ -961,7 +962,23 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
                     self.internal_angles[j][-1] = self.internal_angles[i][-1]
                     self.internal_angles[j][-2] = self.internal_angles[j][-2]
 
-    def fix_I_moment(self, c_type = ''):
+    def rotate_tables(self, mat = None):
+        if mat is None :
+            mat = np.eye(3)
+        for i in range(self.__table.__len__()):
+            self.__table[i] = np.dot(mat, self.__table[i])
+        for i in range(self.additional_points.__len__()):
+            self.additional_points[i] = np.dot(mat, self.additional_points[i])
+        try:
+            _c_In = self.flags['I_tensor']
+            _c_tensor =np.array([[_c_In[0], _c_In[3], _c_In[4]], [_c_In[3], _c_In[1], _c_In[5]], [_c_In[4], _c_In[5], _c_In[2]]])
+            _c_tensor = np.dot(np.dot( np.transpose(mat), _c_tensor), mat)
+            self.flags['I_tensor'] = np.array([_c_tensor[0,0], _c_tensor[1, 1], _c_tensor[2,2], _c_tensor[0,1],_c_tensor[0,2], _c_tensor[1,2]], dtype = float)
+        except KeyError:
+            pass
+
+
+    def fix_I_moment(self, c_type = '', m_tol = 5e-2):
         """
         Fixes the moment of inertia of the shape by adding 12 ficticious particles in the middle. Some directives needs to be
         defined or this will throw an error. Self.flags['mass'] must be set to some value and self.flags['I_tensor'] must be defined.
@@ -969,25 +986,61 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
         :param c_type: prefix to add to ficticious types. Default is empty string
         :return:
         """
-
+        _c_In = self.flags['I_tensor']
+        #rotate the stuff to get it on its principal axis
+        _c_tensor =np.array([[_c_In[0], _c_In[3], _c_In[4]], [_c_In[3], _c_In[1], _c_In[5]], [_c_In[4], _c_In[5], _c_In[2]]])
+        eigval, eigvec = np.linalg.eig(_c_tensor)
+        self.rotate_tables(mat = eigvec) # precondition the system
+        #self.flags['I_tensor'] = np.array([eigval[0], eigval[1], eigval[2], 0,0,0], dtype = float)
         self.I_fixer = Moment_Fixer.Added_Beads(c_type=c_type, shape_pos=self.__table, shape_num_surf=self.num_surf, d_tensor= self.flags['I_tensor'], mass =self.flags['mass'])
 
-        #change the I_fixer until the masses values are fine by using self.I_fixer.cmass = x, where x ranges from 0 to self.flags['mass']. 
+        #define a merit function for the I_fixer mass values, as a function of center mass and rotation parameters
 
+        def merit_funct(v):
+            self.rotate_tables(mat =
+                               np.dot(np.dot(np.array([[cos(v[1]), - sin(v[1]), 0], [sin(v[1]), cos(v[1]), 0], [0,0,1]]),
+                               np.array([[cos(v[2]), 0, sin(v[2])], [0,1,0], [-sin(v[2]),0, cos(v[2])]])),
+                               np.array([[1,0,0],[0,cos(v[3]), - sin(v[3])], [0,sin(v[3]), cos(v[3])]])))
+            self.I_fixer.cmass = v[0]
+            self.I_fixer.target_tensor = self.flags['I_tensor']
+            self.I_fixer.calc_surf_inertia()
+            self.I_fixer.update_values()
+            vals = self.I_fixer.masses
+            _sum = 0
+            for i in range(vals.__len__()):
+                _sum += (np.sign(vals[i])-1) *vals[i]
+            self.rotate_tables(mat =
+                               np.transpose(np.dot(np.dot(np.array([[cos(v[1]), - sin(v[1]), 0], [sin(v[1]), cos(v[1]), 0], [0,0,1]]),
+                               np.array([[cos(v[2]), 0, sin(v[2])], [0,1,0], [-sin(v[2]),0, cos(v[2])]])),
+                               np.array([[1,0,0],[0,cos(v[3]), - sin(v[3])], [0,sin(v[3]), cos(v[3])]]))))
+            return _sum
+
+        _opt_mass = minimize(merit_funct, x0 = np.array([1.0, 0.05, 0.10, 0.02]),bounds= ((1, self.flags['mass']), (-pi,pi), (-pi/2,pi/2), (-pi,pi)))
+
+        v = _opt_mass.x
+        self.rotate_tables(mat =
+                               np.dot(np.dot(np.array([[cos(v[1]), - sin(v[1]), 0], [sin(v[1]), cos(v[1]), 0], [0,0,1]]),
+                               np.array([[cos(v[2]), 0, sin(v[2])], [0,1,0], [-sin(v[2]),0, cos(v[2])]])),
+                               np.array([[1,0,0],[0,cos(v[3]), - sin(v[3])], [0,sin(v[3]), cos(v[3])]])))
+        self.masses = np.append(self.masses, v[0])
         _offset = self.additional_points.__len__()
 
-        self.additional_points = np.append(self.additional_points, self.I_fixer.intertwined_positions, axis = 0)
 
-        self.masses[0] = 1.0 # the I_fixer assumes a center_mass of 1
-        self.masses=np.append(self.masses, self.I_fixer.intertwined_masses[1:])
 
-        self.type_suffix += self.I_fixer.types
+        #should check that masses are sufficiently large before appending (i.e. avoid a mass of ~0.01)
 
-        if 'soft_shell' in self.flags and self.flags['soft_shell'] is True:
-            for i in range(6):
-                self.internal_bonds.append([0, i + _offset, 1.0, self.flags['soft_signature']+'_IF_xx'])
-            for i in range(6, 12):
-                self.internal_bonds.append([0, i + _offset, 2.0**0.5, self.flags['soft_signature']+'_IF_xy'])
+        for i in range(self.I_fixer.intertwined_positions.__len__()):
+            if self.I_fixer.intertwined_masses[i] > m_tol :
+                self.additional_points = np.append(self.additional_points, self.I_fixer.intertwined_positions[i], axis = 0)
+                self.masses = np.append(self.masses, self.I_fixer.intertwined_masses[i])
+                if i % 2:
+                    self.type_suffix += self.I_fixer.intertwined_types[i]
+                if 'soft_shell' in self.flags and self.flags['soft_shell'] is True:
+                    if i < 6 :
+                        self.internal_bonds.append([0, i+_offset, 1.0, self.flags['soft_signature']+'_IF_xx'])
+                    else:
+                        self.internal_bonds.append([0, i+_offset, 2**0.5, self.flags['soft_signature']+'_IF_xy'])
+        # TODO : Add a list that tracks the positions of the I_tensor beads so that we can remove them with another method.
 
     def rotate(self):
         try:

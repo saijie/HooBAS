@@ -151,6 +151,12 @@ llen = 2
 dsL = 5
 options.filenameformat = 'Test_dt_'+str(options.step_size)+'_Um_'+str(options.Um)+'_temp_'+str(options.target_temp_1)+'_dims_'+str(options.target_dim)+'_dsL'+str(dsL)
 
+a = GenShape.shape()
+a.parse_pdb_protein(filename='4BLC.pdb')
+a.add_pdb_dna_key(key = {'RES':'LYS', 'ATOM'  : 'NZ'}, n_ss = 1)
+a.pdb_build_table()
+a.fix_I_moment()
+
 shapes = []
 i_cut = 12
 for i in range(options.special):

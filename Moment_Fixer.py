@@ -10,13 +10,15 @@ class Added_Beads(object):
 
     """
 
-    def __init__(self, c_type, shape_pos, shape_num_surf,  mass, f_name = None, d_tensor = None, scale = 1.0, cmass = 1.0):
+    def __init__(self, c_type, shape_pos, shape_num_surf,  mass, f_name = None, d_tensor = None, scale = 1.0, CM = 1.0):
 
         self.__scale = scale
         self.__shape = shape_pos
         self.__shape_num_surf = shape_num_surf
-        self.cmass = cmass
+        self.c_mass = CM
         self._c_type = c_type
+
+        self.dtens = d_tensor
 
         self.mass = mass
         self.Ixx = []
@@ -51,11 +53,22 @@ class Added_Beads(object):
 
     @property
     def cmass(self):
-        return self.cmass
+        return self.c_mass
     @cmass.setter
     def cmass(self, val):
-        self.cmass = val
-        self.update_values()
+        self.c_mass = val
+    @property
+    def target_tensor(self):
+        return self.dtens
+    @target_tensor.setter
+    def target_tensor(self, val):
+        self.dtens = val
+        self.Ixx = val[0]
+        self.Ixy = val[3]
+        self.Ixz = val[4]
+        self.Iyy = val[1]
+        self.Izz = val[2]
+        self.Iyz = val[5]
 
     @property
     def intertwined_masses(self):
@@ -126,4 +139,4 @@ class Added_Beads(object):
             [self.__intrinsic_inert_multi[5],  0.0, 0.0, 0.0, 0.0, 0.0, -2.0*self.__scale**2],
         ]
 
-        self.__added_mass = np.linalg.solve(_mat, [self.mass-self.cmass, self.Ixx, self.Iyy, self.Izz, self.Ixy, self.Ixz, self.Iyz])
+        self.__added_mass = np.linalg.solve(_mat, [self.mass-self.c_mass, self.Ixx, self.Iyy, self.Izz, self.Ixy, self.Ixz, self.Iyz])
