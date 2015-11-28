@@ -592,18 +592,18 @@ class BuildHoomdXML(object):
                 _dmp_copy.beads[i].position = _p
                 _dmp_copy.beads[i].image = _fl
                 self.__beads.append(_dmp_copy.beads[i])
-                self.__p_num.append(self.__p_num[-1] + 1)
+            for i in range(_dmp_copy.pnum.__len__()):
+                self.__p_num.append(_dmp_copy.pnum[i])
             for i in range(_dmp_copy.bonds.__len__()):
                 self.__bonds.append(_dmp_copy.bonds[i])
-
             for i in range(_dmp_copy.angles.__len__()):
                 self.__angles.append(_dmp_copy.angles[i])
-
             for i in range(_dmp_copy.dihedrals.__len__()):
                 self.__dihedrals.append(_dmp_copy.dihedrals[i])
             self.ext_bond_t += _dmp_copy.bond_types
             self.ext_ang_t += _dmp_copy.angle_types
             self.ext_dihedral_t += _dmp_copy.dihedral_types
+            del _dmp_copy
 
     def add_rho_molar_ions(self, rho, itype = 'ion', ion_mass = 1.0, q = 1.0, ion_diameter = 1.0):
         """
