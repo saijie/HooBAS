@@ -1,7 +1,7 @@
 # Created by Ting Li, September 21, 2012
 # Generate 1 DNA chain in this format----------
 ###############################################
-# FL   FL   FL            ###
+#                   FL   FL   FL            ###
 # S-S-S-S-A-A-A-A-B(C)-B(X)-B(K)FL          ###
 #                   FL   FL   FL            ###
 #[ssDNA----dsDNA---linker]                  ###
@@ -14,9 +14,11 @@ from headxml import *
 import CoarsegrainedBead
 import WriteXML
 import vector
+import random
+import numpy as np
+import Build
 
-
-class oneDNAchain:
+class oneDNAchain(object):
     '''This is one DNA chain'''
     '''Attributes are beads(positions, types etc.), bonds, angles, and in the future dihedral...'''
 
@@ -207,3 +209,42 @@ class oneDNAchain:
         #oneDNA_template = oneDNAchain(f_DNAtemplate = 'testDNA_0925.xml', N_dsDNAbeads=5)
         #oneDNA_template.write_in_file()
         ##DNA_typeA = oneDNAchain(f_DNAtemplate = 'testDNA_3.xml', N_dsDNAbeads=4) #._oneDNAchain__build_beads()
+
+
+    def randomize_rel(self, tol = 1e-2):
+        for i in range(self.beads_in_oneDNAchain.__len__()):
+            for j in range(self.beads_in_oneDNAchain[i].position.__len__()):
+                self.beads_in_oneDNAchain[i].position[j] *= 1 + random.uniform(-1.0, 1.0) * tol
+
+    def randomize_dirs(self, tol = 1e-1):
+        _new_pos = np.zeros((self.beads_in_oneDNAchain.__len__(),3), dtype = float)
+        for i in range(1, self.beads_in_oneDNAchain.__len__()):
+            _old_vec = Build.vec(np.array(self.beads_in_oneDNAchain[i].position) - np.array(self.beads_in_oneDNAchain[i-1].position))
+            _old_vec2 = Build.vec(np.array(self.beads_in_oneDNAchain[i].position) - np.array(self.beads_in_oneDNAchain[i-1].position))
+            _r_mat = Build.BuildHoomdXML.gen_random_mat()
+            _old_vec2.rot(_r_mat)
+            _new_vec = Build.vec(_old_vec.array * (1-tol) + _old_vec2.array * tol)
+            _new_pos[i,:] = _new_pos[i-1,:] + _new_vec.array
+        for i in range(1, self.beads_in_oneDNAchain.__len__()):
+            self.beads_in_oneDNAchain[i].position = _new_pos[i,:]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

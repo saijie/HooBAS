@@ -3,7 +3,7 @@ from headxml import *
 import CoarsegrainedBead
 
 '''Read in classes of beads, bonds and angles, write xml file for HOOMD'''
-def write_xml (filename, All_beads, All_bonds, All_angles, L=[100, 100, 100], export_charge= False):
+def write_xml (filename, All_beads, All_bonds, All_angles, L=[100, 100, 100], export_charge= False, export_diam = False,All_dihedrals = None, export_dihedral = False):
     print 'output filename=', filename
     fw = open(filename, 'a')
     xmlhead(filename, L)
@@ -46,7 +46,11 @@ def write_xml (filename, All_beads, All_bonds, All_angles, L=[100, 100, 100], ex
         for i in range(len(All_beads)):
             fw.write('%f\n' %All_beads[i].charge)
         fw.write('</charge>\n')
-
+    if export_diam:
+        fw.write('<diameter>\n')
+        for i in range(len(All_beads)):
+            fw.write('%f\n' %All_beads[i].diameter)
+        fw.write('</diameter>\n')
 #### Bond ###
 #    print All_bonds
     fw.write('''<bond>\n''')
@@ -59,7 +63,12 @@ def write_xml (filename, All_beads, All_bonds, All_angles, L=[100, 100, 100], ex
     for i in range (len(All_angles)):
       fw.write('%s %d %d %d\n' %(All_angles[i][0], All_angles[i][1], All_angles[i][2], All_angles[i][3]))
     fw.write('</angle>\n')
-    
+    if export_dihedral:
+        fw.write('<dihedral>\n')
+        for i in range (len(All_dihedrals)):
+          fw.write('%s %d %d %d %d\n' %(All_dihedrals[i][0], All_dihedrals[i][1],All_dihedrals[i][2], All_dihedrals[i][3], All_dihedrals[i][4]))
+        fw.write('</dihedral>\n')
+
     fw.write('''</configuration>\n''')
     fw.write('''</hoomd_xml>''')
     fw.close()  

@@ -13,8 +13,10 @@ import hoomd_XML_parser
 import Simulation_options
 import xml.etree.cElementTree as ET
 import Build
+import LinearChain
 from hoomd_script import *
 import time
+
 
 def c_hoomd_box(v, int_bounds, z_multi =1.00):
     vx = v[0][:]
@@ -110,16 +112,16 @@ options = Simulation_options.simulation_options()
 F = 7.0  # :: Full length binding energies, usual = 7
 Dump = 2e5 #dump period for dcd
 
-options.Um = 0.5
+options.Um = 1.00
 
 
-options.target_dim = 12.60
+options.target_dim = 18.60
 options.scale_factor = 1.0
 
 options.target_temp = 1.60
 options.target_temp_1 = 1.4
 options.target_temp_2 = options.target_temp_1 - 0.01
-options.mixing_temp = 4.0
+options.mixing_temp = 1.8
 options.freeze_flag = False
 options.freeze_temp = 1.0
 options.box_size = [3, 3, 3] # box dimensions in units of target_dim
@@ -130,11 +132,11 @@ options.step_size = 0.0005
 options.size_time = 6e6
 options.box_size_packing = 0 # leave to 0, calculated further in, initialization needed
 options.coarse_grain_power = int(0) ## coarsens DNA scaling by a power of 2. 0 is regular model. Possible to uncoarsen the regular model
-options.flag_surf_energy = True ## check for surface energy calculations; exposed plane defined later. Turn to False for regular random
+options.flag_surf_energy = False ## check for surface energy calculations; exposed plane defined later. Turn to False for regular random
 options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
-options.special = 27
+#options.special = 27
 
 options.center_sec_factor = (3**0.5)*1.35 # security factor for center-center. min dist between particles in random config.
 options.z_m = 1.0 # box z multiplier for surface energy calculations.
@@ -148,33 +150,38 @@ options.num_particles = [27]
 options.center_types = ['W'] #Should be labeled starting with 'W', must have distinct names
 
 llen = 2
-dsL = 5
+dsL = 3
 options.filenameformat = 'Test_dt_'+str(options.step_size)+'_Um_'+str(options.Um)+'_temp_'+str(options.target_temp_1)+'_dims_'+str(options.target_dim)+'_dsL'+str(dsL)
 
-shapes = []
-i_cut = 12
-for i in range(options.special):
-    shapes.append(GenShape.shape())
-    shapes[-1].cube(Num=300, Radius = 2.5*2.0 / 28.5)
-    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
-    if i < i_cut:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X' + str(i) for j in range(llen) ], p_flex = array([0]), num = 133)
-        shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 2)
-        shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
-    else:
-        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X12' for j in range(llen)], p_flex = array([0]), num = 133)
-        shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 2)
-        shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
+shapes = [GenShape.shape()]
+shapes[-1].sphere(Num=50)
+shapes[-1].will_build_from_shapes(properties = {'size' : 2.5, 'surf_type' : 'P', 'density' : 14.29})
+shapes[-1].set_dna(n_ss = 1, n_ds = dsL, s_end = ['X', 'Y'], p_flex = array([0]), num = int(4*pi*5.0**2 * 0.17))
+shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 3)
+shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
+#i_cut = 12
+#for i in range(options.special):
+#    shapes.append(GenShape.shape())
+#    shapes[-1].cube(Num=300, Radius = 2.5*2.0 / 28.5)
+#    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
+#    if i < i_cut:
+#        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X' + str(i) for j in range(llen) ], p_flex = array([0]), num = 133)
+#        shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 2)
+#        shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
+#    else:
+#        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X12' for j in range(llen)], p_flex = array([0]), num = 133)
+#        shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 2)
+#        shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
 
 
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
 ######################################################################
-options.sticky_pairs = []
-for i in range(13):
-    for j in range(i, 13):
-        if i != j:
-            options.sticky_pairs.append(['X'+str(i), 'X' + str(j)])
+options.sticky_pairs = [['X', 'W'], ['Y','Z']]
+#for i in range(13):
+#    for j in range(i, 13):
+#        if i != j:
+#            options.sticky_pairs.append(['X'+str(i), 'X' + str(j)])
 #options.sticky_pairs = [['X', 'Y']] #<- which pairs are attractive. Non-physical pairs can be included. Defined as list of lists of 2 particles [['X', 'Y'], ['T', 'G'], ['M', 'N']] for instance
 # for tracking purposes, each list means a potential energy is computed, by taking all pair interactions from the sticky
 # pairs included in the track list.
@@ -261,14 +268,19 @@ options.num_particles = [1 for i in range(center_file_object.positions.__len__()
 for i in range(options.num_particles.__len__() - shapes.__len__()):
     shapes.append(shapes[-1])
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
-buildobj.set_rotation_function()
+polyaniline = LinearChain.polyaniline(n_monomer = 100)
+polyaniline.add_dna(10, 1, 5, ['Z', 'W'])
+buildobj.add_N_ext_obj(polyaniline, N = 20)
+
+buildobj.set_rotation_function(mode = 'random')
 
 d_tags = buildobj.dna_tags
 c_tags = buildobj.center_tags
 d_tags_len = d_tags.__len__()
 d_tags_loc_len = d_tags[0].__len__()
 
-buildobj.set_charge_to_pnum()
+#buildobj.set_charge_to_pnum()
+buildobj.set_charge_to_dna_types()
 buildobj.write_to_file(z_box_multi=options.z_m, export_charge= True)
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
@@ -329,7 +341,7 @@ Sangle.set_coeff('A-B-B', k=2.0, t0=pi)
 Sangle.set_coeff('C-C-endFL', k=50.0, t0=pi)
 
 
-ktyp = 1000.00
+ktyp = 800.00
 try :
     for i in range(options.bond_types.__len__()):
         _ad = False
@@ -493,12 +505,13 @@ nlist.set_params(check_period=1)
 nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
 
 
-part_len = system.particles.__len__() # avoid calls later to the system
-_t = time.time()
-reset_nblock_list()
-_t = time.time() - _t
-print 'reset_nblock_list() timing :'+str(_t)
+#part_len = system.particles.__len__() # avoid calls later to the system
+#_t = time.time()
+#reset_nblock_list()
+#_t = time.time() - _t
+#print 'reset_nblock_list() timing :'+str(_t)
 
+dump.dcd(filename=options.filenameformat+'_dcd.dcd', period=Dump, overwrite = True) # dump a .dcd file for the trajectory
 
 nve = integrate.nve(group=nonrigid, limit=0.0005)
 keep_phys = update.zero_momentum(period=100)
@@ -510,7 +523,7 @@ nonrigid_integrator = integrate.nvt(group=nonrigid, T=0.1, tau = 0.65)
 integrate.mode_standard(dt=0.00001)
 run(1e6)
 
-rigid_integrator = integrate.nvt_rigid(group=rigid, T=0.1, tau = 0.65)
+#rigid_integrator = integrate.nvt_rigid(group=rigid, T=0.1, tau = 0.65)
 
 
 #####################################################################################
@@ -520,7 +533,7 @@ rigid_integrator = integrate.nvt_rigid(group=rigid, T=0.1, tau = 0.65)
 
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
-dump.dcd(filename=options.filenameformat+'_dcd.dcd', period=Dump, overwrite = True) # dump a .dcd file for the trajectory
+
 
 ###  Equilibrate System #################
 
@@ -540,29 +553,31 @@ run(2e6)
 #increase time step so system can mix up faster
 integrate.mode_standard(dt=0.0002)
 
-rigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
+#rigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
 nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
 
+run(1e6)
 #starting here we periodicaly update the nn table which changes DNA types
-options.tab_update = 1e3
+#options.tab_update = 1e3
 #curr_types = ['X'+str(i) for i in range(12)] + ['X12' for i in range(options.special - 12)]
 
 
-for i in range(int(1e6 / options.tab_update)):
+#for i in range(int(1e6 / options.tab_update)):
 
-    reset_nblock_list()
-    run(options.tab_update)
+#    reset_nblock_list()
+#    run(options.tab_update)
 
 
 
 integrate.mode_standard(dt=0.0005)
 
-rigid_integrator.set_params(T=options.mixing_temp)
+#rigid_integrator.set_params(T=options.mixing_temp)
 nonrigid_integrator.set_params(T=options.mixing_temp)
+run(2e6)
 
-for i in range(int(2e6 / options.tab_update)):
-    reset_nblock_list()
-    run(options.tab_update)
+#for i in range(int(2e6 / options.tab_update)):
+#    reset_nblock_list()
+#    run(options.tab_update)
 
 
 
@@ -570,48 +585,54 @@ integrate.mode_standard(dt=0.0005)
 BoxChange = update.box_resize(Lx=variant.linear_interp([(0, Lx0), (options.size_time, TargetBx)]),
                               Ly=variant.linear_interp([(0, Ly0), (options.size_time, TargetBy)]),
                               Lz=variant.linear_interp([(0, Lz0), (options.size_time, TargetBz)]), period=50)
-for i in range(int(options.size_time / options.tab_update)):
-    reset_nblock_list()
-    run(options.tab_update)
+#for i in range(int(options.size_time / options.tab_update)):
+#    reset_nblock_list()
+#    run(options.tab_update)
+run(options.size_time)
 BoxChange.disable()
 keep_phys.disable()
 
 integrate.mode_standard(dt=0.0005)
-rigid_integrator.set_params(T=options.mixing_temp)
+#rigid_integrator.set_params(T=options.mixing_temp)
 nonrigid_integrator.set_params(T=options.mixing_temp)
 
-for i in range(int(options.mix_time/options.tab_update)):
-    reset_nblock_list()
-    run(options.tab_update)
+#for i in range(int(options.mix_time/options.tab_update)):
+#    reset_nblock_list()
+#    run(options.tab_update)
+run(options.mix_time)
 
 
 
 
 
 integrate.mode_standard(dt=options.step_size)
-rigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
+#rigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
 nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
 
-for i in range(int(3e6 / options.tab_update)):
-    reset_nblock_list()
-    run(options.tab_update)
-
+#for i in range(int(3e6 / options.tab_update)):
+#    reset_nblock_list()
+#    run(options.tab_update)
+run(3e6)
 
 integrate.mode_standard(dt=options.step_size)
-rigid_integrator.set_params(T=options.target_temp_1)
+#rigid_integrator.set_params(T=options.target_temp_1)
 nonrigid_integrator.set_params(T=options.target_temp_1)
 
-for i in range(int(1e6 / options.tab_update)):
-    reset_nblock_list()
-    run(options.tab_update)
-
+#for i in range(int(1e6 / options.tab_update)):
+#    reset_nblock_list()
+#    run(options.tab_update)
+run(1e6)
 
 mol2.write(filename='BefCoolSnap'+options.filenameformat+'.mol2')
 
-integrate.mode_standard(dt=options.step_size)
-rigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
-nonrigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
+nonrigid_integrator.disable()
+npt_integ = integrate.npt(group = nonrigid, T = options.mixing_temp, tau = 0.65, P = 1e-4, tauP = 1.00)
 
-for i in range(int(options.cool_time / options.tab_update)):
-    reset_nblock_list()
-    run(options.tab_update)
+#integrate.mode_standard(dt=options.step_size)
+#rigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
+#nonrigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
+
+#for i in range(int(options.cool_time / options.tab_update)):
+#    reset_nblock_list()
+#    run(options.tab_update)
+#run(options.cool_time)

@@ -136,6 +136,14 @@ class CenterFile(object):
                 self.__table[counter] = np.delete(self.__table[counter], -1, 0)
             counter +=1
 
+    def add_one_particle(self, position, list_number = 0):
+        try:
+            self.__table[list_number] = np.append(self.__table[0], np.array([[position[0], position[1], position[2]]]), axis = 0)
+        except IndexError:
+            if self.__table.__len__() == list_number:
+                self.__table.append(np.array([[position[0], position[1], position[2]]]))
+        self.__table_size += 1
+
     def __random_table(self):
         """
         initialize the tables from optinos w/ randomly placed beads
