@@ -605,40 +605,33 @@ class BuildHoomdXML(object):
             self.ext_dihedral_t += _dmp_copy.dihedral_types
             del _dmp_copy
 
-    def add_rho_molar_ions(self, rho, itype = 'ion', ion_mass = 1.0, q = 1.0, ion_diameter = 1.0):
+    def add_rho_molar_ions(self, rho, qtype = 'ion', ion_mass = 1.0, q = 1.0, ion_diam = 1.0):
         """
         Adds a volumetric density of rho ions to the simulation domain
         :param rho:
         :return:
         """
-        rho *= (6.02*10**23) / (10**3*(2*10**-9)**3)**-1
+        #rho *= (6.02*10**23) / (10**3*(2*10**-9)**3)**-1
         L = self.current_box()
         V = L[0] * L[1] * L[2]
-        N = int(rho * V)
-        for i in range(N):
-            _rej = False
-            while not _rej:
-                _gen_pos = np.array([random.uniform(-L[0], L[0]), random.uniform(-L[1], L[1]), random.uniform(-L[2], L[2])])
-                for j in range(self.__particles.__len__()):
-                    try:
-                        _rej or np.linalg.norm(self.__particles[j].center_position - _rej) < self.__particles[j]._sh.flags['hardcore_safe_dist'] * self.__particles[j]._sh.flags['size']/2
-                    except KeyError:
-                        pass
-            self.__positions = np.append(self.__positions, _rej, axis = 0)
-            self.__beads.append(CoarsegrainedBead.bead(position=_rej, beadtype=itype, mass = ion_mass, body = -1, charge = q, diameter = ion_diameter))
-    def add_N_ions(self, N, type = 'ion', ion_mass = 1.0, q = 1.0, ion_diameter = 1.0):
+        N = int(rho *4.81* V)
+        self.add_N_ions(N=N, ion_mass=ion_mass, ion_diam=ion_diam, q = q, qtype = qtype)
+
+    def add_N_ions(self, N, qtype = 'ion', ion_mass = 1.0, q = 1.0, ion_diam = 1.0):
         L = self.current_box()
         for i in range(N):
-            _rej = False
-            while not _rej:
-                _gen_pos = np.array([random.uniform(-L[0], L[0]), random.uniform(-L[1], L[1]), random.uniform(-L[2], L[2])])
+            _rej_check = True
+            while _rej_check:
+                _rej_check = False
+                _gen_pos = np.array([random.uniform(-L[0]/2.1, L[0]/2.1), random.uniform(-L[1]/2.1, L[1]/2.1), random.uniform(-L[2]/2.1, L[2]/2.1)])
                 for j in range(self.__particles.__len__()):
                     try:
-                        _rej or np.linalg.norm(self.__particles[j].center_position - _rej) < self.__particles[j]._sh.flags['hardcore_safe_dist'] * self.__particles[j]._sh.flags['size']/2
+                        if np.linalg.norm(self.__particles[j].center_position - _gen_pos) < self.__particles[j]._sh.flags['hardcore_safe_dist'] * self.__particles[j]._sh.flags['size']/2:
+                            _rej_check = True
                     except KeyError:
                         pass
-            self.__positions = np.append(self.__positions, _rej, axis = 0)
-            self.__beads.append(CoarsegrainedBead.bead(position=_rej, beadtype='type', mass = ion_mass, body = -1, charge = q, diameter = ion_diameter))
+            #self.__positions = np.append(self.__positions, _gen_pos, axis = 0)
+            self.__beads.append(CoarsegrainedBead.bead(position=_gen_pos, beadtype=qtype, mass = ion_mass, body = -1, charge = q, diameter = ion_diam))
 
     def set_diameter_by_type(self, btype, diam):
         for i in range(self.__beads.__len__()):
@@ -657,10 +650,10 @@ class BuildHoomdXML(object):
             return
         elif _internal_charge >0 :
             _rerun_check =(_internal_charge % qn ==0)
-            self.add_N_ions(N = ceil(_internal_charge / float(qn)), type = ntype, ion_mass = nion_mass, q = qn, ion_diameter=nion_diam)
+            self.add_N_ions(N = int(ceil(-_internal_charge / float(qn))), qtype = ntype, ion_mass = nion_mass, q = qn, ion_diam=nion_diam)
         else:
             _rerun_check = (_internal_charge % qp ==0)
-            self.add_N_ions(N = ceil(_internal_charge / float(qp)), type = ptype, ion_mass = pion_mass, q = qp, ion_diameter=pion_diam)
+            self.add_N_ions(N = int(ceil(-_internal_charge / float(qp))), qtype = ptype, ion_mass = pion_mass, q = qp, ion_diam=pion_diam)
         if not isrerun and _rerun_check:
             self.fix_remaining_charge(ptype,ntype,pion_mass, nion_mass, qp, qn, pion_diam, nion_diam, isrerun=True)
         elif _rerun_check:

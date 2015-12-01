@@ -184,6 +184,8 @@ class LinearChain(object):
             self.sticky_used.append(sticky_end)
         for i in range(num):
             _dump_copy = copy.deepcopy(dna_obj)
+            for j in range(_dump_copy.beads_in_oneDNAchain.__len__()):
+                _dump_copy.beads_in_oneDNAchain[j].position[2] += 0.2
             _dump_copy.randomize_dirs()
             _p_off = self.pnum[-1]+1
             self.att_sites.append(self.rem_sites.pop(random.randint(0, self.rem_sites.__len__()-1)))
@@ -221,11 +223,73 @@ class LinearChain(object):
         for i in range(1, self.beads.__len__()):
             self.beads[i].position = _new_pos[i,:]
 
+    def change_remaining_att_sites(self, key_search, max_num_bindings = 1):
+        self.rem_sites = []
+        for i in range(self.beads.__len__()):
+            _bind_counter = 0
+            for j in self.att_sites.__len__():
+                if self.pnum[i] == self.att_sites[j]:
+                    _bind_counter+=1
+            if _bind_counter < max_num_bindings:
+                _bool_add = True
+                for key in key_search.keys():
+                    try:
+                        _bool_add and self.beads.__getattribute__(key) == key_search[key]
+                    except AttributeError:
+                        _bool_add = False
+                        break
+                if _bool_add:
+                    self.rem_sites.append(self.pnum[i])
+
+    def graft_N_ext_object(self, obj, N, connecting_bond = None):
+        if connecting_bond is None:
+            connecting_bond = ['Chain-Graft', 330.0, 1.0]
+        if N > self.rem_sites.__len__():
+            raise StandardError('Number of grafted chains greater than attachments sites')
+        for i in range(N):
+            _dmp_copy = copy.deepcopy(obj)
+            try:
+                _dmp_copy.randomize_dirs()
+            except NameError:
+                pass
+            _p_off = self.pnum[-1]+1
+            self.att_sites.append(self.rem_sites.pop(random.randint(0, self.rem_sites.__len__()-1)))
+            _attvec = vec(self.positions[self.att_sites[-1],:])
+            _rotmat = self.get_rot_mat([random.uniform(-1,1), random.uniform(-1,1), random.uniform(-0.1, 0.1)])
+
+            for j in range(_dmp_copy.beads.__len__()):
+                _v = vec(_dmp_copy.beads[j].position)
+                _v.rot(mat = _rotmat)
+                _dmp_copy.beads[j].position = _v.array + self.positions[self.att_sites[-1], :] + np.random.uniform(0,1e-2,3)
+                del _v
+                self.positions = np.append(self.positions, np.array([_dmp_copy.beads[j].position[:]]), axis = 0)
+                self.beads.append(_dmp_copy.beads[j])
+                self.pnum.append(_p_off+j)
+            for j in range(_dmp_copy.bonds.__len__()):
+                _dmp_copy.bonds[j][1] += _p_off
+                _dmp_copy.bonds[j][2] += _p_off
+                self.bonds.append(_dmp_copy.bonds[j])
+            self.bonds.append([connecting_bond[0], self.att_sites[-1], _p_off])
+            for j in range(_dmp_copy.angles.__len__()):
+                for k in range(_dmp_copy.angles[j].__len__()-1):
+                    _dmp_copy.angles[j][k+1] += _p_off
+                self.angles.append(_dmp_copy.angles[j])
+            for j in range(_dmp_copy.dihedrals.__len__()):
+                for k in range(_dmp_copy.dihedrals[j].__len__()):
+                    _dmp_copy.dihedrals[j][k+1] += _p_off
+                self.dihedrals.append(_dmp_copy.dihedrals[j])
+            del _dmp_copy, _attvec
+
+        self.b_types += obj.bond_types
+        self.b_types += connecting_bond
+        self.a_types += obj.angle_types
+        self.d_types += obj.dihedral_types
+
 class polyaniline(LinearChain):
     def __init__(self, n_monomer = None):
         LinearChain.__init__(self, n_monomer = n_monomer, kuhn_length = [5.56/20, 5.52/20, 5.47/20])
 
-        self.b_types = [['paA-paA', 71.84 * 4.18 / (20**2), 5.56/20], ['paA-paB', 111.28 * 4.18 / 20**2, 5.52/20], ['paB-paB', 143.03 *4.18 / 20**2, 5.47/20]]
+        self.b_types = [['paA-paA', 71.84 * 4.18 * (20**2), 5.56/20], ['paA-paB', 111.28 * 4.18 * 20**2, 5.52/20], ['paB-paB', 143.03 *4.18 * 20**2, 5.47/20]]
         self.a_types = [['paA-paA-paB', 19.46*4.18*sin(1.94)**2, 1.94], ['paA-paB-paB', 38.80*4.18*sin(2.45)**2, 2.45]]
         self.d_types = [['paA-paA-paB-paB', 0.5*0.8*4.18, 0.5*0.73*4.18, 0.5*-0.03*4.18, 0.5*0.22*4.18],
                         ['paA-paB-paB-paA', 0.5*0.66*4.18, 0.5*-0.54*4.18, 0.5*-0.1*4.18, 0.5*0.02*4.18],
@@ -238,7 +302,7 @@ class polyaniline(LinearChain):
         self.__build_chain()
         self.__build_chain_beads()
         self.randomize_dirs()
-        self.rem_sites = range(0, self.beads.__len__(), 4)+range(3, self.beads.__len__(), 4)
+        self.rem_sites = range(0, self.beads.__len__(), 4)+range(3, self.beads.__len__(), 4) # sites available for binding
 
 
     def __build_chain(self):
@@ -294,3 +358,28 @@ class polyaniline(LinearChain):
             else:
                 self.beads.append(CoarsegrainedBead.bead(position=self.positions[i], beadtype = 'paB', mass = self.mass[0], charge = 0, body = -1))
 
+class GenericPolymer(LinearChain):
+    def __init__(self, n_mono = 100, kuhn_length = 1.0):
+        LinearChain.__init__(self, n_monomer=n_mono, kuhn_length=kuhn_length)
+
+        self.wdv = [['GenericPolymerBackbone', 'GenericPolymerBackbone', 1.0, 1.0]]
+        self.b_types = [['GenericPolymerBackbone', 300.0, self.lmono]]
+
+        self.__build_chain()
+        self.__build_beads()
+        self.randomize_dirs()
+        self.rem_sites = range(0, self.positions.__len__())
+
+    def __build_chain(self):
+        self.positions = np.append(self.positions, [[0.0, 0.0, 0.0]], axis =0)
+        self.pnum = [0]
+        self.mass = [1.0]
+
+
+        for i in range(self.nmono -1):
+            self.positions = np.append(self.positions, [[0.0, 0.0, self.positions[-1,2] + self.lmono]])
+            self.pnum.append(self.pnum[-1]+1)
+            self.bonds.append(['GenericPolymerBackbone',self.pnum[-1], self.pnum[-2]])
+    def __build_beads(self):
+        for i in range(self.positions.__len__()):
+            self.beads.append(CoarsegrainedBead.bead(position=self.positions[i,:], beadtype='GenericPolymer', body = -1))
