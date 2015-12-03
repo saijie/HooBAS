@@ -160,6 +160,8 @@ class BuildHoomdXML(object):
         self.ext_bond_t = []
         self.ext_dihedral_t = []
 
+        self.charge_normalization = 1.00
+
         if init is None:
             self._c_pos = center_obj.positions
             self._c_t = center_obj.built_types
@@ -281,6 +283,19 @@ class BuildHoomdXML(object):
         for i in range(self.__particles.__len__()):
             _tags.append(self.__particles[i].pnum_offset)
         return _tags
+
+    @property
+    def charge_normalization(self):
+        return self.charge_normalization
+    @charge_normalization.setter
+    def charge_normalization(self, val):
+        self.charge_normalization = val
+    @property
+    def permittivity(self):
+        return self.charge_normalization**2.0
+    @permittivity.setter
+    def permittivity(self, val):
+        self.charge_normalization = val**0.5
 
     def set_charge_to_pnum(self):
         for i in range(self.__beads.__len__()):
@@ -672,6 +687,10 @@ class BuildHoomdXML(object):
             self.set_rot_to_hoomd()
 
         self.__opts.sys_box = L
+
+        for i in range(self.__beads.__len__()):
+            self.__beads[i].charge /= self.charge_normalization
+
         if self.__dihedrals.__len__() == 0:
             WriteXML.write_xml(filename = self.__opts.filenameformat+'.xml', All_angles= self.__angles, All_beads=self.__beads,
                            All_bonds=self.__bonds, L = L, export_charge = export_charge, export_diam=export_diameter)
