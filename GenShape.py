@@ -892,6 +892,7 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
     def generate_surface_bonds(self, *args):
         #old name for this function
         self.generate_internal_bonds(*args)
+
     def generate_internal_bonds(self, signature, num_nn = 3):
         """
         Generates surface bonds for the num_nn nearest neighbours on the surface. Also adds one bond per surface atom between the center and the surface. Note
@@ -975,7 +976,6 @@ class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own cl
             self.flags['I_tensor'] = np.array([_c_tensor[0,0], _c_tensor[1, 1], _c_tensor[2,2], _c_tensor[0,1],_c_tensor[0,2], _c_tensor[1,2]], dtype = float)
         except KeyError:
             pass
-
 
     def fix_I_moment(self, c_type = '', m_tol = 5e-2):
         """

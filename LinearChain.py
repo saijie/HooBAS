@@ -50,8 +50,41 @@ class vec(object):
 
 class LinearChain(object):
     """
-    This is a class for linear chains in the model. Subclasses are expected to give constant for angles and other functions
+    This is a class for linear chains in the model. Subclasses are expected to give constants for angles and other functions
     initial chain is expected to run along Z, while DNA is added on x-y plane
+
+    Properties :
+
+    zero_pos : position of the first bead in the chani
+
+    center_position : position of the center of the chain, calculated by arithmetic average
+
+    bond_types : returns the bond types in the chain in the form [['name', k, r0], ... ]
+
+    angle_types : returns the angle types in the chain in the form [['name', k, t0], ...]
+
+    dihedral_types : returns the dihedral types in the form [['name', params0, params1, ... ], ...], parameter number
+     depends on the potential type, OPLS has 4
+
+    pnum_offset : shifts all bead numbers in potentials by this constant
+
+    Methods :
+
+    add_dna(#, n_ss, n_ds, sticky_end) : adds DNA defined by the parameters to the linear chain. DNA are grafted to remaining sites
+
+    randomize_dirs : randomizes the chain directions
+
+    change_remaining_att_sites(key_search, max_num_bindings = 1) : changes the remaining attachment sites in the chain by using a key search
+     in the beads. the key is a dictionary (e.g. {'beadtype':'P'}). max_num_bindings is the maximum number of grafts a site can have, including all previous
+     bindings
+
+    graft_N_ext_obj(N, obj, connecting_bond = None, add_attachment_sites = False) : grafts N copies (N<remaining sites) of obj to the chain, connecting the newly
+    added chain by connecting_bond[0]. If add_attachment_sites is true, the grafted object attachment sites will be appended to the remaining sites
+
+    random_roration():
+    Rotates the chain by a random matrix
+
+
     """
     def __init__(self, n_monomer = None, kuhn_length = None):
 
@@ -241,7 +274,8 @@ class LinearChain(object):
                 if _bool_add:
                     self.rem_sites.append(self.pnum[i])
 
-    def graft_N_ext_object(self, obj, N, connecting_bond = None):
+    def graft_N_ext_object(self, obj, N, connecting_bond = None, add_attachment_sites = False):
+        _graft_att_sites = []
         if connecting_bond is None:
             connecting_bond = ['Chain-Graft', 330.0, 1.0]
         if N > self.rem_sites.__len__():
@@ -255,7 +289,7 @@ class LinearChain(object):
             _p_off = self.pnum[-1]+1
             self.att_sites.append(self.rem_sites.pop(random.randint(0, self.rem_sites.__len__()-1)))
             _attvec = vec(self.positions[self.att_sites[-1],:])
-            _rotmat = self.get_rot_mat([random.uniform(-1,1), random.uniform(-1,1), random.uniform(-0.1, 0.1)])
+            _rotmat = self.get_rot_mat([random.uniform(-1,1), random.uniform(-1,1), random.uniform(-1, 1)])
 
             for j in range(_dmp_copy.beads.__len__()):
                 _v = vec(_dmp_copy.beads[j].position)
@@ -278,8 +312,15 @@ class LinearChain(object):
                 for k in range(_dmp_copy.dihedrals[j].__len__()):
                     _dmp_copy.dihedrals[j][k+1] += _p_off
                 self.dihedrals.append(_dmp_copy.dihedrals[j])
+            if add_attachment_sites:
+                try:
+                    for j in range(1, _dmp_copy.rem_sites.__len__()):
+                        _graft_att_sites.append(_dmp_copy.rem_sites[j] + _p_off)
+                except NameError:
+                    pass
             del _dmp_copy, _attvec
-
+        if add_attachment_sites:
+            self.rem_sites.append(_graft_att_sites)
         self.b_types += obj.bond_types
         self.b_types += connecting_bond
         self.a_types += obj.angle_types
@@ -383,3 +424,84 @@ class GenericPolymer(LinearChain):
     def __build_beads(self):
         for i in range(self.positions.__len__()):
             self.beads.append(CoarsegrainedBead.bead(position=self.positions[i,:], beadtype='GenericPolymer', body = -1))
+
+class GenericRingPolymer(LinearChain):
+    def __init__(self, n_mono = 100, kuhn_length = 1.0):
+        LinearChain.__init__(self, n_monomer=n_mono, kuhn_length=kuhn_length)
+
+        self.wdv = [['GenericPolymerBackbone', 'GenericPolymerBackbone', 1.0, 1.0]]
+        self.b_types = [['GenericPolymerBackbone', 300.0, self.lmono]]
+
+        self.__build_chain()
+        self.__build_beads()
+        self.randomize_dirs()
+        self.rem_sites = range(0, self.positions.__len__())
+
+        self.R = self.lmono * self.nmono / (2*pi)
+
+    def __build_chain(self):
+        self.positions = np.append(self.positions, [[self.R, 0.0, 0.0]], axis =0)
+        self.pnum = [0]
+        self.mass = [1.0]
+
+
+        for i in range(self.nmono -1):
+            self.positions = np.append(self.positions, [[self.R * cos(2*pi * (i+1) / (self.nmono+1)), self.R * sin(2*pi * (i+1) / (self.nmono+1)), 0.0]])
+            self.pnum.append(self.pnum[-1]+1)
+            self.bonds.append(['GenericPolymerBackbone',self.pnum[-1], self.pnum[-2]])
+        self.bonds.append(['GenericPolymerBackbone', self.pnum[-1], self.pnum[0]])
+    def __build_beads(self):
+        for i in range(self.positions.__len__()):
+            self.beads.append(CoarsegrainedBead.bead(position=self.positions[i,:], beadtype='GenericPolymer', body = -1))
+
+class DNAChain(LinearChain): #TODO : finish this dna, its gonna be useful for Eileen stuff
+    def __init__(self, n_ss, n_ds, sticky_end, flexor = None, bond_length = 0.84):
+        LinearChain.__init__(self, n_monomer= n_ss + n_ds + sticky_end.__len__(), kuhn_length=bond_length)
+        self.nss = n_ss
+        self.nds = n_ds
+        self.sticky = sticky_end
+        self.b_types = []
+        self.a_types = []
+        self.rem_sites = [] # we dont attach anything to the DNA chain
+
+        if self.nmono < 1 :
+            raise StandardError('DNA chain does not have a single monomer, unable to build')
+
+    def __build_chain(self):
+        self.positions = np.append(self.positions, [[0.0, 0.0, 0.0]], axis = 0)
+        self.pnum = [0]
+
+        if self.nss > 0:
+            self.mass = [1.0]
+        else:
+            self.mass = [4.0]
+
+        for i in range(1, self.nss - 1):
+
+                self.positions = np.append(self.positions, [[0.0, 0.0, self.positions[-1,2] + self.lmono * 0.5]], axis = 0)
+                self.mass.append(1.0)
+                self.pnum.append(self.pnum[-1]+1)
+
+        for i in range(self.nds):
+                if self.mass[-1] == 1.0 :
+                    self.positions = np.append(self.positions, [[0.0,0.0, self.positions[-1,2] + self.lmono * 0.5]], axis = 0)
+                    self.mass.append(4.0)
+                    self.pnum.append(self.pnum[-1]+1)
+                else:
+                    self.positions = np.append(self.positions, [[0.0, 0.0, self.positions[-1,2] + self.lmono]], axis = 0)
+                    self.mass.append(4.0)
+                    self.pnum.append(self.pnum[-1]+1)
+        for i in range(self.sticky.__len__()): # this could be zero actually
+            if self.mass[-1] == 4.0:
+                self.positions = np.append(self.positions, [[]], axis = 0)
+            else:
+                self.positions = np.append(self.positions, [[]], axis = 0)
+
+
+    def __build_bonds(self):
+        pass
+    def __build_angles(self):
+        pass
+    def __build_beads(self):
+        pass
+

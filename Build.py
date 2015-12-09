@@ -127,12 +127,21 @@ class BuildHoomdXML(object):
     rename_type_by_RE(pattern, new_type, RE_flags = None)
         same as rename_type, but uses a regular expression through re.match(pattern, ..., RE_flags) to search the beadtype strings
 
+    current_box()
+    returns the current domain box of the build obj
+
+    add_N_ext_obj(N, ext_obj)
+    makes N copies of the external object ext_obj and appends them to the build object. ext_obj must supports methods/properties for angle_types, bond_types, dihedral_types
+    have a pnum_offset, center_position properties with setters and support access to ext_obj.beads
+
+    add_rho_molar_ions(rho, qtyoe, q, ion_mass)
+
     __build_from_X
         where X is either options or shapes. Old implementation is from options which will pull all particle properties from the options list. Called automatically
         from constructor is init = None newer implementation uses build directives from the shape object, which is much more intuitive. Can be called automatically
         by using init = 'from_shapes' in constructor
 
-
+    Defined property : impose_box, imposes a box, useful for adding charge to the domain.
 
     Defined properties (no setters)
     centers : returns list of center types
@@ -285,10 +294,10 @@ class BuildHoomdXML(object):
         return _tags
 
     @property
-    def charge_normalization(self):
+    def charge_norm(self):
         return self.charge_normalization
-    @charge_normalization.setter
-    def charge_normalization(self, val):
+    @charge_norm.setter
+    def charge_norm(self, val):
         self.charge_normalization = val
     @property
     def permittivity(self):
@@ -583,7 +592,6 @@ class BuildHoomdXML(object):
         else:
             return self.impose_box
 
-
     def add_N_ext_obj(self, ext_obj, N):
         """
         Adds arbitrary build-like objects to this file. They need to have DNA built-in and support pnum_offset method,
@@ -698,6 +706,21 @@ class BuildHoomdXML(object):
             WriteXML.write_xml(filename = self.__opts.filenameformat+'.xml', All_angles= self.__angles, All_beads=self.__beads,
                            All_bonds=self.__bonds, L = L, export_charge = export_charge, export_diam=export_diameter,
                                All_dihedrals=self.__dihedrals, export_dihedral=True)
+
+    def graft_N_obj_on_shapes(self, ext_obj, N, key = None):
+        _max_pnum_from_particles = self.__particles[-1].p_num[-1]
+        _extra_list = self.__beads[_max_pnum_from_particles : self.__beads.__len__()] ## for safekeeping any addition to the list that doesnt come from particles
+
+
+        for i in range(self.__particles.__len__()):
+            # TODO : add key check
+            self.__particles[i].graft_N_ext_obj(ext_obj, N)
+        self.build_lists_from_particles()
+
+        self.__beads.append(_extra_list)
+
+        pass
+
     class Particle(object):
         """
         object that contains list of each object that should be contained in the build object. Input args :
@@ -1007,6 +1030,10 @@ class BuildHoomdXML(object):
                         _dump_copy.angles_in_oneDNAchain[j][k+1] += _p_off
                     self.angles.append(_dump_copy.angles_in_oneDNAchain[j])
                 del _dump_copy, _att_vec
+
+        def graft_N_ext_objs(self, ext_obj, N):
+            # TODO : add the grafting
+            pass
 
         def __build_surface(self):
             self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
