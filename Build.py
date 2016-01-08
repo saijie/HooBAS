@@ -252,7 +252,9 @@ class BuildHoomdXML(object):
             _d.append(self.__particles[i].dihedral_types)
         _d += self.ext_dihedral_t
         return list(set(list(chain.from_iterable(_d))))
-
+    @property
+    def num_beads(self):
+        return self.__beads.__len__()
     @property
     def center_types(self):
         _ct = []

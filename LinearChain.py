@@ -394,7 +394,7 @@ class polyaniline(LinearChain):
 
     def __build_chain_beads(self):
         for i in range(self.positions.__len__()):
-            if not (i%4) or not (i%4==3):
+            if not (i%4) or (i%4==3):
                 self.beads.append(CoarsegrainedBead.bead(position=self.positions[i], beadtype = 'paA', mass = self.mass[0], charge = 0, body = -1))
             else:
                 self.beads.append(CoarsegrainedBead.bead(position=self.positions[i], beadtype = 'paB', mass = self.mass[0], charge = 0, body = -1))

@@ -102,7 +102,7 @@ def reset_nblock_list():
 ##############################
 #### Simulation parameters####
 ##############################
-
+print 'initial declarations'
 options = Simulation_options.simulation_options()
 
 #############################################################################
@@ -149,16 +149,18 @@ options.size = [28.5/5.0]
 options.num_particles = [27]
 options.center_types = ['W'] #Should be labeled starting with 'W', must have distinct names
 
+print 'setting up shapes'
+
 llen = 2
 dsL = 3
 options.filenameformat = 'Test_dt_'+str(options.step_size)+'_Um_'+str(options.Um)+'_temp_'+str(options.target_temp_1)+'_dims_'+str(options.target_dim)+'_dsL'+str(dsL)
 
 shapes = [GenShape.shape()]
-shapes[-1].sphere(Num=50)
+shapes[-1].sphere(Num=75)
 shapes[-1].will_build_from_shapes(properties = {'size' : 2.5, 'surf_type' : 'P', 'density' : 14.29})
-shapes[-1].set_dna(n_ss = 1, n_ds = dsL, s_end = ['X', 'Y'], p_flex = array([0]), num = int(4*pi*5.0**2 * 0.17))
-shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 3)
-shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
+shapes[-1].set_dna(n_ss = 1, n_ds = dsL, s_end = ['X', 'Y'], p_flex = array([0]), num = int(4*pi*2.5**2 * 0.17))
+#shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 3)
+#shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
 #i_cut = 12
 #for i in range(options.special):
 #    shapes.append(GenShape.shape())
@@ -214,50 +216,15 @@ options.int_bounds = [2, 2, 2] # for rotations, new box size, goes from -bound t
 options.exposed_surf = [0, 0, 1] ## z component must not be zero
 options.lattice_multi = [1.0, 1.0, 1.0]
 
-
-
-if options.flag_surf_energy:
-    center_file_object = CenterFile.CenterFile(options, init = None, surf_plane = options.exposed_surf, Lattice = options.lattice_multi)
-    center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0, 0, 0])
-#    center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0.5, 0.5, 0.5])
-    center_file_object._manual_rot_cut(int_bounds = options.int_bounds)
-    options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
-    options.rotm = center_file_object.rotation_matrix
-    options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds, z_multi=options.z_m)
-    center_file_object.expend_table()
-else:
-    center_file_object = CenterFile.CenterFile(options)
-    TargetBx = options.box_size[0]*options.target_dim/options.scale_factor
-    TargetBy = options.box_size[1]*options.target_dim/options.scale_factor
-    TargetBz = options.box_size[2]*options.target_dim/options.scale_factor
-    options.target_dims = [TargetBx, TargetBy, TargetBz]
-
-
-options.non_centrosymmetric_moment = True
-
-if options.non_centrosymmetric_moment:
-    options.mass = []
-    options.m_w = []
-    options.m_surf = []
-    options.dna_coverage = []
-else:
-    options.dna_coverage = [10] # total number of DNA chains
+print 'making center file obj'
+center_file_object= CenterFile.CenterFile(options, init = None)
+center_file_object.add_one_particle(position = [0.0, 0.0, -5.0])
+center_file_object.add_one_particle(position = [0.0, 0.0, 5.0])
+print 'center file made'
 
 ##################################################################################################################
 ## Derived quantities, volumes are calculated in genshape functions.
 #################################################################################################################
-
-if options.non_centrosymmetric_moment:
-    for i in range(options.volume.__len__()):
-        options.mass.append(options.densities[i] * options.volume[i])
-        options.m_w.append(options.mass[i]*2.0 / 5.0)
-        options.m_surf.append(options.mass[i]*3.0 / 5.0 / options.num_surf[i])
-        options.box_size_packing += 2.5*options.size[i] / options.scale_factor # special
-        options.dna_coverage.append(int(round(0.17*(options.size[i]*2.0 / options.scale_factor)**2 * 6)))
-else:
-    for i in range(options.volume.__len__()):
-        options.box_size_packing += 2.5*amax(abs(array(shapes[i].pos)))*2.0 / options.scale_factor
-
 
 # Target box sizes
 ################################
@@ -268,26 +235,32 @@ options.num_particles = [1 for i in range(center_file_object.positions.__len__()
 for i in range(options.num_particles.__len__() - shapes.__len__()):
     shapes.append(shapes[-1])
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
-polyaniline = LinearChain.polyaniline(n_monomer = 100)
-polyaniline.add_dna(10, 1, 5, ['Z', 'W'])
-buildobj.add_N_ext_obj(polyaniline, N = 20)
+print 'Build object constructed'
+buildobj.impose_box = [15.0, 15.0, 25.0]
+PMFlength = buildobj.num_beads
 
-buildobj.set_rotation_function(mode = 'random')
+buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Na', ion_mass = 23.0/650.0,q = 1.0, ion_diam = 0.5/2.0)
 
-d_tags = buildobj.dna_tags
-c_tags = buildobj.center_tags
-d_tags_len = d_tags.__len__()
-d_tags_loc_len = d_tags[0].__len__()
+buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Cl', ion_mass = 35.0/650.0, q=-1.0, ion_diam = 0.5/2.0)
 
-#buildobj.set_charge_to_pnum()
-buildobj.set_charge_to_dna_types()
-buildobj.write_to_file(z_box_multi=options.z_m, export_charge= True)
+buildobj.set_rotation_function(mode = 'none')
+buildobj.set_diameter_by_type(btype = 'W', diam = 0.0)
+buildobj.set_diameter_by_type(btype = 'P', diam = 0.25)
+buildobj.set_diameter_by_type(btype = 'S', diam = 0.5)
+buildobj.set_diameter_by_type(btype = 'A', diam = 1.0)
+
+buildobj.set_charge_by_type(btype = 'A', charge = -7.0)
+buildobj.set_charge_by_type(btype = 'S', charge = -3.0)
+buildobj.set_charge_by_type(btype = 'C', charge = -3.0)
+
+buildobj.fix_remaining_charge(ptype='Na', ntype='Cl', qp=1.0, qn=-1.0, pion_mass=23.0/650, nion_mass = 35.0/650, pion_diam = 0.5/2.0, nion_diam =0.5/2.0)
+buildobj.permittivity = 80.0
+ 
+buildobj.write_to_file(z_box_multi=options.z_m, export_charge= True, export_diameter = True)
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
 options.surface_types = buildobj.surface_types
 options.sticky_types = buildobj.sticky_types
-
-#options.sticky_exclusions = buildobj.sticky_excluded(['X', 'X0'], r_cut = 1.50)
 
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
@@ -308,11 +281,11 @@ Lz0 = options.sys_box[2]
 #No.1 covelent bond, could be setup w/ dict
 harmonic = bond.harmonic()
 harmonic.set_coeff('S-NP', k=330.0, r0=0.84)
-harmonic.set_coeff('S-S', k=330.0, r0=0.84*0.5)
-harmonic.set_coeff('S-A', k=330.0, r0=0.84*0.75)
-harmonic.set_coeff('backbone', k=330.0, r0=0.84)
+harmonic.set_coeff('S-S', k=300.0, r0=0.84*0.5)
+harmonic.set_coeff('S-A', k=300.0, r0=0.84*0.75)
+harmonic.set_coeff('backbone', k=300.0, r0=0.84)
 harmonic.set_coeff('A-B', k=330.0, r0=0.84*0.75)
-harmonic.set_coeff('B-B', k=330.0, r0=0.84*0.5 )
+harmonic.set_coeff('B-B', k=300.0, r0=0.84*0.5 )
 harmonic.set_coeff('B-C', k=330.0, r0=0.84*0.5 )
 harmonic.set_coeff('C-FL', k=330.0, r0=0.84*0.5 )
 harmonic.set_coeff('B-FL', k=330.0, r0=0.84*0.5*1.4)
@@ -341,7 +314,7 @@ Sangle.set_coeff('A-B-B', k=2.0, t0=pi)
 Sangle.set_coeff('C-C-endFL', k=50.0, t0=pi)
 
 
-ktyp = 800.00
+ktyp = 8000.00
 try :
     for i in range(options.bond_types.__len__()):
         _ad = False
@@ -363,7 +336,7 @@ except AttributeError:
 ##################################################################################
 
 #force field setup
-lj = pair.lj(r_cut=1.5, name = 'lj')
+lj = pair.slj(r_cut=1.5, name = 'slj')
 lj.set_params(mode="shift")
 
 def attract(a,b,sigma=1.0,epsilon=1.0):
@@ -375,14 +348,14 @@ def attract(a,b,sigma=1.0,epsilon=1.0):
 def repulse(a,b,sigma=1.0,epsilon = 1.0):
     #sigma = effective radius
     #r_cut = cutoff distance at the lowest potential (will be shifted to 0)
-
+    #sigma = 1.00
     lj.pair_coeff.set(a,b,epsilon=epsilon*1.0,
                       sigma=sigma,
                       r_cut=sigma*2.0**(1.0/6))
 
 # Changed radius to a list of lists instead of tuples so it is easier to append elements to it. <- M.G.
 
-radius = [['S', 0.5], ['A', 1.0], ['B', 0.5], ['FL', 0.3]]
+radius = [['S', 0.5], ['A', 1.0], ['B', 0.5], ['FL', 0.3], ['Na', 0.25], ['Cl',0.25]]
 
 c_uniques = options.center_types
 for i in range(c_uniques.__len__()):
@@ -411,7 +384,7 @@ for i in range(options.sticky_track.__len__()):
         lja_names[i] += options.sticky_track[i][j]
 
 for i in range(options.sticky_track.__len__()):
-    lja_list.append(pair.lj(r_cut = 2.0, name = lja_names[i]))
+    lja_list.append(pair.slj(r_cut = 2.0, name = lja_names[i]))
 
     for j in range(radius.__len__()):
         for k in range(j, radius.__len__()):
@@ -486,7 +459,7 @@ for i in range(len(radius)):
             print 'unsorted', radius[i][0], radius[j][0]
 # Generate string logged quantities argument
 
-Qlog = ['temperature', 'potential_energy', 'kinetic_energy', 'pair_lj_energy_lj', 'bond_harmonic_energy', 'pressure']
+Qlog = ['temperature', 'potential_energy', 'kinetic_energy', 'pair_slj_energy_slj', 'bond_harmonic_energy', 'pressure']
 for s in range(lja_list.__len__()):
     Qlog.append('pair_lj_energy_'+lja_names[s])
 
@@ -498,33 +471,39 @@ logger = analyze.log(quantities=Qlog,
 ####################################################################################
 nonrigid = group.nonrigid()
 rigid = group.rigid()
+charged = group.charged()
+ionsNa = group.type(name = 'grNa', type = 'Na')
+ionsCl = group.type(name = 'grCl', type = 'Cl')
 
-integrate.mode_standard(dt=0.005)
+groupions = group.union(name = 'ions', a=ionsNa, b=ionsCl)
+groupnoions = group.difference(name = 'NPstuff', a=nonrigid, b=groupions)
+
+
+integrate.mode_standard(dt=0.00001)
 
 nlist.set_params(check_period=1)
 nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
 
-
-#part_len = system.particles.__len__() # avoid calls later to the system
-#_t = time.time()
-#reset_nblock_list()
-#_t = time.time() - _t
-#print 'reset_nblock_list() timing :'+str(_t)
-
 dump.dcd(filename=options.filenameformat+'_dcd.dcd', period=Dump, overwrite = True) # dump a .dcd file for the trajectory
 
-nve = integrate.nve(group=nonrigid, limit=0.0005)
-keep_phys = update.zero_momentum(period=100)
-run(3e5)
+
+pppm = charge.pppm(group=charged)
+pppm.set_params(Nx = 64, Ny = 64, Nz = 64, order = 6, rcut = 2.0)
+nve = integrate.nve(group=charged, limit=0.001)
+#keep_phys = update.zero_momentum(period=100)
+run(4e3)
 nve.disable()
 #keep_phys.disable()
 
-nonrigid_integrator = integrate.nvt(group=nonrigid, T=0.1, tau = 0.65)
-integrate.mode_standard(dt=0.00001)
-run(1e6)
+
+ions_integrator = integrate.berendsen(group=groupions, T=options.mixing_temp, tau = 2.00)
+noions_integrator = integrate.berendsen(group=groupnoions, T=options.mixing_temp, tau = 2.00)
+#ions_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (2e6, 0.1)]))
+integrate.mode_standard(dt=0.0001)
+run(2e6)
+
 
 #rigid_integrator = integrate.nvt_rigid(group=rigid, T=0.1, tau = 0.65)
-
 
 #####################################################################################
 #              Dump File
@@ -533,7 +512,11 @@ run(1e6)
 
 mol2 = dump.mol2()
 mol2.write(filename=options.filenameformat+'.mol2')
+ions_integrator.disable()
+noions_integrator.disable()
 
+ions_nvt_integrator = integrate.nvt(group = groupions, T = logger.query('temperature'), tau = 0.65)
+noions_nvt_integrator = integrate.nvt(group = groupnoions, T = logger.query('temperature'), tau = 0.65)
 
 ###  Equilibrate System #################
 
@@ -541,64 +524,36 @@ mol2.write(filename=options.filenameformat+'.mol2')
 integrate.mode_standard(dt=0.00001)
 #set the check period very low to let the system equilibrate
 
-
 run(2e6)
-
-
 
 ##################################################################
 #	Heat System Up to Mix/then slowly cool it down
 ##################################################################
 
 #increase time step so system can mix up faster
-integrate.mode_standard(dt=0.0002)
+integrate.mode_standard(dt=0.00005)
 
-#rigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
-nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
 
+ions_nvt_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
+noions_nvt_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
 run(1e6)
-#starting here we periodicaly update the nn table which changes DNA types
-#options.tab_update = 1e3
-#curr_types = ['X'+str(i) for i in range(12)] + ['X12' for i in range(options.special - 12)]
 
-
-#for i in range(int(1e6 / options.tab_update)):
-
-#    reset_nblock_list()
-#    run(options.tab_update)
-
-
-
-integrate.mode_standard(dt=0.0005)
+integrate.mode_standard(dt=0.00005)
 
 #rigid_integrator.set_params(T=options.mixing_temp)
-nonrigid_integrator.set_params(T=options.mixing_temp)
+ions_nvt_integrator.set_params(T=options.mixing_temp)
+noions_nvt_integrator.set_params(T=options.mixing_temp)
 run(2e6)
 
-#for i in range(int(2e6 / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
 
-
-
-integrate.mode_standard(dt=0.0005)
-BoxChange = update.box_resize(Lx=variant.linear_interp([(0, Lx0), (options.size_time, TargetBx)]),
-                              Ly=variant.linear_interp([(0, Ly0), (options.size_time, TargetBy)]),
-                              Lz=variant.linear_interp([(0, Lz0), (options.size_time, TargetBz)]), period=50)
-#for i in range(int(options.size_time / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
 run(options.size_time)
-BoxChange.disable()
-keep_phys.disable()
 
-integrate.mode_standard(dt=0.0005)
-#rigid_integrator.set_params(T=options.mixing_temp)
-nonrigid_integrator.set_params(T=options.mixing_temp)
 
-#for i in range(int(options.mix_time/options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
+integrate.mode_standard(dt=0.00005)
+ions_nvt_integrator.set_params(T=options.mixing_temp)
+noions_nvt_integrator.set_params(T=options.mixing_temp)
+
+
 run(options.mix_time)
 
 
@@ -606,33 +561,41 @@ run(options.mix_time)
 
 
 integrate.mode_standard(dt=options.step_size)
-#rigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
-nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
+ions_nvt_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
+noions_nvt_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
 
-#for i in range(int(3e6 / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
 run(3e6)
 
 integrate.mode_standard(dt=options.step_size)
-#rigid_integrator.set_params(T=options.target_temp_1)
-nonrigid_integrator.set_params(T=options.target_temp_1)
+ions_nvt_integrator.set_params(T=options.target_temp_1)
+noions_nvt_integrator.set_params(T=options.target_temp_1)
 
-#for i in range(int(1e6 / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
-run(1e6)
 
-mol2.write(filename='BefCoolSnap'+options.filenameformat+'.mol2')
+run(4e6)
 
-nonrigid_integrator.disable()
-npt_integ = integrate.npt(group = nonrigid, T = options.mixing_temp, tau = 0.65, P = 1e-4, tauP = 1.00)
 
-#integrate.mode_standard(dt=options.step_size)
-#rigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
-#nonrigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
+evaltime = 1000
+npts = 100
+fxarray = zeros(npts, dtype = float)
+fyarray = zeros(npts, dtype = float)
+fzarray = zeros(npts, dtype = float)
+darray = zeros(npts, dtype = float)
+logger = analyze.log(quantities=Qlog, period=1000, filename='PMFlog.log', overwrite=True)
 
-#for i in range(int(options.cool_time / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
-#run(options.cool_time)
+
+for i in range(npts):
+#    system.bodies[0].COM = array([0.0, 0.0, -drange[i]])
+#    system.bodies[1].COM = array([0.0, 0.0, drange[i]])
+    run(3e4)
+    for p in system.particles:
+        if p.tag < PMFlength/2:
+            fxarray[i] += p.net_force[0] / 2.0
+            fyarray[i] += p.net_force[1] / 2.0
+            fzarray[i] += p.net_force[2] / 2.0
+        elif p.tag < PMFlength:
+            fxarray[i] -= p.net_force[0] / 2.0
+            fyarray[i] -= p.net_force[1] / 2.0
+            fzarray[i] -= p.net_force[2] / 2.0             
+#    darray[i] = system.bodies[0].COM[2]
+
+savetxt('PMF.out', (darray, fxarray, fyarray, fzarray), delimiter = ' ')
