@@ -9,13 +9,10 @@ del angle
 from math import *
 import CenterFile
 import GenShape
-import hoomd_XML_parser
 import Simulation_options
-import xml.etree.cElementTree as ET
 import Build
 import LinearChain
-from hoomd_script import *
-import time
+#from hoomd_script import *
 
 
 def c_hoomd_box(v, int_bounds, z_multi =1.00):
@@ -41,56 +38,6 @@ def c_hoomd_box(v, int_bounds, z_multi =1.00):
     yz = (dot(vy,vz) - a2x*a3x) / (ly*lz)
 
     return [lx,ly,lz, xy, xz, yz]
-
-def get_nn(_c_pos, _box):
-    ## assuming cubic box cause im lazy, this returns the list of 12 nearest neighbors, so its a N x 12 list. Uses mergesort for N logN speed, but quicksort might be better here
-    _nn = zeros((_c_pos.__len__(), 12), dtype = int)
-    _dist_m_sq = zeros((_c_pos.__len__(), _c_pos.__len__()), dtype=float) #matrix of squared distances. no need to calculate square roots here, min(x) = min(x**2)**0.5 if x > 0
-    for ii in range(_c_pos.__len__()):
-        for jj in range(_c_pos.__len__()):
-            for KK in range(3):
-                _dist_m_sq[ii,jj] += min([(_c_pos[ii,KK] - _c_pos[jj,KK])**2, (_c_pos[ii,KK] - _c_pos[jj,KK] + _box[KK])**2, (_c_pos[ii,KK] - _c_pos[jj,KK] - _box[KK])**2])
-    for ii in range(_c_pos.__len__()):
-        _c_sort = argsort(_dist_m_sq[ii,:], kind='mergesort')
-        _nn[ii,:] = _c_sort[1:13]
-    return _nn
-
-def reset_nblock_list():
-    new_types = -ones(options.special, dtype = int)
-    new_types[0] = 0
-    c_pos = zeros((options.special, 3), dtype = float)
-
-    _dump_snap = system.take_snapshot()
-    _tag_list = _dump_snap.particles.charge.astype(int)
-    _tag_sort = argsort(_tag_list, kind = 'mergesort') # the sorted tag list acts as a pointer array where _tag_sort[c_tag[j]] will point to the original c_tag[j]. Mergesort is N log N
-
-    for jj in range(options.special):
-        c_pos[jj,:] = _dump_snap.particles.position[_tag_sort[c_tags[jj]]]
-
-    locbox = system.box
-    nntab = get_nn(_c_pos = c_pos, _box=[locbox.Lx, locbox.Ly, locbox.Lz])
-    for jj in range(0, 12):
-        new_types[nntab[0,jj]] = jj+1
-    for jj in range(1, options.special):
-        applicable_list = range(13)
-        try:
-            applicable_list.remove(new_types[jj])
-        except ValueError:
-            pass
-        for kk in range(12):
-            try:
-                applicable_list.remove(new_types[nntab[jj,kk]])
-            except ValueError:
-                pass
-        if new_types[jj] == -1:
-            new_types[jj] = applicable_list.pop()
-        for kk in range(12):
-            if new_types[nntab[jj,kk]] == -1:
-                new_types[nntab[jj,kk]] = applicable_list.pop()
-    for jj in range(options.special):
-        l_str = ''.join(['X', str(new_types[jj])]) # string to pass as new tag
-        for kk in range(d_tags[jj].__len__()):
-            system.particles[_tag_sort[d_tags[jj][kk]]].type = l_str
 
 ###########################################
 # List of future improvements :
@@ -155,38 +102,23 @@ llen = 2
 dsL = 3
 options.filenameformat = 'Test_dt_'+str(options.step_size)+'_Um_'+str(options.Um)+'_temp_'+str(options.target_temp_1)+'_dims_'+str(options.target_dim)+'_dsL'+str(dsL)
 
-shapes = [GenShape.shape()]
-shapes[-1].sphere(Num=75)
-shapes[-1].will_build_from_shapes(properties = {'size' : 2.5, 'surf_type' : 'P', 'density' : 14.29})
-shapes[-1].set_dna(n_ss = 1, n_ds = dsL, s_end = ['X', 'Y'], p_flex = array([0]), num = int(4*pi*2.5**2 * 0.17))
-#shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 3)
-#shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
-#i_cut = 12
-#for i in range(options.special):
-#    shapes.append(GenShape.shape())
-#    shapes[-1].cube(Num=300, Radius = 2.5*2.0 / 28.5)
-#    shapes[-1].will_build_from_shapes(properties = {'size' : 28.5/5.0, 'surf_type' : 'P', 'density' : 14.29})
-#    if i < i_cut:
-#        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X' + str(i) for j in range(llen) ], p_flex = array([0]), num = 133)
-#        shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 2)
-#        shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
-#    else:
-#        shapes[-1].set_dna(n_ss = 1, n_ds = 5, s_end = ['X12' for j in range(llen)], p_flex = array([0]), num = 133)
-#        shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 2)
-#        shapes[-1].reduce_internal_DOF(n_rel_tol=5e-2)
+DNA_chain = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['X','Y','Z'])
+DNA_brush = LinearChain.DNAChain(n_ss = 1.0, n_ds = 1, sticky_end=[])
+
+shapes = [GenShape.RhombicDodecahedron(Num = 500)]
+shapes[-1].will_build_from_shapes(properties = {'size' : 5.0, 'surf_type' : 'P', 'density' : 14.29, 'nonuniformDNA' : False})
+shapes[-1].set_ext_grafts(DNA_chain, num = 5, linker_bond_type = 'S-NP')
+shapes[-1].set_ext_grafts(DNA_brush, num = 5, linker_bond_type = 'S-NP')
+shapes[-1].will_build_from_shapes()
+shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
+
 
 
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
 ######################################################################
+
 options.sticky_pairs = [['X', 'W'], ['Y','Z']]
-#for i in range(13):
-#    for j in range(i, 13):
-#        if i != j:
-#            options.sticky_pairs.append(['X'+str(i), 'X' + str(j)])
-#options.sticky_pairs = [['X', 'Y']] #<- which pairs are attractive. Non-physical pairs can be included. Defined as list of lists of 2 particles [['X', 'Y'], ['T', 'G'], ['M', 'N']] for instance
-# for tracking purposes, each list means a potential energy is computed, by taking all pair interactions from the sticky
-# pairs included in the track list.
 options.sticky_track = []
 
 
@@ -218,8 +150,8 @@ options.lattice_multi = [1.0, 1.0, 1.0]
 
 print 'making center file obj'
 center_file_object= CenterFile.CenterFile(options, init = None)
-center_file_object.add_one_particle(position = [0.0, 0.0, -5.0])
-center_file_object.add_one_particle(position = [0.0, 0.0, 5.0])
+center_file_object.add_one_particle(position = [0.0, 0.0, 0.0])
+#center_file_object.add_one_particle(position = [0.0, 0.0, 5.0])
 print 'center file made'
 
 ##################################################################################################################
@@ -239,24 +171,25 @@ print 'Build object constructed'
 buildobj.impose_box = [15.0, 15.0, 25.0]
 PMFlength = buildobj.num_beads
 
-buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Na', ion_mass = 23.0/650.0,q = 1.0, ion_diam = 0.5/2.0)
+#buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Na', ion_mass = 23.0/650.0,q = 1.0, ion_diam = 0.5/2.0)
 
-buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Cl', ion_mass = 35.0/650.0, q=-1.0, ion_diam = 0.5/2.0)
+#buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Cl', ion_mass = 35.0/650.0, q=-1.0, ion_diam = 0.5/2.0)
 
 buildobj.set_rotation_function(mode = 'none')
-buildobj.set_diameter_by_type(btype = 'W', diam = 0.0)
-buildobj.set_diameter_by_type(btype = 'P', diam = 0.25)
-buildobj.set_diameter_by_type(btype = 'S', diam = 0.5)
-buildobj.set_diameter_by_type(btype = 'A', diam = 1.0)
+#buildobj.set_diameter_by_type(btype = 'W', diam = 0.0)
+#buildobj.set_diameter_by_type(btype = 'P', diam = 0.25)
+#buildobj.set_diameter_by_type(btype = 'S', diam = 0.5)
+#buildobj.set_diameter_by_type(btype = 'A', diam = 1.0)
 
-buildobj.set_charge_by_type(btype = 'A', charge = -7.0)
-buildobj.set_charge_by_type(btype = 'S', charge = -3.0)
-buildobj.set_charge_by_type(btype = 'C', charge = -3.0)
+#buildobj.set_charge_by_type(btype = 'A', charge = -7.0)
+#buildobj.set_charge_by_type(btype = 'S', charge = -3.0)
+#buildobj.set_charge_by_type(btype = 'C', charge = -3.0)
 
-buildobj.fix_remaining_charge(ptype='Na', ntype='Cl', qp=1.0, qn=-1.0, pion_mass=23.0/650, nion_mass = 35.0/650, pion_diam = 0.5/2.0, nion_diam =0.5/2.0)
-buildobj.permittivity = 80.0
+#buildobj.fix_remaining_charge(ptype='Na', ntype='Cl', qp=1.0, qn=-1.0, pion_mass=23.0/650, nion_mass = 35.0/650, pion_diam = 0.5/2.0, nion_diam =0.5/2.0)
+#buildobj.permittivity = 80.0
  
-buildobj.write_to_file(z_box_multi=options.z_m, export_charge= True, export_diameter = True)
+buildobj.write_to_file(z_box_multi=options.z_m, export_charge= True)#, export_diameter = True)
+
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
 options.surface_types = buildobj.surface_types
@@ -265,6 +198,7 @@ options.sticky_types = buildobj.sticky_types
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
+options.dih_types = buildobj.dihedral_types
 
 
 system = init.read_xml(filename=options.filenameformat+'.xml')

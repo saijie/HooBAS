@@ -30,8 +30,8 @@ class CenterFile(object):
         :param surf_plane : set z surface plane list of length (3), anything else is treated as [0 0 1]
         :return:
         """
-        self.__table_size = 0
-        self.__table = []
+        self.table_size = 0
+        self.table = []
         self.__options = options
         self.__rand_flag = False
         self.__BoxSize = 0
@@ -97,7 +97,7 @@ class CenterFile(object):
         return number of particles in the current table
         :return: int size
         """
-        return self.__table_size
+        return self.table_size
     @property
     def built_types(self):
         return self.__built_centers
@@ -107,7 +107,7 @@ class CenterFile(object):
         get positions
         :return: table of arrays of positions
         """
-        return self.__table
+        return self.table
     @property
     def latt(self):
         return self.__lattice
@@ -125,24 +125,24 @@ class CenterFile(object):
         contracts the whole table into a single list
         :return:
         """
-        while self.__table.__len__()>1:
-            self.__table[0] = np.append(self.__table[0], self.__table.pop(), axis = 0)
+        while self.table.__len__()>1:
+            self.table[0] = np.append(self.table[0], self.table.pop(), axis = 0)
 
     def expend_table(self):
         counter = 0
-        while counter < self.__table.__len__():
-            for i in range(self.__table[counter].__len__()-1):
-                self.__table.append( np.resize(self.__table[counter][-1], new_shape=(1,3)))
-                self.__table[counter] = np.delete(self.__table[counter], -1, 0)
+        while counter < self.table.__len__():
+            for i in range(self.table[counter].__len__()-1):
+                self.table.append( np.resize(self.table[counter][-1], new_shape=(1,3)))
+                self.table[counter] = np.delete(self.table[counter], -1, 0)
             counter +=1
 
     def add_one_particle(self, position, list_number = 0):
         try:
-            self.__table[list_number] = np.append(self.__table[0], np.array([[position[0], position[1], position[2]]]), axis = 0)
+            self.table[list_number] = np.append(self.table[0], np.array([[position[0], position[1], position[2]]]), axis = 0)
         except IndexError:
-            if self.__table.__len__() == list_number:
-                self.__table.append(np.array([[position[0], position[1], position[2]]]))
-        self.__table_size += 1
+            if self.table.__len__() == list_number:
+                self.table.append(np.array([[position[0], position[1], position[2]]]))
+        self.table_size += 1
 
     def __random_table(self):
         """
@@ -152,8 +152,8 @@ class CenterFile(object):
         self.__BoxSize = 1.5*self.__options.target_dim / self.__options.scale_factor
         Table = [] # kth table contains (num_part(k),3) array of the kth particle type
         self.__rand_flag = True
-        self.__table = []
-        self.__table_size = 0
+        self.table = []
+        self.table_size = 0
 
         j = 0
         while j < self.__options.num_particles.__len__():
@@ -197,9 +197,9 @@ class CenterFile(object):
         table_size = 0
         for i in range(Table.__len__()):
             table_size = table_size + Table[i].__len__()
-            self.__table.append(Table[i])
+            self.table.append(Table[i])
 
-        self.__table_size += table_size
+        self.table_size += table_size
         for i in range(self.__options.num_particles.__len__()):
             self.__built_centers.append(self.__options.center_types[i])
 
@@ -216,7 +216,7 @@ class CenterFile(object):
 
         _tmp_table = []
         _tmp_centers = list(_set)
-        self.__table_size = _positions.__len__()
+        self.table_size = _positions.__len__()
         self.__options.num_particles = [0]*_set.__len__()
 
 
@@ -234,14 +234,14 @@ class CenterFile(object):
 
         # order of _tmp_table may not be the same as center_types.
         _permute_list = []
-        self.__table = [None] * _tmp_centers.__len__()
+        self.table = [None] * _tmp_centers.__len__()
         self.__built_centers = [None] * _tmp_centers.__len__()
         for i in range(self.__built_centers.__len__()):
             for j in range(self.__options.center_types.__len__()):
                 if self.__built_centers[i] == self.__options.center_types[j]:
                     _permute_list.append(j)
         for i in range(_permute_list.__len__()):
-            self.__table[i] = _tmp_table[_permute_list[i]]
+            self.table[i] = _tmp_table[_permute_list[i]]
             self.__built_centers = _tmp_centers[_permute_list[i]]
 
     def __cubic_lattice_table(self):
@@ -251,8 +251,8 @@ class CenterFile(object):
         and cuts the rest.
         :return: none
         """
-        self.__table = []
-        self.__table_size = 0
+        self.table = []
+        self.table_size = 0
         self.__rand_flag = False
 
         if self.__rot_flag:
@@ -322,13 +322,13 @@ class CenterFile(object):
             self.vy = list(_b_y.array) #* self.__options.box_size[1])
             self.vz = list(_b_z.array) #* self.__options.box_size[2])
 
-        self.__table = Table
-        for i in range(self.__table.__len__()):
-            self.__table_size += self.__table[i].__len__()
+        self.table = Table
+        for i in range(self.table.__len__()):
+            self.table_size += self.table[i].__len__()
         self.__BoxSize = pitch
 
         for i in range(self.__options.num_particles.__len__()):
-            self.__options.num_particles[i] = self.__table[i].__len__()
+            self.__options.num_particles[i] = self.table[i].__len__()
             self.__built_centers.append(self.__options.center_types[i])
 
     def add_particles_on_lattice(self, center_type, offset):
@@ -369,13 +369,13 @@ class CenterFile(object):
         flag = False
         for i in range(self.__built_centers.__len__()):
             if self.__built_centers[i] == center_type:
-                self.__table[i] = np.append(self.__table[i], new_table, axis = 0)
-                self.__table_size += new_table.__len__()
+                self.table[i] = np.append(self.table[i], new_table, axis = 0)
+                self.table_size += new_table.__len__()
                 flag = True
 
         if not flag:
-            self.__table.append(new_table)
-            self.__table_size+= new_table.__len__()
+            self.table.append(new_table)
+            self.table_size+= new_table.__len__()
             self.__built_centers.append(center_type)
 
     class vec(object):
@@ -466,16 +466,16 @@ class CenterFile(object):
 
     def center_to_zero(self):
         _mean = [0,0,0]
-        for i in range(self.__table.__len__()):
-            for j in range(self.__table[i].__len__()):
+        for i in range(self.table.__len__()):
+            for j in range(self.table[i].__len__()):
                 for k in range(_mean.__len__()):
-                    _mean[k] += self.__table[i][j,k]
+                    _mean[k] += self.table[i][j,k]
         for i in range(_mean.__len__()):
-            _mean[i] /= self.__table_size
-        for i in range(self.__table.__len__()):
-            for j in range(self.__table[i].__len__()):
+            _mean[i] /= self.table_size
+        for i in range(self.table.__len__()):
+            for j in range(self.table[i].__len__()):
                 for k in range(_mean.__len__()):
-                    self.__table[i][j,k] -= _mean[k]
+                    self.table[i][j,k] -= _mean[k]
 
     def add_particles_at_random(self, num, center_type, particle_size, max_try=10000):
         """
@@ -499,9 +499,9 @@ class CenterFile(object):
             new_table[i, 2] = (self.__BoxSize*self.__options.box_size[2])*random.uniform(-0.5, 0.5)
 
             IsOk = True
-            for j in range(self.__table.__len__()):
-                for k in range(self.__table[j].__len__()):
-                    value = ((new_table[i, 0] - self.__table[j][k, 0])**2 + (new_table[i, 1] - self.__table[j][k, 1])**2 + (new_table[i, 2] - self.__table[j][k, 2])**2)**0.5
+            for j in range(self.table.__len__()):
+                for k in range(self.table[j].__len__()):
+                    value = ((new_table[i, 0] - self.table[j][k, 0])**2 + (new_table[i, 1] - self.table[j][k, 1])**2 + (new_table[i, 2] - self.table[j][k, 2])**2)**0.5
                     IsOk = IsOk and value > (self.__options.size[j] + particle_size)*self.__options.center_sec_factor/2.0 / self.__options.scale_factor
 
             for j in range(i):
@@ -520,12 +520,12 @@ class CenterFile(object):
         flag = False
         for i in range(self.__built_centers.__len__()):
             if self.__built_centers[i] == center_type:
-                self.__table[i] = np.append(self.__table[i], new_table, axis = 0)
+                self.table[i] = np.append(self.table[i], new_table, axis = 0)
                 self.__options.num_particles[i] += num
                 flag = True
         if not flag:
-            self.__table.append(new_table)
-        self.__table_size += new_table.__len__()
+            self.table.append(new_table)
+        self.table_size += new_table.__len__()
 
     def _manual_rot_cut(self, int_bounds):
         """
@@ -540,11 +540,11 @@ class CenterFile(object):
         """
 
 
-        for i in range(self.__table.__len__()):
-            for j in range(self.__table[i].__len__()):
-                _dump_vec = CenterFile.vec(self.__table[i][j,:])
+        for i in range(self.table.__len__()):
+            for j in range(self.table[i].__len__()):
+                _dump_vec = CenterFile.vec(self.table[i][j,:])
                 _dump_vec.rot(mat = self.__rot_mat)
-                self.__table[i][j,:] = _dump_vec.array
+                self.table[i][j,:] = _dump_vec.array
                 del _dump_vec
 
         _b_x = CenterFile.vec([self.__BoxSize * self.__lattice[0], 0, 0], parent_lattice=self.__lattice)
@@ -564,9 +564,9 @@ class CenterFile(object):
 
 
         _index_to_keep = []
-        for i in range(self.__table.__len__()):
-            for j in range(self.__table[i].__len__()):
-                _tmp_dump = CenterFile.vec(list(self.__table[i][j,:]))
+        for i in range(self.table.__len__()):
+            for j in range(self.table[i].__len__()):
+                _tmp_dump = CenterFile.vec(list(self.table[i][j,:]))
 
                 # decompose into base vectors _b_x, _b_y
                 _a1, _a2, _a3 = np.linalg.solve(_mat, _tmp_dump.array)
@@ -576,16 +576,16 @@ class CenterFile(object):
                     _index_to_keep.append([i,j])
                 del _tmp_dump
 
-        for i in range(self.__table.__len__()):
+        for i in range(self.table.__len__()):
             _loc_list = []
             for j in range(_index_to_keep.__len__()):
                 if _index_to_keep[j][0] == i:
                     _loc_list.append(_index_to_keep[j][1])
-            self.__table[i] = self.__table[i][_loc_list, :]
+            self.table[i] = self.table[i][_loc_list, :]
         # this discards sanity checks, should be careful.
-        self.__table_size = 0
-        for i in range(self.__table.__len__()):
-            self.__table_size += self.__table[i].__len__()
+        self.table_size = 0
+        for i in range(self.table.__len__()):
+            self.table_size += self.table[i].__len__()
 
         self.vx = list(_b_x.array)
         self.vy = list(_b_y.array)
@@ -603,8 +603,8 @@ class CenterFile(object):
         if not ('drop_index' in locals()):
             raise StandardError('Dropped name not in table')
         else:
-            self.__table_size -= self.__table[drop_index].__len__()
-            self.__table[drop_index] = np.zeros((0,3))
+            self.table_size -= self.table[drop_index].__len__()
+            self.table[drop_index] = np.zeros((0,3))
 
     def write_table(self):
         """
@@ -612,8 +612,8 @@ class CenterFile(object):
         :return: none
         """
         with open(self.__options.xyz_name, 'w') as f:
-            f.write(str(self.__table_size)+'\n')
+            f.write(str(self.table_size)+'\n')
             f.write('#######'+'\n')
             for i in range(self.__built_centers.__len__()):
-                for j in range(0, self.__table[i].__len__()):
-                    f.write(self.__built_centers[i] + ' '+str(self.__table[i][j, 0])+' '+str(self.__table[i][j, 1])+' '+str(self.__table[i][j, 2])+'\n')
+                for j in range(0, self.table[i].__len__()):
+                    f.write(self.__built_centers[i] + ' '+str(self.table[i][j, 0])+' '+str(self.table[i][j, 1])+' '+str(self.table[i][j, 2])+'\n')
