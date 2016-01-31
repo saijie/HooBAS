@@ -451,7 +451,7 @@ class GenericRingPolymer(LinearChain):
         for i in range(self.positions.__len__()):
             self.beads.append(CoarsegrainedBead.bead(position=self.positions[i,:], beadtype='GenericPolymer', body = -1))
 
-class DNAChain(LinearChain):
+class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the other stuff
     def __init__(self, n_ss, n_ds, sticky_end, flexor = None, bond_length = 0.84):
         LinearChain.__init__(self, n_monomer= n_ss + n_ds + sticky_end.__len__(), kuhn_length=bond_length)
         self.nss = n_ss
