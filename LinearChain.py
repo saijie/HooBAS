@@ -2,7 +2,6 @@ __author__ = 'martin'
 import numpy as np
 import random
 import CoarsegrainedBead
-import oneDNA
 import copy
 from math import *
 
@@ -55,7 +54,7 @@ class LinearChain(object):
 
     Properties :
 
-    zero_pos : position of the first bead in the chani
+    zero_pos : position of the first bead in the chain
 
     center_position : position of the center of the chain, calculated by arithmetic average
 
@@ -157,7 +156,6 @@ class LinearChain(object):
         diff = val - self.positions[0,:]
         for i in range(self.beads.__len__()):
             self.beads[i].position += diff
-
     @property
     def center_position(self):
         _ret = np.zeros((3), dtype = float)
@@ -169,7 +167,6 @@ class LinearChain(object):
         diff = val - self.center_position
         for i in range(self.beads.__len__()):
             self.beads[i].position += diff
-
     @property
     def bond_types(self):
         return self.b_types
@@ -179,7 +176,6 @@ class LinearChain(object):
     @property
     def dihedral_types(self):
         return self.d_types
-
     @property
     def pnum_offset(self):
         return self.pnum[0]
@@ -211,8 +207,9 @@ class LinearChain(object):
 
         if num > self.rem_sites.__len__():
             raise StandardError('# of DNA chains greater than # of attachment sites on Linear Chain')
-        dna_obj = oneDNA.oneDNAchain(f_DNAtemplate=None, N_dsDNAbeads=n_ds, Pos_Flex=np.array([-1]), sticky_end= sticky_end,
-                                     N_ssDNAbeads=n_ss, N_linkerbeads=sticky_end.__len__(), bond_length=0.6)
+        #dna_obj = oneDNA.oneDNAchain(f_DNAtemplate=None, N_dsDNAbeads=n_ds, Pos_Flex=np.array([-1]), sticky_end= sticky_end,
+        #                            N_ssDNAbeads=n_ss, N_linkerbeads=sticky_end.__len__(), bond_length=0.6)
+        dna_obj = DNAChain(n_ss= n_ss, bond_length=0.6, n_ds = n_ds, sticky_end=sticky_end)
         if num>0:
             self.sticky_used.append(sticky_end)
         for i in range(num):
@@ -326,7 +323,7 @@ class LinearChain(object):
         self.a_types += obj.angle_types
         self.d_types += obj.dihedral_types
 
-class polyaniline(LinearChain):
+class Polyaniline(LinearChain):
     def __init__(self, n_monomer = None):
         LinearChain.__init__(self, n_monomer = n_monomer, kuhn_length = [5.56/20, 5.52/20, 5.47/20])
 
@@ -454,7 +451,7 @@ class GenericRingPolymer(LinearChain):
         for i in range(self.positions.__len__()):
             self.beads.append(CoarsegrainedBead.bead(position=self.positions[i,:], beadtype='GenericPolymer', body = -1))
 
-class DNAChain(LinearChain): #TODO : finish this dna, its gonna be useful for Eileen stuff
+class DNAChain(LinearChain):
     def __init__(self, n_ss, n_ds, sticky_end, flexor = None, bond_length = 0.84):
         LinearChain.__init__(self, n_monomer= n_ss + n_ds + sticky_end.__len__(), kuhn_length=bond_length)
         self.nss = n_ss
@@ -463,45 +460,229 @@ class DNAChain(LinearChain): #TODO : finish this dna, its gonna be useful for Ei
         self.b_types = []
         self.a_types = []
         self.rem_sites = [] # we dont attach anything to the DNA chain
+        self.inner_types = []
+        if not flexor is None:
+            self.flexors = flexor - n_ss
+        else:
+            self.flexors = flexor
+        if self.nds < 2 :
+            self.flexors = []
 
         if self.nmono < 1 :
             raise StandardError('DNA chain does not have a single monomer, unable to build')
 
+        self.__build_chain()
+        self.__build_bonds()
+        self.__build_angles()
+        self.__build_beads()
+
+    #############################
+    # to be deprecated
+    # overloading older methods
+    @property
+    def harmonic_bonds_in_oneDNAchain(self):
+        return self.bonds
+    @property
+    def angles_in_oneDNAchain(self):
+        return self.angles
+    @property
+    def beads_in_oneDNAchain(self):
+        return self.beads
+    ########################
+
+
     def __build_chain(self):
-        self.positions = np.append(self.positions, [[0.0, 0.0, 0.0]], axis = 0)
-        self.pnum = [0]
+        #self.positions = np.append(self.positions, [[0.0, 0.0, 0.0]], axis = 0)
+        #self.pnum = [0]
+        nss_left = self.nss
+        nds_left = self.nds
+        Nsticky_left = self.sticky.__len__()
+        monomers_left = self.nmono
+        sticky_left = copy.deepcopy(self.sticky)
 
-        if self.nss > 0:
-            self.mass = [1.0]
-        else:
-            self.mass = [4.0]
-
-        for i in range(1, self.nss - 1):
-
-                self.positions = np.append(self.positions, [[0.0, 0.0, self.positions[-1,2] + self.lmono * 0.5]], axis = 0)
+        while monomers_left > 0:
+            if nss_left > 0:
+                nss_left -= 1
+                self.inner_types.append('S')
                 self.mass.append(1.0)
-                self.pnum.append(self.pnum[-1]+1)
+                try:
+                    self.pnum.append(self.pnum[-1] + 1)
+                except IndexError:
+                    self.pnum.append(0)
 
-        for i in range(self.nds):
-                if self.mass[-1] == 1.0 :
-                    self.positions = np.append(self.positions, [[0.0,0.0, self.positions[-1,2] + self.lmono * 0.5]], axis = 0)
-                    self.mass.append(4.0)
-                    self.pnum.append(self.pnum[-1]+1)
-                else:
-                    self.positions = np.append(self.positions, [[0.0, 0.0, self.positions[-1,2] + self.lmono]], axis = 0)
-                    self.mass.append(4.0)
-                    self.pnum.append(self.pnum[-1]+1)
-        for i in range(self.sticky.__len__()): # this could be zero actually
-            if self.mass[-1] == 4.0:
-                self.positions = np.append(self.positions, [[]], axis = 0)
+
+            elif nds_left > 0:
+                nds_left -= 1
+                self.inner_types.append('A')
+                self.mass.append(4.0)
+                try:
+                    self.pnum.append(self.pnum[-1] + 1)
+                except IndexError:
+                    print 'Warning : DNA chain starts with dsDNA'
+                    self.pnum.append(0)
+
+
             else:
-                self.positions = np.append(self.positions, [[]], axis = 0)
+                Nsticky_left -=1
+                self.inner_types.append('B')
+                self.mass.append(1.0)
+                try:
+                    self.pnum.append(self.pnum[-1] + 1)
+                except IndexError:
+                    print 'Warning : DNA chain starts with sticky ends, there is no linker / duplexor, check for errors'
+                    self.pnum.append(0)
+                self.inner_types.append(sticky_left.pop(0))
+                self.mass.append(1.0)
+                self.pnum.append(self.pnum[-1] + 1)
+                self.inner_types.append('FL')
+                self.mass.append(1.0)
+                self.pnum.append(self.pnum[-1] + 1)
+                self.inner_types.append('FL')
+                self.mass.append(1.0)
+                self.pnum.append(self.pnum[-1] + 1)
+            monomers_left -= 1
 
+        if self.sticky.__len__() > 1:
+            self.inner_types.append('FL')
+            self.mass.append(1.0)
+            self.pnum.append(self.pnum[-1] + 1)
 
     def __build_bonds(self):
-        pass
+
+        for idx in range(self.pnum.__len__() - 1):
+            if self.inner_types[idx] == 'S' and self.inner_types[idx + 1] == 'S':
+                self.bonds.append(['S-S', idx, idx + 1])
+            if self.inner_types[idx] == 'S' and self.inner_types[idx + 1] == 'A':
+                self.bonds.append(['S-A', idx, idx + 1])
+            if self.inner_types[idx] == 'A' and self.inner_types[idx + 1] == 'A':
+                self.bonds.append(['backbone', idx, idx + 1])
+            if self.inner_types[idx] == 'A' and self.inner_types[idx + 1] == 'B':
+                self.bonds.append(['A-B', idx, idx + 1])
+
+            ###
+            # Stuff get messier afterwards since we have a cage-like structure. for each B, there is 1 sticky + 2 flanking
+            # plus the end flanking to check.
+            ###
+
+            if self.inner_types[idx] == 'B' and self.inner_types[idx + 4] == 'B':
+                self.bonds.append(['B-B', idx, idx + 4])
+            if self.inner_types[idx] == 'B' and self.inner_types[idx + 2] == 'FL':
+                self.bonds.append(['B-FL', idx, idx + 2])
+            if self.inner_types[idx] == 'B' and self.inner_types[idx + 3] == 'FL':
+                self.bonds.append(['B-FL', idx, idx + 3])
+            if self.inner_types[idx] == 'B' and self.inner_types[idx + 1] in self.sticky:
+                self.bonds.append(['B-C', idx, idx + 1])
+            if self.inner_types[idx] == 'B' and self.inner_types[idx + 4] == 'FL':
+                self.bonds.append(['B-FL', idx, idx + 4])
+
+
+            if self.inner_types[idx] in self.sticky and self.inner_types[idx + 1] == 'FL':
+                self.bonds.append(['C-FL', idx, idx + 1])
+            if self.inner_types[idx] in self.sticky and self.inner_types[idx + 2] == 'FL':
+                self.bonds.append(['C-FL', idx, idx + 2])
+
+            try:
+                if self.inner_types[idx] in self.sticky and self.inner_types[idx + 4] in self.sticky:
+                    self.bonds.append(['C-C', idx, idx + 4])
+            except IndexError:
+                pass
+            if self.inner_types[idx] in self.sticky and self.inner_types[idx + 3] == 'FL':
+                self.bonds.append(['C-FL', idx, idx + 3])
+
     def __build_angles(self):
-        pass
+
+        for idx in range(self.pnum.__len__() - 2):
+            if self.inner_types[idx] == 'S':
+                continue
+            if self.inner_types[idx] == 'A':
+                if self.inner_types[idx + 1] =='A' and self.inner_types[idx + 2] =='A':
+                    if self.flexors is not None and idx + 1 in self.flexors:
+                        self.angles.append(['flexor', idx, idx + 1, idx + 2])
+                    else :
+                        self.angles.append(['dsDNA', idx, idx + 1, idx + 2])
+                if self.inner_types[idx + 1] == 'A' and self.inner_types[idx + 2] == 'B':
+                    self.angles.append(['A-A-B', idx, idx + 1, idx + 2])
+                try:
+                    if self.inner_types[idx + 1] == 'B' and self.inner_types[idx + 5] == 'B': #offset by 4 see generator above
+                        self.angles.append(['A-B-B', idx, idx + 1, idx + 5])
+                except IndexError:
+                    pass
+                try:
+                    if self.inner_types[idx + 1] == 'B' and self.inner_types[idx + 2] in self.sticky:
+                        self.angles.append(['A-B-C', idx, idx + 1, idx + 2])
+                except IndexError:
+                    pass
+            try:
+                if self.inner_types[idx] == 'B' and self.inner_types[idx + 4] == 'B' and self.inner_types[idx + 8]=='B' :
+                    self.angles.append(['B-B-B', idx, idx + 4, idx + 8])
+            except IndexError:
+                pass
+            if self.inner_types[idx] in self.sticky: # have to check angles FL - C - FL, C - C - C and C - C - FL
+                if self.inner_types[idx + 1] == 'FL' and self.inner_types[idx + 2] == 'FL': #should be, sanity check
+                    self.angles.append(['FL-C-FL', idx + 1, idx, idx + 2])
+                try:
+                    if self.inner_types[idx + 4] in self.sticky and self.inner_types[idx + 8] in self.sticky:
+                        self.angles.append(['C-C-C', idx, idx +4, idx +8])
+                except IndexError:
+                    pass
+                try:
+                    if self.inner_types[idx + 4] in self.sticky and self.inner_types[idx + 7] == 'FL':
+                        self.angles.append(['C-C-FL', idx, idx+4, idx+7])
+                except IndexError:
+                    pass
+
     def __build_beads(self):
-        pass
+
+        base_length = self.lmono
+
+        for idx in range(self.pnum.__len__()):
+            if idx == 0:
+                self.positions = np.append(self.positions, [[0.0, 0.0, 0.0]], axis = 0)
+                continue
+            if self.inner_types[idx - 1] == 'S' and self.inner_types[idx] == 'S': # S - S bond
+                self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 0.50 * base_length]], axis = 0)
+            elif self.inner_types[idx - 1] == 'S' and self.inner_types[idx] == 'A': # S - A bond
+                self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 0.75 * base_length]], axis = 0)
+            elif self.inner_types[idx - 1] == 'A' and self.inner_types[idx] == 'A': # A - A bond
+                self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 1.00 * base_length]], axis = 0)
+            elif self.inner_types[idx] == 'B':
+                if self.inner_types[idx - 1] == 'A':
+                    self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 0.75 * base_length]], axis = 0)
+                elif self.inner_types[idx - 4] == 'B': # sanity check
+                    self.positions = np.append(self.positions, self.positions[-4, :] + [[0.0, 0.0, 0.50 * base_length]], axis = 0)
+            elif self.inner_types[idx] == 'FL': # 3 scenarios, 1st flanking for C, 2nd flanking for C or chain end FL
+                if self.inner_types[idx - 2] == 'B':
+                    self.positions = np.append(self.positions, self.positions[-2, :] + [[0.30 * base_length, 0.40 * base_length, 0.0]], axis = 0)
+                elif self.inner_types[idx - 3] == 'B':
+                    self.positions = np.append(self.positions, self.positions[-3, :] + [[-0.30 * base_length, 0.40 * base_length, 0.0]], axis = 0)
+                elif self.inner_types[idx - 4] == 'B': # chain end flanking
+                    self.positions = np.append(self.positions, self.positions[-4, :] + [[0.0, 0.0, 0.30 * base_length]], axis = 0)
+            elif self.inner_types[idx] in self.sticky:
+                self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.40 * base_length, 0.0]], axis = 0)
+
+        for idx in range(self.pnum.__len__()):
+            self.beads.append(CoarsegrainedBead.bead(position = self.positions[idx, :], beadtype=self.inner_types[idx], mass = self.mass[idx], body = -1))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

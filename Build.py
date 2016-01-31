@@ -4,7 +4,7 @@ from math import *
 ## My library
 # Classes
 import CoarsegrainedBead
-import oneDNA
+import LinearChain
 # functions
 import PeriodicBC
 import WriteXML
@@ -12,8 +12,6 @@ import numpy as np
 import random
 import copy
 import types
-import Moment_Fixer
-import LinearChain
 import re
 from itertools import chain
 
@@ -127,21 +125,12 @@ class BuildHoomdXML(object):
     rename_type_by_RE(pattern, new_type, RE_flags = None)
         same as rename_type, but uses a regular expression through re.match(pattern, ..., RE_flags) to search the beadtype strings
 
-    current_box()
-    returns the current domain box of the build obj
-
-    add_N_ext_obj(N, ext_obj)
-    makes N copies of the external object ext_obj and appends them to the build object. ext_obj must supports methods/properties for angle_types, bond_types, dihedral_types
-    have a pnum_offset, center_position properties with setters and support access to ext_obj.beads
-
-    add_rho_molar_ions(rho, qtyoe, q, ion_mass)
-
     __build_from_X
         where X is either options or shapes. Old implementation is from options which will pull all particle properties from the options list. Called automatically
         from constructor is init = None newer implementation uses build directives from the shape object, which is much more intuitive. Can be called automatically
         by using init = 'from_shapes' in constructor
 
-    Defined property : impose_box, imposes a box, useful for adding charge to the domain.
+
 
     Defined properties (no setters)
     centers : returns list of center types
@@ -252,9 +241,7 @@ class BuildHoomdXML(object):
             _d.append(self.__particles[i].dihedral_types)
         _d += self.ext_dihedral_t
         return list(set(list(chain.from_iterable(_d))))
-    @property
-    def num_beads(self):
-        return self.__beads.__len__()
+
     @property
     def center_types(self):
         _ct = []
@@ -294,7 +281,9 @@ class BuildHoomdXML(object):
         for i in range(self.__particles.__len__()):
             _tags.append(self.__particles[i].pnum_offset)
         return _tags
-
+    @property
+    def num_beads(self):
+        return self.__beads.__len__()
     @property
     def charge_norm(self):
         return self.charge_normalization
@@ -319,7 +308,7 @@ class BuildHoomdXML(object):
                 for k in range(self.__particles[i].beads.__len__()):
                     if self.__particles[i].beads[k].beadtype == self.__particles[i].sticky_types[j]:
                         self.__particles[i].beads[k].charge = _offset
-                _offset += 1
+            _offset += 1
 
     def add_einstein_crystal_lattice(self):
         self.__types.append('EC')
@@ -594,6 +583,7 @@ class BuildHoomdXML(object):
         else:
             return self.impose_box
 
+
     def add_N_ext_obj(self, ext_obj, N):
         """
         Adds arbitrary build-like objects to this file. They need to have DNA built-in and support pnum_offset method,
@@ -651,11 +641,10 @@ class BuildHoomdXML(object):
                 _gen_pos = np.array([random.uniform(-L[0]/2.1, L[0]/2.1), random.uniform(-L[1]/2.1, L[1]/2.1), random.uniform(-L[2]/2.1, L[2]/2.1)])
                 for j in range(self.__particles.__len__()):
                     try:
-                        if np.linalg.norm(self.__particles[j].center_position - _gen_pos) < self.__particles[j]._sh.flags['hardcore_safe_dist'] * self.__particles[j]._sh.flags['size']/2:
+                        if np.linalg.norm(self.__particles[j].center_position - _gen_pos) < self.__particles[j]._sh.flags['hard_core_safe_dist'] * self.__particles[j]._sh.flags['size']:
                             _rej_check = True
                     except KeyError:
                         pass
-            #self.__positions = np.append(self.__positions, _gen_pos, axis = 0)
             self.__beads.append(CoarsegrainedBead.bead(position=_gen_pos, beadtype=qtype, mass = ion_mass, body = -1, charge = q, diameter = ion_diam))
 
     def set_diameter_by_type(self, btype, diam):
@@ -709,19 +698,6 @@ class BuildHoomdXML(object):
                            All_bonds=self.__bonds, L = L, export_charge = export_charge, export_diam=export_diameter,
                                All_dihedrals=self.__dihedrals, export_dihedral=True)
 
-    def graft_N_obj_on_shapes(self, ext_obj, N, key = None):
-        _max_pnum_from_particles = self.__particles[-1].p_num[-1]
-        _extra_list = self.__beads[_max_pnum_from_particles : self.__beads.__len__()] ## for safekeeping any addition to the list that doesnt come from particles
-
-
-        for i in range(self.__particles.__len__()):
-            # TODO : add key check
-            self.__particles[i].graft_N_ext_obj(ext_obj, N)
-        self.build_lists_from_particles()
-
-        self.__beads.append(_extra_list)
-
-        pass
 
     class Particle(object):
         """
@@ -985,10 +961,11 @@ class BuildHoomdXML(object):
             self.pos = self.pos + _t
 
         def add_DNA(self, n_ds, n_ss, p_flex, s_end, scale, num, rem_id = None):
-            dna_obj = oneDNA.oneDNAchain(f_DNAtemplate = None, N_dsDNAbeads=int(round(n_ds*1.0/scale)),
-                                        Pos_Flex=int(round(p_flex*1.0/scale)), sticky_end=s_end,
-                                        N_ssDNAbeads=int(round(n_ss*1.0/scale)),
-                                        N_linkerbeads=s_end.__len__(), bond_length=0.6)
+            #dna_obj = oneDNA.oneDNAchain(f_DNAtemplate = None, N_dsDNAbeads=int(round(n_ds*1.0/scale)),
+            #                            Pos_Flex=int(round(p_flex*1.0/scale)), sticky_end=s_end,
+            #                            N_ssDNAbeads=int(round(n_ss*1.0/scale)),
+            #                            N_linkerbeads=s_end.__len__(), bond_length=0.6)
+            dna_obj = LinearChain.DNAChain(n_ss = int(n_ss * 1.0 / scale), n_ds = int(n_ds * 1.0 / scale), sticky_end=s_end, bond_length=0.6)
             if self.flags['mst']:
                 if num > self.rem_list[rem_id].__len__():
                     raise ValueError('DNA chain number greater than number of surface beads')
@@ -998,11 +975,51 @@ class BuildHoomdXML(object):
             self.sticky_used.append(s_end)
 
             _tmp_a_list = []
-            while _tmp_a_list.__len__() < num:
-                if self.flags['mst']:
-                    _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
-                else:
-                    _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list.__len__()-1)))
+
+            if not 'nonuniformDNA' in self.flags and not self.flags['nonuniformDNA']: #normal case of uniform coverage of dna
+                while _tmp_a_list.__len__() < num:
+                    if self.flags['mst']:
+                        _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
+                    else:
+                        _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list.__len__()-1)))
+
+            else:
+                _cmindistv = vec(copy.deepcopy(self.pos[self.rem_list[0], :] - self.pos[0,:]))
+                _cmindist = _cmindistv.__norm__()
+                for idx in range(self.rem_list.__len__()):
+                    _cmindistv = vec(copy.deepcopy(self.pos[self.rem_list[0], :] - self.pos[0,:]))
+                    if _cmindistv.__norm__() < _cmindist:
+                        _cmindist = _cmindistv.__norm__()
+
+                while _tmp_a_list.__len__() < num:
+                    probability_vector = np.zeros(self.rem_list.__len__(), dtype = float)
+                    sig_distribution = self._sh.flags['delta']
+                    for prvec_idx in range(probability_vector.__len__()):
+
+                        _current_surface_vector = vec(copy.deepcopy(self.pos[self.rem_list[prvec_idx], :] - self.pos[0,:]))
+                        _current_max_dim = max(abs(_current_surface_vector.array[dim]) for dim in range(3))
+                        _dmp_var = _current_surface_vector.array
+                        for dim in range(3):
+                            _dmp_var[dim] = abs(abs(_dmp_var[dim]) - _current_max_dim)
+                        _dmp_var.sort()
+                        _current_normalized_dist = _dmp_var[1] # the current distance to edge is the second minimum dimension in magnitude (first one is zero)
+
+
+                        #_current_surface_vector = vec(copy.deepcopy(self.pos[self.rem_list[prvec_idx], :] - self.pos[0,:]))
+                        #_current_normalized_dist = _current_surface_vector.__norm__()
+
+                        if prvec_idx == 0:
+                            #probability_vector[prvec_idx] = exp(-(_current_normalized_dist * _current_normalized_dist-_cmindist*_cmindist)) # gaussian based on normalized size
+                            probability_vector[prvec_idx] = exp(-sig_distribution**2 / (_current_normalized_dist * _current_normalized_dist)) # gaussian based on normalized size
+                        else:
+                            #probability_vector[prvec_idx] = probability_vector[prvec_idx-1] + exp(-(_current_normalized_dist * _current_normalized_dist-_cmindist*_cmindist)) # gaussian based on normalized size
+                            probability_vector[prvec_idx] = probability_vector[prvec_idx-1] + exp(-sig_distribution**2 / (_current_normalized_dist * _current_normalized_dist)) # gaussian based on normalized size
+                    _randnum = random.uniform(0.0, probability_vector[-1]) # generate random number from 0 to norm, then treat _probability_vector as a CDF
+                    for prvec_idx in range(probability_vector.__len__()):
+                        if _randnum < probability_vector[prvec_idx]:
+                            _tmp_a_list.append(self.rem_list.pop(prvec_idx))
+                            break
+
             self.att_list.append(_tmp_a_list)
 
             #  following code makes a copy of the dna object, rotates it, translates it and then changes position and
@@ -1010,9 +1027,10 @@ class BuildHoomdXML(object):
 
             for i in range(num):
                 _dump_copy = copy.deepcopy(dna_obj)
+                _dump_copy.extend_lengths(val = random.uniform(1.00, 1.35))
                 _p_off = self.p_num[-1]+1
                 _att_vec = vec(copy.deepcopy(self.pos[self.att_list[-1][i],:] - self.pos[0,:]))
-                _rot_matrix = BuildHoomdXML.get_rot_mat(_att_vec.array+np.array([random.uniform(0,1), random.uniform(0,1), random.uniform(0,1)])*2e-1)
+                _rot_matrix = BuildHoomdXML.get_rot_mat(_att_vec.array+np.array([random.uniform(-1,1), random.uniform(-1,1), random.uniform(-1,1)])*0.0*2e-1*np.linalg.norm(_att_vec.array))
 
                 for j in range(_dump_copy.beads_in_oneDNAchain.__len__()):
                     _v = vec(_dump_copy.beads_in_oneDNAchain[j].position)
@@ -1030,12 +1048,8 @@ class BuildHoomdXML(object):
                 for j in range(_dump_copy.angles_in_oneDNAchain.__len__()):
                     for k in range(_dump_copy.angles_in_oneDNAchain[j].__len__()-1):
                         _dump_copy.angles_in_oneDNAchain[j][k+1] += _p_off
-                    self.angles.append(_dump_copy.angles_in_oneDNAchain[j])
+                    self.dihedrals.append(_dump_copy.angles_in_oneDNAchain[j])
                 del _dump_copy, _att_vec
-
-        def graft_N_ext_objs(self, ext_obj, N):
-            # TODO : add the grafting
-            pass
 
         def __build_surface(self):
             self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
@@ -1059,13 +1073,65 @@ class BuildHoomdXML(object):
                     self.beads.append(CoarsegrainedBead.bead(position = self._sh.pos[_c]*self.size / (2*self.scale), beadtype=self.s_type[i], body =0, mass = self.s_mass))
                     _c += 1
 
+        def graft_EXT(self, EXT_IDX, rem_id, num, linker_type):
+            if self.flags['mst']:
+                if num > self.rem_list[rem_id].__len__():
+                    raise ValueError('DNA chain number greater than number of surface beads')
+                elif num > self.rem_list.__len__():
+                    raise ValueError('DNA chain number greater than number of surface beads')
+
+            _tmp_a_list = []
+            while _tmp_a_list.__len__() < num:
+                if self.flags['mst']:
+                    _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
+                else:
+                    _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list.__len__()-1)))
+
+            self.att_list.append(_tmp_a_list)
+
+            for obj_copy_idx in range(num):
+                _dump_copy = copy.deepcopy(self._sh.ext_objects[EXT_IDX])
+                _p_off = self.p_num[-1]+1
+                _att_vec = vec(copy.deepcopy(self.pos[self.att_list[-1][obj_copy_idx],:] - self.pos[0,:]))
+                _rot_matrix = BuildHoomdXML.get_rot_mat(_att_vec.array)
+                for obj_int_crd in range(_dump_copy.beads.__len__()):
+                    _v = vec(_dump_copy.beads[obj_int_crd].position)
+                    _v.rot(_rot_matrix)
+                    _dump_copy.beads[obj_int_crd].position = self.pos[0,:] + _att_vec.array*(1.00 + 0.8 / _att_vec.__norm__()) +_v.array
+                    del _v
+                    self.pos = np.append(self.pos, np.array([_dump_copy.beads[obj_int_crd].position[:]]), axis = 0)
+                    self.beads.append(_dump_copy.beads[obj_int_crd])
+                    self.p_num.append(_p_off + obj_int_crd)
+                for obj_int_bonds in range(_dump_copy.bonds.__len__()):
+                    _dump_copy.bonds[obj_int_bonds][1] += _p_off
+                    _dump_copy.bonds[obj_int_bonds][2] += _p_off
+                    self.bonds.append(_dump_copy.bonds[obj_int_bonds])
+                self.bonds.append([linker_type, self.att_list[-1][obj_copy_idx], _p_off])
+                for obj_int_ang in range(_dump_copy.angles.__len__()):
+                    for k in range(_dump_copy.angles[obj_int_ang].__len__()-1):
+                        _dump_copy.angles[obj_int_ang][k+1] += _p_off
+                    self.angles.append(_dump_copy.angles[obj_int_ang])
+                for obj_int_dih in range(_dump_copy.dihedrals.__len__()):
+                    for k in range(_dump_copy.dihedrals[obj_int_dih].__len__()-1):
+                        _dump_copy.dihedrals[obj_int_dih][k+1] += _p_off
+                    self.angles.append(_dump_copy.dihedrals[obj_int_dih])
+                del _dump_copy, _att_vec
+
+
+
+
         def pdb_DNA_keys(self):
             if 'no_dna' in self._sh.keys:
                 offset = self._sh.keys['no_dna'].__len__()
             else:
                 offset = 0
-            for i in range(self._sh.keys['dna'].__len__()):
-                self.add_DNA(rem_id= i + offset, scale = self.scale, **self._sh.keys['dna'][i][1])
+            if 'dna' in self._sh.keys:
+                for i in range(self._sh.keys['dna'].__len__()):
+                    self.add_DNA(rem_id= i + offset, scale = self.scale, **self._sh.keys['dna'][i][1])
+            if 'EXT' in self._sh.keys:
+                for i in range(self._sh.keys['EXT'].__len__()):
+                    self.graft_EXT(rem_id = i + offset, **self._sh.keys['EXT'][i][1])
+
 
         def __build_soft_shell(self):
             for i in range(self.beads.__len__()):
