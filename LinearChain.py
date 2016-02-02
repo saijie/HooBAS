@@ -1,9 +1,12 @@
 __author__ = 'martin'
-import numpy as np
 import random
-import CoarsegrainedBead
 import copy
 from math import *
+
+import numpy as np
+
+import CoarsegrainedBead
+
 
 class vec(object):
         """
@@ -264,7 +267,7 @@ class LinearChain(object):
                 _bool_add = True
                 for key in key_search.keys():
                     try:
-                        _bool_add and self.beads.__getattribute__(key) == key_search[key]
+                        _bool_add  = _bool_add and self.beads.__getattribute__(key) == key_search[key]
                     except AttributeError:
                         _bool_add = False
                         break
@@ -456,7 +459,7 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
         LinearChain.__init__(self, n_monomer= n_ss + n_ds + sticky_end.__len__(), kuhn_length=bond_length)
         self.nss = n_ss
         self.nds = n_ds
-        self.sticky = sticky_end
+        self.sticky_end = sticky_end
         self.b_types = []
         self.a_types = []
         self.rem_sites = [] # we dont attach anything to the DNA chain
@@ -496,9 +499,9 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
         #self.pnum = [0]
         nss_left = self.nss
         nds_left = self.nds
-        Nsticky_left = self.sticky.__len__()
+        Nsticky_left = self.sticky_end.__len__()
         monomers_left = self.nmono
-        sticky_left = copy.deepcopy(self.sticky)
+        sticky_left = copy.deepcopy(self.sticky_end)
 
         while monomers_left > 0:
             if nss_left > 0:
@@ -542,7 +545,7 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
                 self.pnum.append(self.pnum[-1] + 1)
             monomers_left -= 1
 
-        if self.sticky.__len__() > 1:
+        if self.sticky_end.__len__() > 1:
             self.inner_types.append('FL')
             self.mass.append(1.0)
             self.pnum.append(self.pnum[-1] + 1)
@@ -570,23 +573,23 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
                 self.bonds.append(['B-FL', idx, idx + 2])
             if self.inner_types[idx] == 'B' and self.inner_types[idx + 3] == 'FL':
                 self.bonds.append(['B-FL', idx, idx + 3])
-            if self.inner_types[idx] == 'B' and self.inner_types[idx + 1] in self.sticky:
+            if self.inner_types[idx] == 'B' and self.inner_types[idx + 1] in self.sticky_end:
                 self.bonds.append(['B-C', idx, idx + 1])
             if self.inner_types[idx] == 'B' and self.inner_types[idx + 4] == 'FL':
                 self.bonds.append(['B-FL', idx, idx + 4])
 
 
-            if self.inner_types[idx] in self.sticky and self.inner_types[idx + 1] == 'FL':
+            if self.inner_types[idx] in self.sticky_end and self.inner_types[idx + 1] == 'FL':
                 self.bonds.append(['C-FL', idx, idx + 1])
-            if self.inner_types[idx] in self.sticky and self.inner_types[idx + 2] == 'FL':
+            if self.inner_types[idx] in self.sticky_end and self.inner_types[idx + 2] == 'FL':
                 self.bonds.append(['C-FL', idx, idx + 2])
 
             try:
-                if self.inner_types[idx] in self.sticky and self.inner_types[idx + 4] in self.sticky:
+                if self.inner_types[idx] in self.sticky_end and self.inner_types[idx + 4] in self.sticky_end:
                     self.bonds.append(['C-C', idx, idx + 4])
             except IndexError:
                 pass
-            if self.inner_types[idx] in self.sticky and self.inner_types[idx + 3] == 'FL':
+            if self.inner_types[idx] in self.sticky_end and self.inner_types[idx + 3] == 'FL':
                 self.bonds.append(['C-FL', idx, idx + 3])
 
     def __build_angles(self):
@@ -608,7 +611,7 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
                 except IndexError:
                     pass
                 try:
-                    if self.inner_types[idx + 1] == 'B' and self.inner_types[idx + 2] in self.sticky:
+                    if self.inner_types[idx + 1] == 'B' and self.inner_types[idx + 2] in self.sticky_end:
                         self.angles.append(['A-B-C', idx, idx + 1, idx + 2])
                 except IndexError:
                     pass
@@ -617,16 +620,16 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
                     self.angles.append(['B-B-B', idx, idx + 4, idx + 8])
             except IndexError:
                 pass
-            if self.inner_types[idx] in self.sticky: # have to check angles FL - C - FL, C - C - C and C - C - FL
+            if self.inner_types[idx] in self.sticky_end: # have to check angles FL - C - FL, C - C - C and C - C - FL
                 if self.inner_types[idx + 1] == 'FL' and self.inner_types[idx + 2] == 'FL': #should be, sanity check
                     self.angles.append(['FL-C-FL', idx + 1, idx, idx + 2])
                 try:
-                    if self.inner_types[idx + 4] in self.sticky and self.inner_types[idx + 8] in self.sticky:
+                    if self.inner_types[idx + 4] in self.sticky_end and self.inner_types[idx + 8] in self.sticky_end:
                         self.angles.append(['C-C-C', idx, idx +4, idx +8])
                 except IndexError:
                     pass
                 try:
-                    if self.inner_types[idx + 4] in self.sticky and self.inner_types[idx + 7] == 'FL':
+                    if self.inner_types[idx + 4] in self.sticky_end and self.inner_types[idx + 7] == 'FL':
                         self.angles.append(['C-C-endFL', idx, idx+4, idx+7])
                 except IndexError:
                     pass
@@ -642,12 +645,12 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
             if self.inner_types[idx - 1] == 'S' and self.inner_types[idx] == 'S': # S - S bond
                 self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 0.50 * base_length]], axis = 0)
             elif self.inner_types[idx - 1] == 'S' and self.inner_types[idx] == 'A': # S - A bond
-                self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 0.75 * base_length]], axis = 0)
+                self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 0.50 * base_length]], axis = 0)
             elif self.inner_types[idx - 1] == 'A' and self.inner_types[idx] == 'A': # A - A bond
                 self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 1.00 * base_length]], axis = 0)
             elif self.inner_types[idx] == 'B':
                 if self.inner_types[idx - 1] == 'A':
-                    self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 0.75 * base_length]], axis = 0)
+                    self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.0, 0.50 * base_length]], axis = 0)
                 elif self.inner_types[idx - 4] == 'B': # sanity check
                     self.positions = np.append(self.positions, self.positions[-4, :] + [[0.0, 0.0, 0.50 * base_length]], axis = 0)
             elif self.inner_types[idx] == 'FL': # 3 scenarios, 1st flanking for C, 2nd flanking for C or chain end FL
@@ -657,7 +660,7 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
                     self.positions = np.append(self.positions, self.positions[-3, :] + [[-0.30 * base_length, 0.40 * base_length, 0.0]], axis = 0)
                 elif self.inner_types[idx - 4] == 'B': # chain end flanking
                     self.positions = np.append(self.positions, self.positions[-4, :] + [[0.0, 0.0, 0.30 * base_length]], axis = 0)
-            elif self.inner_types[idx] in self.sticky:
+            elif self.inner_types[idx] in self.sticky_end:
                 self.positions = np.append(self.positions, self.positions[-1, :] + [[0.0, 0.40 * base_length, 0.0]], axis = 0)
 
         for idx in range(self.pnum.__len__()):

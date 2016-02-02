@@ -106,8 +106,9 @@ DNA_chain = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['X','Y','Z'
 DNA_brush = LinearChain.DNAChain(n_ss = 1.0, n_ds = 1, sticky_end=[])
 
 shapes = [GenShape.RhombicDodecahedron(Num = 500)]
-shapes[-1].will_build_from_shapes(properties = {'size' : 5.0, 'surf_type' : 'P', 'density' : 14.29, 'nonuniformDNA' : False})
-shapes[-1].set_ext_grafts(DNA_chain, num = 5, linker_bond_type = 'S-NP')
+shapes[-1].will_build_from_shapes(properties = {'size' : 5.0, 'surf_type' : 'P', 'density' : 14.29, 'nonuniformDNA' : False, 'delta' : 1.0})
+shapes[-1].set_dna(n_ss = 1, n_ds = dsL, s_end = ['X','Y','Z'], p_flex = array([-1]), num = int(102))
+#shapes[-1].set_ext_grafts(DNA_chain, num = 5, linker_bond_type = 'S-NP')
 shapes[-1].set_ext_grafts(DNA_brush, num = 5, linker_bond_type = 'S-NP')
 shapes[-1].will_build_from_shapes()
 shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)

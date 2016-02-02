@@ -975,8 +975,14 @@ class BuildHoomdXML(object):
             self.sticky_used.append(s_end)
 
             _tmp_a_list = []
-
-            if not 'nonuniformDNA' in self.flags and not self.flags['nonuniformDNA']: #normal case of uniform coverage of dna
+            try:
+                if not self.flags['nonuniformDNA']:
+                    buniform = True
+                else:
+                    buniform  = False
+            except KeyError:
+                buniform = True
+            if buniform: #normal case of uniform coverage of dna
                 while _tmp_a_list.__len__() < num:
                     if self.flags['mst']:
                         _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
@@ -1027,7 +1033,6 @@ class BuildHoomdXML(object):
 
             for i in range(num):
                 _dump_copy = copy.deepcopy(dna_obj)
-                _dump_copy.extend_lengths(val = random.uniform(1.00, 1.35))
                 _p_off = self.p_num[-1]+1
                 _att_vec = vec(copy.deepcopy(self.pos[self.att_list[-1][i],:] - self.pos[0,:]))
                 _rot_matrix = BuildHoomdXML.get_rot_mat(_att_vec.array+np.array([random.uniform(-1,1), random.uniform(-1,1), random.uniform(-1,1)])*0.0*2e-1*np.linalg.norm(_att_vec.array))
@@ -1048,7 +1053,7 @@ class BuildHoomdXML(object):
                 for j in range(_dump_copy.angles_in_oneDNAchain.__len__()):
                     for k in range(_dump_copy.angles_in_oneDNAchain[j].__len__()-1):
                         _dump_copy.angles_in_oneDNAchain[j][k+1] += _p_off
-                    self.dihedrals.append(_dump_copy.angles_in_oneDNAchain[j])
+                    self.angles.append(_dump_copy.angles_in_oneDNAchain[j])
                 del _dump_copy, _att_vec
 
         def __build_surface(self):
@@ -1079,7 +1084,10 @@ class BuildHoomdXML(object):
                     raise ValueError('DNA chain number greater than number of surface beads')
                 elif num > self.rem_list.__len__():
                     raise ValueError('DNA chain number greater than number of surface beads')
-
+            try:
+                self.sticky_used.append(self._sh.ext_objects[EXT_IDX].sticky_end)
+            except AttributeError:
+                pass
             _tmp_a_list = []
             while _tmp_a_list.__len__() < num:
                 if self.flags['mst']:
@@ -1114,11 +1122,8 @@ class BuildHoomdXML(object):
                 for obj_int_dih in range(_dump_copy.dihedrals.__len__()):
                     for k in range(_dump_copy.dihedrals[obj_int_dih].__len__()-1):
                         _dump_copy.dihedrals[obj_int_dih][k+1] += _p_off
-                    self.angles.append(_dump_copy.dihedrals[obj_int_dih])
+                    self.dihedrals.append(_dump_copy.dihedrals[obj_int_dih])
                 del _dump_copy, _att_vec
-
-
-
 
         def pdb_DNA_keys(self):
             if 'no_dna' in self._sh.keys:
@@ -1131,7 +1136,6 @@ class BuildHoomdXML(object):
             if 'EXT' in self._sh.keys:
                 for i in range(self._sh.keys['EXT'].__len__()):
                     self.graft_EXT(rem_id = i + offset, **self._sh.keys['EXT'][i][1])
-
 
         def __build_soft_shell(self):
             for i in range(self.beads.__len__()):
