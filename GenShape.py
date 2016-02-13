@@ -1,5 +1,4 @@
 __author__ = 'martin'
-#Generates surface of a rounded Cube, EdgeLength = 2 (Cube ranges from -1 to +1) Number of points is approximative
 
 from math import *
 import numpy as np
@@ -48,7 +47,7 @@ class vec(object):
             return _c
 
 
-class shape(object): #TODO : change the shapes (pdb, cubes, ...) to their own classes, and inherit the shape class.
+class shape(object):
     """
     Shape object containing self.__table, which is a list of all the points in the base object. Any new shape can be
     added by adding def name and making the new method generate a numpy array of size (N,3) where N is the number of

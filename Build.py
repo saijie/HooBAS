@@ -7,7 +7,6 @@ import CoarsegrainedBead
 import LinearChain
 # functions
 import PeriodicBC
-import WriteXML
 import numpy as np
 import random
 import copy
@@ -141,12 +140,13 @@ class BuildHoomdXML(object):
 
     """
     def __init__(self, center_obj, shapes, opts , init = None):
-        self.__positions = np.zeros((0,3))
+        self.positions = np.zeros((0,3))
         self.__particles = []
-        self.__bonds = []
-        self.__angles = []
-        self.__dihedrals = []
-        self.__beads = []
+        self.bonds = []
+        self.angles = []
+        self.dihedrals = []
+        self.impropers = []
+        self.beads = []
         self.__types = []
         self.__p_num = []
         self.__obj_index = []
@@ -154,9 +154,14 @@ class BuildHoomdXML(object):
         self.impose_box = []
         self.flaglist = {}
 
+        # list of properties defined in the Hoomd xml formats. First list refers to particle properties, second to bonded interaction types
+        self.xml_proplist = ['velocity', 'acceleration', 'diameter', 'charge', 'body', 'orientation', 'angmom', 'moment_inertia', 'image']
+        self.xml_inter_prop_list = ['bonds', 'angles', 'dihedrals', 'impropers']
+
         self.ext_ang_t = []
         self.ext_bond_t = []
         self.ext_dihedral_t = []
+        self.ext_improper_t = []
 
         self.charge_normalization = 1.00
 
@@ -241,7 +246,13 @@ class BuildHoomdXML(object):
             _d.append(self.__particles[i].dihedral_types)
         _d += self.ext_dihedral_t
         return list(set(list(chain.from_iterable(_d))))
-
+    @property
+    def improper_types(self):
+        _d = []
+        for i in range(self.__particles.__len__()):
+            _d.append(self.__particles[i].improper_types)
+        _d += self.ext_improper_t
+        return list(set(list(chain.from_iterable(_d))))
     @property
     def center_types(self):
         _ct = []
@@ -283,7 +294,7 @@ class BuildHoomdXML(object):
         return _tags
     @property
     def num_beads(self):
-        return self.__beads.__len__()
+        return self.beads.__len__()
     @property
     def charge_norm(self):
         return self.charge_normalization
@@ -298,8 +309,8 @@ class BuildHoomdXML(object):
         self.charge_normalization = val**0.5
 
     def set_charge_to_pnum(self):
-        for i in range(self.__beads.__len__()):
-            self.__beads[i].charge = float(self.__p_num[i])
+        for i in range(self.beads.__len__()):
+            self.beads[i].charge = float(self.__p_num[i])
 
     def set_charge_to_dna_types(self):
         _offset = 1
@@ -313,9 +324,9 @@ class BuildHoomdXML(object):
     def add_einstein_crystal_lattice(self):
         self.__types.append('EC')
         for i in range(self.__particles.__len__()):
-            self.__beads.append(CoarsegrainedBead.bead(position=self.__particles[i].center_position, beadtype='EC', mass = 1.0))
+            self.beads.append(CoarsegrainedBead.bead(position=self.__particles[i].center_position, beadtype='EC', mass = 1.0))
             self.__p_num.append(self.__p_num[-1]+1)
-            self.__bonds.append(['EC-bond', self.__particles[i].pnum_offset, self.__p_num[-1]])
+            self.bonds.append(['EC-bond', self.__particles[i].pnum_offset, self.__p_num[-1]])
 
 
     def sticky_excluded(self, sticky_pair, r_cut = None):
@@ -327,12 +338,12 @@ class BuildHoomdXML(object):
             _exl.append(self.__particles[i].sticky_excluded(_types = sticky_pair, _rc = r_cut))
         for i in range(_exl.__len__()):
             for j in range(_exl[i].__len__()):
-                self.__bonds.append(['UselessBond'] + _exl[i][j])
+                self.bonds.append(['UselessBond'] + _exl[i][j])
         return _exl
 
     def shift_pos(self, index, d):
-        for i in range(self.__beads.__len__()):
-            self.__beads[i].position[index] += d
+        for i in range(self.beads.__len__()):
+            self.beads[i].position[index] += d
 
     def set_rot_to_hoomd(self):
         _v_a = self.__opts.vx
@@ -352,8 +363,8 @@ class BuildHoomdXML(object):
         else:
             _hoomd_mat = _id + _vx + np.linalg.matrix_power(_vx,2)*(1-_c)/(_s**2)
 
-        for i in range(self.__beads.__len__()):
-            self.__beads[i].position = list(np.dot(_hoomd_mat, self.__beads[i].position))
+        for i in range(self.beads.__len__()):
+            self.beads[i].position = list(np.dot(_hoomd_mat, self.beads[i].position))
 
     def add_particle(self, ptype, *args):
         self.__particles.append(BuildHoomdXML.Particle(*args))
@@ -383,18 +394,18 @@ class BuildHoomdXML(object):
 
     def build_lists_from_particles(self):
         self.__p_num  = []
-        self.__beads  = []
-        self.__angles = []
-        self.__bonds  = []
+        self.beads  = []
+        self.angles = []
+        self.bonds  = []
         for i in range(self.__particles.__len__()):
             for k in range(self.__particles[i].p_num.__len__()):
                 self.__p_num.append(self.__particles[i].p_num[k])
             for k in range(self.__particles[i].bonds.__len__()):
-                self.__bonds.append(self.__particles[i].bonds[k])
+                self.bonds.append(self.__particles[i].bonds[k])
             for k in range(self.__particles[i].angles.__len__()):
-                self.__angles.append(self.__particles[i].angles[k])
+                self.angles.append(self.__particles[i].angles[k])
             for k in range(self.__particles[i].beads.__len__()):
-                self.__beads.append(self.__particles[i].beads[k])
+                self.beads.append(self.__particles[i].beads[k])
 
     def correct_pnum_body_lists(self):
 
@@ -482,12 +493,13 @@ class BuildHoomdXML(object):
                 for k in range(self.__particles[-1].p_num.__len__()):
                     self.__p_num.append(self.__particles[-1].p_num[k])
                 for k in range(self.__particles[-1].bonds.__len__()):
-                    self.__bonds.append(self.__particles[-1].bonds[k])
+                    self.bonds.append(self.__particles[-1].bonds[k])
                 for k in range(self.__particles[-1].angles.__len__()):
-                    self.__angles.append(self.__particles[-1].angles[k])
+                    self.angles.append(self.__particles[-1].angles[k])
                 for k in range(self.__particles[-1].beads.__len__()):
-                    self.__beads.append(self.__particles[-1].beads[k])
+                    self.beads.append(self.__particles[-1].beads[k])
 
+    # DEPRECATED, Legacy behavior
     def __build_from_options(self):
         b_cnt = 0
         for i in range(self._c_t.__len__()):
@@ -512,17 +524,17 @@ class BuildHoomdXML(object):
                 for k in range(self.__particles[-1].p_num.__len__()):
                     self.__p_num.append(self.__particles[-1].p_num[k])
                 for k in range(self.__particles[-1].bonds.__len__()):
-                    self.__bonds.append(self.__particles[-1].bonds[k])
+                    self.bonds.append(self.__particles[-1].bonds[k])
                 for k in range(self.__particles[-1].angles.__len__()):
-                    self.__angles.append(self.__particles[-1].angles[k])
+                    self.angles.append(self.__particles[-1].angles[k])
                 for k in range(self.__particles[-1].beads.__len__()):
-                    self.__beads.append(self.__particles[-1].beads[k])
+                    self.beads.append(self.__particles[-1].beads[k])
 
     def rename_type(self, initial_type, new_type):
         _indices = []
-        for i in range(self.__beads.__len__()):
-            if self.__beads[i].beadtype == initial_type:
-                self.__beads[i].beadtype = new_type
+        for i in range(self.beads.__len__()):
+            if self.beads[i].beadtype == initial_type:
+                self.beads[i].beadtype = new_type
                 _indices.append(i)
         return _indices
 
@@ -536,13 +548,13 @@ class BuildHoomdXML(object):
         """
 
         _indices = []
-        for i in range(self.__beads.__len__()):
+        for i in range(self.beads.__len__()):
             if RE_flags is None:
-                match = re.match(pattern, self.__beads[i].beadtype)
+                match = re.match(pattern, self.beads[i].beadtype)
             else:
-                match = re.match(pattern, self.__beads[i].beadtype, RE_flags)
+                match = re.match(pattern, self.beads[i].beadtype, RE_flags)
             if match is not None:
-                self.__beads[i].beadtype = new_type
+                self.beads[i].beadtype = new_type
                 _indices.append(i)
             del match
         return _indices
@@ -550,17 +562,17 @@ class BuildHoomdXML(object):
     def fix_overlapping(self, _m_dist = 1e-5):
         # fixes overlapping of beads by setting the min dist between them to _m_dist, by shifting coords of one of them by 1/3 m_dist in the i-j direction. This is extremely slow
 
-        for i in range(0,self.__beads.__len__()):
-            if not (self.__beads[i].beadtype == 'P' or self.__beads[i].beadtype == 'W'):
-                for j in range(i+1, self.__beads.__len__()):
-                    if not (self.__beads[j].beadtype == 'P' or self.__beads[j].beadtype == 'W'):
-                        _dx = (self.__beads[i].position[0] - self.__beads[j].position[0])
-                        _dy = (self.__beads[i].position[1] - self.__beads[j].position[1])
-                        _dz = (self.__beads[i].position[2] - self.__beads[j].position[2])
+        for i in range(0,self.beads.__len__()):
+            if not (self.beads[i].beadtype == 'P' or self.beads[i].beadtype == 'W'):
+                for j in range(i+1, self.beads.__len__()):
+                    if not (self.beads[j].beadtype == 'P' or self.beads[j].beadtype == 'W'):
+                        _dx = (self.beads[i].position[0] - self.beads[j].position[0])
+                        _dy = (self.beads[i].position[1] - self.beads[j].position[1])
+                        _dz = (self.beads[i].position[2] - self.beads[j].position[2])
                         if (_dx**2 + _dy**2 + _dz **2) < _m_dist**2:
-                            self.__beads[i].position[0] += _m_dist * np.sign(_dx) / 3.0
-                            self.__beads[i].position[1] += _m_dist * np.sign(_dy) / 3.0
-                            self.__beads[i].position[2] += _m_dist * np.sign(_dz) / 3.0
+                            self.beads[i].position[0] += _m_dist * np.sign(_dx) / 3.0
+                            self.beads[i].position[1] += _m_dist * np.sign(_dy) / 3.0
+                            self.beads[i].position[2] += _m_dist * np.sign(_dz) / 3.0
 
     def current_box(self):
         if self.impose_box.__len__() == 0:
@@ -606,15 +618,15 @@ class BuildHoomdXML(object):
                 _p, _fl = PeriodicBC.PeriodicBC_simple_cubic(r = copy.deepcopy(_dmp_copy.beads[i].position), L = [L[0]/2.0, L[1]/2.0, L[2]/2.0])
                 _dmp_copy.beads[i].position = _p
                 _dmp_copy.beads[i].image = _fl
-                self.__beads.append(_dmp_copy.beads[i])
+                self.beads.append(_dmp_copy.beads[i])
             for i in range(_dmp_copy.pnum.__len__()):
                 self.__p_num.append(_dmp_copy.pnum[i])
             for i in range(_dmp_copy.bonds.__len__()):
-                self.__bonds.append(_dmp_copy.bonds[i])
+                self.bonds.append(_dmp_copy.bonds[i])
             for i in range(_dmp_copy.angles.__len__()):
-                self.__angles.append(_dmp_copy.angles[i])
+                self.angles.append(_dmp_copy.angles[i])
             for i in range(_dmp_copy.dihedrals.__len__()):
-                self.__dihedrals.append(_dmp_copy.dihedrals[i])
+                self.dihedrals.append(_dmp_copy.dihedrals[i])
             self.ext_bond_t += _dmp_copy.bond_types
             self.ext_ang_t += _dmp_copy.angle_types
             self.ext_dihedral_t += _dmp_copy.dihedral_types
@@ -645,21 +657,21 @@ class BuildHoomdXML(object):
                             _rej_check = True
                     except KeyError:
                         pass
-            self.__beads.append(CoarsegrainedBead.bead(position=_gen_pos, beadtype=qtype, mass = ion_mass, body = -1, charge = q, diameter = ion_diam))
+            self.beads.append(CoarsegrainedBead.bead(position=_gen_pos, beadtype=qtype, mass = ion_mass, body = -1, charge = q, diameter = ion_diam))
 
     def set_diameter_by_type(self, btype, diam):
-        for i in range(self.__beads.__len__()):
-            if self.__beads[i].beadtype == btype:
-                self.__beads[i].diameter = diam
+        for i in range(self.beads.__len__()):
+            if self.beads[i].beadtype == btype:
+                self.beads[i].diameter = diam
     def set_charge_by_type(self, btype, charge):
-        for i in range(self.__beads.__len__()):
-            if self.__beads[i].beadtype == btype:
-                self.__beads[i].charge = charge
+        for i in range(self.beads.__len__()):
+            if self.beads[i].beadtype == btype:
+                self.beads[i].charge = charge
     def fix_remaining_charge(self, ptype = 'ion', ntype = 'ion', pion_mass = 1.0, nion_mass = 1.0,
                              qp = 1.0, qn = -1.0, pion_diam = 1.0, nion_diam = 1.0, isrerun = False):
         _internal_charge = 0.0
-        for i in range(self.__beads.__len__()):
-            _internal_charge += self.__beads[i].charge
+        for i in range(self.beads.__len__()):
+            _internal_charge += self.beads[i].charge
         if _internal_charge == 0:
             return
         elif _internal_charge >0 :
@@ -687,16 +699,69 @@ class BuildHoomdXML(object):
 
         self.__opts.sys_box = L
 
-        for i in range(self.__beads.__len__()):
-            self.__beads[i].charge /= self.charge_normalization
+        for i in range(self.beads.__len__()):
+            self.beads[i].charge /= self.charge_normalization
+        self.__writeXML(L)
 
-        if self.__dihedrals.__len__() == 0:
-            WriteXML.write_xml(filename = self.__opts.filenameformat+'.xml', All_angles= self.__angles, All_beads=self.__beads,
-                           All_bonds=self.__bonds, L = L, export_charge = export_charge, export_diam=export_diameter)
-        else:
-            WriteXML.write_xml(filename = self.__opts.filenameformat+'.xml', All_angles= self.__angles, All_beads=self.__beads,
-                           All_bonds=self.__bonds, L = L, export_charge = export_charge, export_diam=export_diameter,
-                               All_dihedrals=self.__dihedrals, export_dihedral=True)
+    def __writeXML(self, L):
+        with open(self.__opts.filenameformat+'.xml','w') as f:
+            f.write('''<?xml version="1.0" encoding="UTF-8"?>\n''')
+            f.write('''<hoomd_xml version="1.6" dimensions="3">\n''')
+            f.write('''<!-- HOOBAS XML Export -->\n''')
+            f.write('''<configuration time_step="0">\n''')
+            if L.__len__() == 2:
+                f.write('''<box lx="% f" ly="% f"/>\n''' % (L[0], L[1]))
+            elif L.__len__() == 3:
+                f.write('''<box lx="% f" ly="% f" lz="% f"/>\n''' % (L[0], L[1], L[2]))
+            else:
+                f.write('''<box lx="% f" ly="% f" lz="% f" xy="% f" xz="% f" yz="% f" />\n''' % (L[0], L[1], L[2], L[3], L[4], L[5]))
+            #mandatory properties for hoomd to start
+            f.write('''<position>\n''')
+            for i in range(self.beads.__len__()):
+                f.write('%f %f %f\n' %(self.beads[i].position[0],
+                                         self.beads[i].position[1], self.beads[i].position[2]))
+            f.write('''</position>\n''')
+
+            f.write('''<type>\n''')
+            for i in range(self.beads.__len__()):
+                f.write('%s\n' %self.beads[i].beadtype)
+            f.write('''</type>\n''')
+
+            f.write('''<mass>\n''')
+            for i in range(self.beads.__len__()):
+                f.write('%f\n' %self.beads[i].mass)
+            f.write('''</mass>\n''')
+
+            # defines the set of properties we'll pull from the bead objects; if they arent defined for every bead, the
+            # property wont be exported.
+            prop_list = self.xml_proplist
+
+            for propidx in range(prop_list.__len__()):
+                try:
+                    _current_prop = True
+                    for bead_idx in range(1, self.beads.__len__()):
+                        _current_prop = _current_prop and prop_list[propidx] in self.beads[bead_idx].__dict__
+                    if _current_prop:
+                        f.write('<' + prop_list[propidx] + '>\n')
+                        for bead_idx in range(self.beads.__len__()):
+                            f.write(str(getattr(self.beads[bead_idx], prop_list[propidx])).strip('[').strip(']').lstrip()+'\n')
+                        f.write('</'+prop_list[propidx]+'>\n')
+                except AttributeError:
+                    pass
+
+            # defines the lists we'll try to export from the build object. If the length is zero, it won't be exported
+            buildprop_list = self.xml_inter_prop_list
+            for propidx in range(buildprop_list.__len__()):
+                if getattr(self, buildprop_list[propidx]).__len__() > 0:
+                    f.write('<'+buildprop_list[propidx].rstrip('s')+'>\n')
+                    for inner_pidx in range(getattr(self, buildprop_list[propidx]).__len__()):
+                        f.write(str(getattr(self, buildprop_list[propidx])[inner_pidx][0]) + ' ')
+                        for inner_type_idx in range(1, getattr(self, buildprop_list[propidx])[inner_pidx].__len__()):
+                            f.write(str(getattr(self, buildprop_list[propidx])[inner_pidx][inner_type_idx]) + ' ')
+                        f.write('\n')
+                    f.write('</'+buildprop_list[propidx].rstrip('s')+'>\n')
+            f.write('''</configuration>\n''')
+            f.write('''</hoomd_xml>''')
 
 
     class Particle(object):
@@ -748,6 +813,7 @@ class BuildHoomdXML(object):
             self.bonds = []
             self.angles = []
             self.dihedrals = []
+            self.impropers = []
             self.types = [center_type]
             self.p_num = [0]
             self.scale = scale
@@ -861,10 +927,6 @@ class BuildHoomdXML(object):
         @property
         def center_type(self):
             return self.c_type
-        #@center_type.setter
-        #def center_type(self, val):
-        #    self.center_type = val
-        #    self.beads[0].beadtype = val
         @property
         def body(self):
             return self.body_num
@@ -923,6 +985,12 @@ class BuildHoomdXML(object):
             _d = []
             for i in range(self.dihedrals.__len__()):
                 _d.append(self.dihedrals[i][0])
+            return list(set(_d))
+        @property
+        def improper_types(self):
+            _d = []
+            for i in range(self.impropers.__len__()):
+                _d.append(self.impropers[i][0])
             return list(set(_d))
         @property
         def sticky_tags(self):

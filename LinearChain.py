@@ -272,7 +272,8 @@ class LinearChain(object):
                         _bool_add = False
                         break
                 if _bool_add:
-                    self.rem_sites.append(self.pnum[i])
+                    for _diff_binding_num in range(max_num_bindings - _bind_counter):
+                        self.rem_sites.append(self.pnum[i])
 
     def graft_N_ext_object(self, obj, N, connecting_bond = None, add_attachment_sites = False):
         _graft_att_sites = []

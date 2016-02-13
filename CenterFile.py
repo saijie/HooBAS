@@ -22,7 +22,7 @@ class CenterFile(object):
     Usage of force_crystal_rot should be careful, method can be called multiple times and will rotate the table to new top
     axis successively. If non-decorated cubic lattice is sufficient, use of init = 'cubic' is simpler
     """
-    def __init__(self, options, init = 'random', surf_plane = None, Lattice = None):
+    def __init__(self, options = None, init = 'random', surf_plane = None, Lattice = None):
         """
         Init method
         :param options: structure options, must contain options.num_particles
@@ -32,24 +32,24 @@ class CenterFile(object):
         """
         self.table_size = 0
         self.table = []
-        self.__options = options
-        self.__rand_flag = False
-        self.__BoxSize = 0
-        self.__built_centers = []
-        self.__rot_flag = False
+        self.options = options
+        self.rand_flag = False
+        self.BoxSize = 0
+        self.built_centers = []
+        self.rot_flag = False
         if Lattice is None:
-            self.__lattice = [1, 1, 1]
+            self.lattice = [1, 1, 1]
         else:
-            self.__lattice = Lattice
+            self.lattice = Lattice
 
         if not (surf_plane is None) and surf_plane.__len__() == 3:
             surf_plane[:] = (x / reduce(gcd, surf_plane) for x in surf_plane)
 
-            r_vec = [surf_plane[0] / self.__lattice[0], surf_plane[1] / self.__lattice[1], surf_plane[2] / self.__lattice[2]]
-            self.__rot_mat = self.__get_rot_mat(r_vec)
-            self.__rot_flag = True
-            self.__surf_plane = CenterFile.vec(surf_plane)
-            self.__n_plane = CenterFile.vec(r_vec)
+            r_vec = [surf_plane[0] / self.lattice[0], surf_plane[1] / self.lattice[1], surf_plane[2] / self.lattice[2]]
+            self.rot_mat = self.__get_rot_mat(r_vec)
+            self.rot_flag = True
+            self.surf_plane = CenterFile.vec(surf_plane)
+            self.n_plane = CenterFile.vec(r_vec)
 
         if init == 'random':
             self.__random_table()
@@ -59,13 +59,6 @@ class CenterFile(object):
             self.__load_custom_file()
 
     # list of usual useful properties, getters and setters
-    @property
-    def options(self):
-        """
-        Return options object
-        :return: structure options
-        """
-        return self.__options
     @property
     def rot_crystal_box(self):
         """
@@ -79,38 +72,39 @@ class CenterFile(object):
         return rotation matrix of axis
         :return:
         """
-        return self.__rot_mat
+        return self.rot_mat
+
     @property
     def surface_plane(self):
         """
         returns surface plane
         :return: list
         """
-        return list(self.__surf_plane.array)
+        return list(self.surf_plane.array)
     @surface_plane.setter
     def surface_plane(self, sp):
-        self.__surf_plane = CenterFile.vec(sp)
-        self.__rot_mat = self.__get_rot_mat(sp)
-    @property
+        self.surf_plane = CenterFile.vec(sp)
+        self.rot_mat = self.__get_rot_mat(sp)
+
+    @property # DEPRECATED, legacy
     def particle_number(self):
         """
         return number of particles in the current table
         :return: int size
         """
         return self.table_size
-    @property
+
+    @property # DEPRECATED, legacy
     def built_types(self):
-        return self.__built_centers
-    @property
+        return self.built_centers
+
+    @property # overloading
     def positions(self):
         """
         get positions
         :return: table of arrays of positions
         """
         return self.table
-    @property
-    def latt(self):
-        return self.__lattice
 
     def set_filename(self, new_name):
         """
@@ -118,7 +112,7 @@ class CenterFile(object):
         :param new_name: string path
         :return: none
         """
-        self.__options.xyz_name = new_name
+        self.options.xyz_name = new_name
 
     def contract_table(self):
         """
@@ -149,47 +143,47 @@ class CenterFile(object):
         initialize the tables from optinos w/ randomly placed beads
         :return: none
         """
-        self.__BoxSize = 1.5*self.__options.target_dim / self.__options.scale_factor
+        self.BoxSize = 1.5*self.options.target_dim / self.options.scale_factor
         Table = [] # kth table contains (num_part(k),3) array of the kth particle type
-        self.__rand_flag = True
+        self.rand_flag = True
         self.table = []
         self.table_size = 0
 
         j = 0
-        while j < self.__options.num_particles.__len__():
-            Table.append(np.zeros((self.__options.num_particles[j], 3)))
+        while j < self.options.num_particles.__len__():
+            Table.append(np.zeros((self.options.num_particles[j], 3)))
             toplist_current_try = 0
             PNum = 0
-            while PNum < self.__options.num_particles[j]:
+            while PNum < self.options.num_particles[j]:
     
                 current_try = 0
                 curr_list = True
     
                 while curr_list:
-                    Table[j][PNum, 0] = (self.__BoxSize * self.__options.box_size[0]) * random.uniform(-0.5, 0.5)
-                    Table[j][PNum, 1] = (self.__BoxSize * self.__options.box_size[1]) * random.uniform(-0.5, 0.5)
-                    Table[j][PNum, 2] = (self.__BoxSize * self.__options.box_size[2]) * random.uniform(-0.5, 0.5)
+                    Table[j][PNum, 0] = (self.BoxSize * self.options.box_size[0]) * random.uniform(-0.5, 0.5)
+                    Table[j][PNum, 1] = (self.BoxSize * self.options.box_size[1]) * random.uniform(-0.5, 0.5)
+                    Table[j][PNum, 2] = (self.BoxSize * self.options.box_size[2]) * random.uniform(-0.5, 0.5)
     
                     curr_list = False
                     for i in range(Table.__len__()-1):
                         for k in range(Table[i].__len__()):
                             value = (( (Table[j][PNum,0] - Table[i][k,0])**2 + (Table[j][PNum,1] - Table[i][k,1])**2 +(Table[j][PNum,2] - Table[i][k,2])**2 )**0.5)
-                            curr_list = curr_list or value < (self.__options.size[j] + self.__options.size[i]) * self.__options.center_sec_factor / 2.0 / self.__options.scale_factor
+                            curr_list = curr_list or value < (self.options.size[j] + self.options.size[i]) * self.options.center_sec_factor / 2.0 / self.options.scale_factor
     
                     for i in range(0, PNum):
                         value = (( (Table[j][PNum,0] - Table[j][i,0])**2 + (Table[j][PNum,1] - Table[j][i,1])**2 +(Table[j][PNum,2] - Table[j][i,2])**2 )**0.5)
-                        curr_list = curr_list or value < self.__options.size[j] * self.__options.center_sec_factor / self.__options.scale_factor
+                        curr_list = curr_list or value < self.options.size[j] * self.options.center_sec_factor / self.options.scale_factor
     
     
                     current_try += 1
                     if current_try > 1000:
                         PNum = 0
-                        Table[j] = np.zeros((self.__options.num_particles[j],3))
+                        Table[j] = np.zeros((self.options.num_particles[j],3))
                         current_try = 0
                         toplist_current_try += 1
                         if toplist_current_try > 1000:
                             j = 0
-                            Table = [np.zeros((self.__options.num_particles[j],3))]
+                            Table = [np.zeros((self.options.num_particles[j],3))]
                             toplist_current_try = 0
                 PNum += 1
             j += 1
@@ -200,8 +194,8 @@ class CenterFile(object):
             self.table.append(Table[i])
 
         self.table_size += table_size
-        for i in range(self.__options.num_particles.__len__()):
-            self.__built_centers.append(self.__options.center_types[i])
+        for i in range(self.options.num_particles.__len__()):
+            self.built_centers.append(self.options.center_types[i])
 
     def __load_custom_file(self): ## still need works, need to complete associate types
         """
@@ -210,39 +204,39 @@ class CenterFile(object):
         :return: none
         """
 
-        _type, _positions = Readcenters.read_centers(self.__options.xyz_name)
+        _type, _positions = Readcenters.read_centers(self.options.xyz_name)
         _set = set(_type)
 
 
         _tmp_table = []
         _tmp_centers = list(_set)
         self.table_size = _positions.__len__()
-        self.__options.num_particles = [0]*_set.__len__()
+        self.options.num_particles = [0]*_set.__len__()
 
 
         for i in range(_type.__len__()):
-            for j in range(self.__options.num_particles.__len__()):
-                if _type[i] == self.__options.center_types[j]:
-                    self.__options.num_particles[j]+=1
+            for j in range(self.options.num_particles.__len__()):
+                if _type[i] == self.options.center_types[j]:
+                    self.options.num_particles[j]+=1
 
-        for i in range(self.__options.num_particles.__len__()):
+        for i in range(self.options.num_particles.__len__()):
             new_table = np.zeros((0, 3))
             for j in range(_positions.__len__()):
-                if self.__options.center_types[i] == _type[j]:
+                if self.options.center_types[i] == _type[j]:
                     new_table = np.append(new_table, np.array([_positions[j]]), axis = 0)
             _tmp_table.append(new_table)
 
         # order of _tmp_table may not be the same as center_types.
         _permute_list = []
         self.table = [None] * _tmp_centers.__len__()
-        self.__built_centers = [None] * _tmp_centers.__len__()
-        for i in range(self.__built_centers.__len__()):
-            for j in range(self.__options.center_types.__len__()):
-                if self.__built_centers[i] == self.__options.center_types[j]:
+        self.built_centers = [None] * _tmp_centers.__len__()
+        for i in range(self.built_centers.__len__()):
+            for j in range(self.options.center_types.__len__()):
+                if self.built_centers[i] == self.options.center_types[j]:
                     _permute_list.append(j)
         for i in range(_permute_list.__len__()):
             self.table[i] = _tmp_table[_permute_list[i]]
-            self.__built_centers = _tmp_centers[_permute_list[i]]
+            self.built_centers = _tmp_centers[_permute_list[i]]
 
     def __cubic_lattice_table(self):
         """
@@ -253,37 +247,37 @@ class CenterFile(object):
         """
         self.table = []
         self.table_size = 0
-        self.__rand_flag = False
+        self.rand_flag = False
 
-        if self.__rot_flag:
-            for i in range(self.__options.box_size.__len__()):
-                self.__options.box_size[i] *= 4
+        if self.rot_flag:
+            for i in range(self.options.box_size.__len__()):
+                self.options.box_size[i] *= 4
         # this generates convoluted 1D grids -> 3D grid
-        pitch = self.__options.target_dim / self.__options.scale_factor
-        Lat_x = np.linspace(-0.5*self.__options.box_size[0]*pitch, 0.5*self.__options.box_size[0]*pitch, num=self.__options.box_size[0]*self.__options.num_particles.__len__()+1)
-        Lat_y = np.linspace(-0.5*self.__options.box_size[1]*pitch, 0.5*self.__options.box_size[1]*pitch, num=self.__options.box_size[1]*self.__options.num_particles.__len__()+1)
-        Lat_z = np.linspace(-0.5*self.__options.box_size[2]*pitch, 0.5*self.__options.box_size[2]*pitch, num=self.__options.box_size[2]*self.__options.num_particles.__len__()+1)
-        Table =[np.zeros((0, 3)) for j in range(self.__options.num_particles.__len__())]
+        pitch = self.options.target_dim / self.options.scale_factor
+        Lat_x = np.linspace(-0.5*self.options.box_size[0]*pitch, 0.5*self.options.box_size[0]*pitch, num=self.options.box_size[0]*self.options.num_particles.__len__()+1)
+        Lat_y = np.linspace(-0.5*self.options.box_size[1]*pitch, 0.5*self.options.box_size[1]*pitch, num=self.options.box_size[1]*self.options.num_particles.__len__()+1)
+        Lat_z = np.linspace(-0.5*self.options.box_size[2]*pitch, 0.5*self.options.box_size[2]*pitch, num=self.options.box_size[2]*self.options.num_particles.__len__()+1)
+        Table =[np.zeros((0, 3)) for j in range(self.options.num_particles.__len__())]
 
         # counter use makes the type of bead switch continuously
         count = 0
         for i in range(Lat_x.__len__()-1):
             for j in range(Lat_y.__len__()-1):
                 for k in range(Lat_z.__len__()-1):
-                    Table[count % self.__options.num_particles.__len__()] = np.append(Table[count % self.__options.num_particles.__len__()], np.array([[Lat_x[i+0], Lat_y[j+0], Lat_z[k+0]]]), axis =0)
+                    Table[count % self.options.num_particles.__len__()] = np.append(Table[count % self.options.num_particles.__len__()], np.array([[Lat_x[i+0], Lat_y[j+0], Lat_z[k+0]]]), axis =0)
                     count += 1
 
-        if self.__rot_flag:
+        if self.rot_flag:
             _b_x = CenterFile.vec([pitch, 0, 0])
             _b_y = CenterFile.vec([0, pitch, 0])
 
             #new base
-            _b_x.rot(mat = self.__rot_mat)
-            _b_y.rot(mat = self.__rot_mat)
+            _b_x.rot(mat = self.rot_mat)
+            _b_y.rot(mat = self.rot_mat)
             _b_z = CenterFile.vec([0,0,1])
 
             #readjust norm of vz
-            _b_z.array /= self.__surf_plane.__norm__()
+            _b_z.array /= self.surf_plane.__norm__()
             _b_z.array *= pitch
 
             #project to (x,y) and adjust lengths.
@@ -297,14 +291,14 @@ class CenterFile(object):
             for i in range(Table.__len__()):
                 for j in range(Table[i].__len__()):
                     _tmp_dump = CenterFile.vec(list(Table[i][j,:]))
-                    _tmp_dump.rot(mat = self.__rot_mat)
+                    _tmp_dump.rot(mat = self.rot_mat)
                     Table[i][j,:] = np.array(_tmp_dump.array)
 
                     # decompose into base vectors _b_x, _b_y
                     _a1, _a2, _a3 = np.linalg.solve(_mat, _tmp_dump.array)
 
                     #check lattice params
-                    if -self.__options.box_size[0]/8 < int(round(_a1)) <= self.__options.box_size[0]/8 and -self.__options.box_size[0]/8 < int(round(_a2)) <= self.__options.box_size[0]/8 and -self.__options.box_size[0]/8 < int(round(_a3)) <= self.__options.box_size[0]/8: #<- change to the stupid boxsize option
+                    if -self.options.box_size[0]/8 < int(round(_a1)) <= self.options.box_size[0]/8 and -self.options.box_size[0]/8 < int(round(_a2)) <= self.options.box_size[0]/8 and -self.options.box_size[0]/8 < int(round(_a3)) <= self.options.box_size[0]/8: #<- change to the stupid boxsize option
                         _index_to_keep.append([i,j])
                     del _tmp_dump
 
@@ -315,8 +309,8 @@ class CenterFile(object):
                         _loc_list.append(_index_to_keep[j][1])
                 Table[i] = Table[i][_loc_list, :]
 
-            for i in range(self.__options.box_size.__len__()):
-                self.__options.box_size[i] /= 4
+            for i in range(self.options.box_size.__len__()):
+                self.options.box_size[i] /= 4
 
             self.vx = list(_b_x.array) #* self.__options.box_size[0])
             self.vy = list(_b_y.array) #* self.__options.box_size[1])
@@ -325,11 +319,11 @@ class CenterFile(object):
         self.table = Table
         for i in range(self.table.__len__()):
             self.table_size += self.table[i].__len__()
-        self.__BoxSize = pitch
+        self.BoxSize = pitch
 
-        for i in range(self.__options.num_particles.__len__()):
-            self.__options.num_particles[i] = self.table[i].__len__()
-            self.__built_centers.append(self.__options.center_types[i])
+        for i in range(self.options.num_particles.__len__()):
+            self.options.num_particles[i] = self.table[i].__len__()
+            self.built_centers.append(self.options.center_types[i])
 
     def add_particles_on_lattice(self, center_type, offset):
         """
@@ -349,16 +343,16 @@ class CenterFile(object):
         """
 
 
-        if self.__BoxSize == 0:
-            self.__BoxSize = self.__options.target_dim / self.__options.scale_factor
-            if self.__rot_flag:
-                for i in range(self.__options.box_size.__len__()):
-                    self.__options.box_size[i] *= 4  #### <------- find better stuff than *4, works fine for 110 & 111 but not general
+        if self.BoxSize == 0:
+            self.BoxSize = self.options.target_dim / self.options.scale_factor
+            if self.rot_flag:
+                for i in range(self.options.box_size.__len__()):
+                    self.options.box_size[i] *= 4  #### <------- find better stuff than *4, works fine for 110 & 111 but not general
 
-        pitch = [self.__BoxSize*self.__lattice[0], self.__BoxSize*self.__lattice[1], self.__BoxSize*self.__lattice[2]]
-        Lat_x = np.linspace(-0.5*self.__options.box_size[0]*pitch[0], 0.5*self.__options.box_size[0]*pitch[0], num=self.__options.box_size[0]+1) + offset[0]*pitch[0]
-        Lat_y = np.linspace(-0.5*self.__options.box_size[1]*pitch[1], 0.5*self.__options.box_size[1]*pitch[1], num=self.__options.box_size[1]+1) + offset[1]*pitch[1]
-        Lat_z = np.linspace(-0.5*self.__options.box_size[2]*pitch[2], 0.5*self.__options.box_size[2]*pitch[2], num=self.__options.box_size[2]+1) + offset[2]*pitch[2]
+        pitch = [self.BoxSize*self.lattice[0], self.BoxSize*self.lattice[1], self.BoxSize*self.lattice[2]]
+        Lat_x = np.linspace(-0.5*self.options.box_size[0]*pitch[0], 0.5*self.options.box_size[0]*pitch[0], num=self.options.box_size[0]+1) + offset[0]*pitch[0]
+        Lat_y = np.linspace(-0.5*self.options.box_size[1]*pitch[1], 0.5*self.options.box_size[1]*pitch[1], num=self.options.box_size[1]+1) + offset[1]*pitch[1]
+        Lat_z = np.linspace(-0.5*self.options.box_size[2]*pitch[2], 0.5*self.options.box_size[2]*pitch[2], num=self.options.box_size[2]+1) + offset[2]*pitch[2]
 
         new_table = np.zeros((0,3))
         for i in range(Lat_x.__len__()-1):
@@ -367,8 +361,8 @@ class CenterFile(object):
                     new_table = np.append(new_table, np.array([[Lat_x[i], Lat_y[j], Lat_z[k]]]), axis =0)
 
         flag = False
-        for i in range(self.__built_centers.__len__()):
-            if self.__built_centers[i] == center_type:
+        for i in range(self.built_centers.__len__()):
+            if self.built_centers[i] == center_type:
                 self.table[i] = np.append(self.table[i], new_table, axis = 0)
                 self.table_size += new_table.__len__()
                 flag = True
@@ -376,7 +370,7 @@ class CenterFile(object):
         if not flag:
             self.table.append(new_table)
             self.table_size+= new_table.__len__()
-            self.__built_centers.append(center_type)
+            self.built_centers.append(center_type)
 
     class vec(object):
         """
@@ -486,27 +480,27 @@ class CenterFile(object):
         :param max_try: maximum number of tries that the system allows (default = 10000). raises StandardError on failure
         :return: none
         """
-        if self.__BoxSize == 0:
-            self.__BoxSize = 1.7*self.__options.target_dim / self.__options.scale_factor
+        if self.BoxSize == 0:
+            self.BoxSize = 1.7*self.options.target_dim / self.options.scale_factor
 
         new_table = np.zeros((num, 3))
         i = 0
         current_try = 0
 
         while i < num:
-            new_table[i, 0] = (self.__BoxSize*self.__options.box_size[0])*random.uniform(-0.5, 0.5)
-            new_table[i, 1] = (self.__BoxSize*self.__options.box_size[1])*random.uniform(-0.5, 0.5)
-            new_table[i, 2] = (self.__BoxSize*self.__options.box_size[2])*random.uniform(-0.5, 0.5)
+            new_table[i, 0] = (self.BoxSize*self.options.box_size[0])*random.uniform(-0.5, 0.5)
+            new_table[i, 1] = (self.BoxSize*self.options.box_size[1])*random.uniform(-0.5, 0.5)
+            new_table[i, 2] = (self.BoxSize*self.options.box_size[2])*random.uniform(-0.5, 0.5)
 
             IsOk = True
             for j in range(self.table.__len__()):
                 for k in range(self.table[j].__len__()):
                     value = ((new_table[i, 0] - self.table[j][k, 0])**2 + (new_table[i, 1] - self.table[j][k, 1])**2 + (new_table[i, 2] - self.table[j][k, 2])**2)**0.5
-                    IsOk = IsOk and value > (self.__options.size[j] + particle_size)*self.__options.center_sec_factor/2.0 / self.__options.scale_factor
+                    IsOk = IsOk and value > (self.options.size[j] + particle_size)*self.options.center_sec_factor/2.0 / self.options.scale_factor
 
             for j in range(i):
                 value = ((new_table[i, 0] - new_table[j, 0])**2 + (new_table[i, 1] - new_table[j, 1])**2 + (new_table[i, 2] - new_table[j, 2])**2)*0.5
-                IsOk = IsOk and value > particle_size * self.__options.center_sec_factor / self.__options.scale_factor
+                IsOk = IsOk and value > particle_size * self.options.center_sec_factor / self.options.scale_factor
 
             if IsOk:
                 i += 1
@@ -518,10 +512,10 @@ class CenterFile(object):
                 raise StandardError('failed to add particles to list')
 
         flag = False
-        for i in range(self.__built_centers.__len__()):
-            if self.__built_centers[i] == center_type:
+        for i in range(self.built_centers.__len__()):
+            if self.built_centers[i] == center_type:
                 self.table[i] = np.append(self.table[i], new_table, axis = 0)
-                self.__options.num_particles[i] += num
+                self.options.num_particles[i] += num
                 flag = True
         if not flag:
             self.table.append(new_table)
@@ -543,18 +537,18 @@ class CenterFile(object):
         for i in range(self.table.__len__()):
             for j in range(self.table[i].__len__()):
                 _dump_vec = CenterFile.vec(self.table[i][j,:])
-                _dump_vec.rot(mat = self.__rot_mat)
+                _dump_vec.rot(mat = self.rot_mat)
                 self.table[i][j,:] = _dump_vec.array
                 del _dump_vec
 
-        _b_x = CenterFile.vec([self.__BoxSize * self.__lattice[0], 0, 0], parent_lattice=self.__lattice)
-        _b_y = CenterFile.vec([0, self.__BoxSize * self.__lattice[1], 0], parent_lattice=self.__lattice)
-        _b_z = CenterFile.vec([0, 0, 1], parent_lattice=self.__lattice)
+        _b_x = CenterFile.vec([self.BoxSize * self.lattice[0], 0, 0], parent_lattice=self.lattice)
+        _b_y = CenterFile.vec([0, self.BoxSize * self.lattice[1], 0], parent_lattice=self.lattice)
+        _b_z = CenterFile.vec([0, 0, 1], parent_lattice=self.lattice)
 
-        _b_z.array *= self.__BoxSize / self.__surf_plane.cnorm(self.__lattice)
+        _b_z.array *= self.BoxSize / self.surf_plane.cnorm(self.lattice)
 
-        _b_x.rot(mat = self.__rot_mat)
-        _b_y.rot(mat = self.__rot_mat)
+        _b_x.rot(mat = self.rot_mat)
+        _b_y.rot(mat = self.rot_mat)
 
         _b_x.s_proj_to_xy(_b_z)
         _b_y.s_proj_to_xy(_b_z)
@@ -597,8 +591,8 @@ class CenterFile(object):
         :param name: name of the centerbead dropped
         :return: none
         """
-        for i in range(self.__options.center_types.__len__()):
-            if self.__options.center_types[i] == name:
+        for i in range(self.options.center_types.__len__()):
+            if self.options.center_types[i] == name:
                 drop_index = i
         if not ('drop_index' in locals()):
             raise StandardError('Dropped name not in table')
@@ -611,9 +605,20 @@ class CenterFile(object):
         writes the current table to the file defined by options.
         :return: none
         """
-        with open(self.__options.xyz_name, 'w') as f:
+        with open(self.options.xyz_name, 'w') as f:
             f.write(str(self.table_size)+'\n')
             f.write('#######'+'\n')
-            for i in range(self.__built_centers.__len__()):
+            for i in range(self.built_centers.__len__()):
                 for j in range(0, self.table[i].__len__()):
-                    f.write(self.__built_centers[i] + ' '+str(self.table[i][j, 0])+' '+str(self.table[i][j, 1])+' '+str(self.table[i][j, 2])+'\n')
+                    f.write(self.built_centers[i] + ' '+str(self.table[i][j, 0])+' '+str(self.table[i][j, 1])+' '+str(self.table[i][j, 2])+'\n')
+
+#currently decorators, following methods may be pulled out in the near future
+# TODO : pull out the center creation and reduce the number of arguments to a minimum
+
+class OrthorhombicLattice(CenterFile):
+    def __init__(self, options = None, lattice = None, z_plane = None):
+        CenterFile.__init__(self, options, Lattice=lattice, init = 'lattice', surf_plane = z_plane)
+
+class RandomPositions(CenterFile):
+    def __init__(self, options = None):
+        CenterFile.__init__(self, options)
