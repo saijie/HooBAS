@@ -918,7 +918,7 @@ class shape(object):
 
         for i in range(self.I_fixer.intertwined_positions.__len__()):
             if self.I_fixer.intertwined_masses[i] > m_tol :
-                self.additional_points = np.append(self.additional_points, self.I_fixer.intertwined_positions[i], axis = 0)
+                self.additional_points = np.append(self.additional_points, [self.I_fixer.intertwined_positions[i]], axis = 0)
                 self.masses = np.append(self.masses, self.I_fixer.intertwined_masses[i])
                 if i % 2:
                     self.type_suffix += self.I_fixer.intertwined_types[i]
@@ -927,6 +927,7 @@ class shape(object):
                         self.internal_bonds.append([0, i+_offset, 1.0, self.flags['soft_signature']+'_IF_xx'])
                     else:
                         self.internal_bonds.append([0, i+_offset, 2**0.5, self.flags['soft_signature']+'_IF_xy'])
+
 #TODO:Add a list that tracks the positions of the I_tensor beads so that we can remove them with another method
 
     def rotate(self):

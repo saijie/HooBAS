@@ -79,7 +79,7 @@ options.step_size = 0.0005
 options.size_time = 6e6
 options.box_size_packing = 0 # leave to 0, calculated further in, initialization needed
 options.coarse_grain_power = int(0) ## coarsens DNA scaling by a power of 2. 0 is regular model. Possible to uncoarsen the regular model
-options.flag_surf_energy = False ## check for surface energy calculations; exposed plane defined later. Turn to False for regular random
+options.flag_surf_energy = True ## check for surface energy calculations; exposed plane defined later. Turn to False for regular random
 options.ini_scale = 1.00
 options.flag_dsDNA_angle = False ## Initialization values, these are calculated in the building blocks
 options.flag_flexor_angle = False
@@ -105,15 +105,16 @@ options.filenameformat = 'Test_dt_'+str(options.step_size)+'_Um_'+str(options.Um
 DNA_chain = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['X','Y','Z'])
 DNA_brush = LinearChain.DNAChain(n_ss = 1.0, n_ds = 1, sticky_end=[])
 
-shapes = [GenShape.RhombicDodecahedron(Num = 500)]
-shapes[-1].will_build_from_shapes(properties = {'size' : 5.0, 'surf_type' : 'P', 'density' : 14.29, 'nonuniformDNA' : False, 'delta' : 1.0})
-shapes[-1].set_dna(n_ss = 1, n_ds = dsL, s_end = ['X','Y','Z'], p_flex = array([-1]), num = int(102))
-#shapes[-1].set_ext_grafts(DNA_chain, num = 5, linker_bond_type = 'S-NP')
+
+shapes = [GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P'})]
+shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N'}, n_ss = 2, n_ds = 5, s_end = ['X','Y'], num = 0)
+
+shapes[-1].set_ext_grafts(DNA_chain, num = 20, linker_bond_type = 'S-NP')
 shapes[-1].set_ext_grafts(DNA_brush, num = 5, linker_bond_type = 'S-NP')
-shapes[-1].will_build_from_shapes()
+
+shapes[-1].pdb_build_table()
 shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
-
-
+shapes[-1].fix_I_moment()
 
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
@@ -201,6 +202,7 @@ options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
 options.dih_types = buildobj.dihedral_types
 
+raise StandardError
 
 system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
@@ -508,6 +510,13 @@ noions_nvt_integrator.set_params(T=options.target_temp_1)
 
 run(4e6)
 
+#current_hoomd_box = system.box
+initial_count = 0
+for p in system.particles:
+    if (p.position[0]*p.position[0] + p.position[1]*p.position[1]) > 10.5*10.5:
+        initial_count += 1
+
+
 
 evaltime = 1000
 npts = 100
@@ -519,9 +528,18 @@ logger = analyze.log(quantities=Qlog, period=1000, filename='PMFlog.log', overwr
 
 
 for i in range(npts):
-#    system.bodies[0].COM = array([0.0, 0.0, -drange[i]])
-#    system.bodies[1].COM = array([0.0, 0.0, drange[i]])
+    system.bodies[0].COM = array([0.0, 0.0, -darray[i]])
+    system.bodies[1].COM = array([0.0, 0.0, darray[i]])
     run(3e4)
+
+    count = 0
+    for p in system.particles:
+        if (p.position[0]*p.position[0] + p.position[1]*p.position[1]) > 10.5*10.5:
+            count += 1
+
+    if abs(count - initial_count) / initial_count > 0.05:
+        pass
+
     for p in system.particles:
         if p.tag < PMFlength/2:
             fxarray[i] += p.net_force[0] / 2.0

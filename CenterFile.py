@@ -621,4 +621,4 @@ class OrthorhombicLattice(CenterFile):
 
 class RandomPositions(CenterFile):
     def __init__(self, options = None):
-        CenterFile.__init__(self, options)
+        CenterFile.__init__(self, options, init = 'random')

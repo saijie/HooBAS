@@ -595,6 +595,26 @@ class BuildHoomdXML(object):
         else:
             return self.impose_box
 
+    def copy_ext_obj(self, ext_obj):
+        L = self.current_box()
+        _dmp_copy = copy.deepcopy(ext_obj)
+        for i in range(_dmp_copy.beads.__len__()):
+            _p, _fl = PeriodicBC.PeriodicBC_simple_cubic(r = copy.deepcopy(_dmp_copy.beads[i].position), L = [L[0]/2.0, L[1]/2.0, L[2]/2.0])
+            _dmp_copy.beads[i].position = _p
+            _dmp_copy.beads[i].image = _fl
+            self.beads.append(_dmp_copy.beads[i])
+        for i in range(_dmp_copy.pnum.__len__()):
+            self.__p_num.append(_dmp_copy.pnum[i])
+        for i in range(_dmp_copy.bonds.__len__()):
+            self.bonds.append(_dmp_copy.bonds[i])
+        for i in range(_dmp_copy.angles.__len__()):
+            self.angles.append(_dmp_copy.angles[i])
+        for i in range(_dmp_copy.dihedrals.__len__()):
+            self.dihedrals.append(_dmp_copy.dihedrals[i])
+        self.ext_bond_t += _dmp_copy.bond_types
+        self.ext_ang_t += _dmp_copy.angle_types
+        self.ext_dihedral_t += _dmp_copy.dihedral_types
+        del _dmp_copy
 
     def add_N_ext_obj(self, ext_obj, N):
         """

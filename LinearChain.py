@@ -562,6 +562,8 @@ class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the oth
                 self.bonds.append(['backbone', idx, idx + 1])
             if self.inner_types[idx] == 'A' and self.inner_types[idx + 1] == 'B':
                 self.bonds.append(['A-B', idx, idx + 1])
+            if self.inner_types[idx] == 'S' and self.inner_types[idx + 1] == 'B': #special case with no dsDNA
+                self.bonds.append(['S-B', idx, idx + 1])
 
             ###
             # Stuff get messier afterwards since we have a cage-like structure. for each B, there is 1 sticky + 2 flanking
