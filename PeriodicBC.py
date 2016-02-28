@@ -54,7 +54,8 @@ class vec(object):
 
 def PeriodicBC(r, opts = None, z_multi = 1.0):
 # :: grab base box vectors, decompose the points, reduce into int_bounds. way more complicated than cubic box.
-
+    if z_multi is None:
+        z_multi = 1.0
     flag = [0,0,0]
 
     #base vectors

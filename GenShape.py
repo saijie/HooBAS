@@ -798,10 +798,7 @@ class shape(object):
 
         #_offset = self.additional_points.__len__() push the table onto additional points and store it on table. TODO : Make a nicer method, this is ugly
         _offset = 1
-        if self.additional_points.__len__()>1:
-            self.table = np.append(self.additional_points, self.table, axis = 0)
-        else:
-            self.table = np.append(self.additional_points[1:, :], self.table, axis = 0)
+        self.table = np.append(self.additional_points[1:, :], self.table, axis = 0)
 
         #construct a list of nn for each particle in the table, append [i, j, r0] to the surf bond list, where i-j are the nn couples and r0 is their distance
         _dist_sq = np.zeros((self.table.__len__(), self.table.__len__())) # table of distances between i-j squared
@@ -902,7 +899,7 @@ class shape(object):
                                np.array([[1,0,0],[0,cos(v[3]), - sin(v[3])], [0,sin(v[3]), cos(v[3])]]))))
             return _sum
 
-        _opt_mass = minimize(merit_funct, x0 = np.array([1.0, 0.05, 0.10, 0.02]),bounds= ((1, self.flags['mass']), (-pi,pi), (-pi/2,pi/2), (-pi,pi)))
+        _opt_mass = minimize(merit_funct, x0 = np.array([1.0, 0.05, 0.10, 0.02]), bounds= ((1, self.flags['mass']), (-pi,pi), (-pi/2,pi/2), (-pi,pi)), method = 'SLSQP')
 
         v = _opt_mass.x
         self.rotate_tables(mat =
@@ -927,7 +924,6 @@ class shape(object):
                         self.internal_bonds.append([0, i+_offset, 1.0, self.flags['soft_signature']+'_IF_xx'])
                     else:
                         self.internal_bonds.append([0, i+_offset, 2**0.5, self.flags['soft_signature']+'_IF_xy'])
-
 #TODO:Add a list that tracks the positions of the I_tensor beads so that we can remove them with another method
 
     def rotate(self):

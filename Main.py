@@ -102,26 +102,33 @@ llen = 2
 dsL = 3
 options.filenameformat = 'Test_dt_'+str(options.step_size)+'_Um_'+str(options.Um)+'_temp_'+str(options.target_temp_1)+'_dims_'+str(options.target_dim)+'_dsL'+str(dsL)
 
-DNA_chain = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['X','Y','Z'])
+DNA_chain = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['X','Y'])
+DNA_chain2 = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['Z','Q'])
 DNA_brush = LinearChain.DNAChain(n_ss = 1.0, n_ds = 1, sticky_end=[])
 
 
-shapes = [GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P'})]
-shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N'}, n_ss = 2, n_ds = 5, s_end = ['X','Y'], num = 0)
-
-shapes[-1].set_ext_grafts(DNA_chain, num = 20, linker_bond_type = 'S-NP')
+shapes = [GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P1'})]
+shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N'}, n_ss = 2, n_ds = 5, s_end = [], num = 0) #this just creates an empty surface
+shapes[-1].set_ext_grafts(DNA_chain, num = 20, linker_bond_type = 'S-NP') # appending stuff to the defined surface
 shapes[-1].set_ext_grafts(DNA_brush, num = 5, linker_bond_type = 'S-NP')
-
 shapes[-1].pdb_build_table()
-shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
 shapes[-1].fix_I_moment()
+shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
+
+shapes.append(GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P2'}))
+shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N'}, n_ss = 2, n_ds = 5, s_end = [], num = 0)
+shapes[-1].set_ext_grafts(DNA_chain2, num = 20, linker_bond_type = 'S-NP')
+shapes[-1].set_ext_grafts(DNA_brush, num = 5, linker_bond_type = 'S-NP')
+shapes[-1].pdb_build_table()
+shapes[-1].fix_I_moment()
+shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
 
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
 ######################################################################
 
-options.sticky_pairs = [['X', 'W'], ['Y','Z']]
-options.sticky_track = []
+options.sticky_pairs = [['X', 'Q'], ['Y','Z']]
+options.sticky_track = [['X', 'Q'], ['Y','Z']]
 
 
 ###########################
@@ -139,7 +146,7 @@ options.n_double_stranded = [5]
 options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain. Does not return any error if there
 # is no flexor, but options.flag_flexor_angle will stay false
 options.n_single_stranded = [3]
-options.sticky_ends = [['X','X', 'X'], ['Y', 'Y']]
+options.sticky_ends = [['X','Q', 'Y'], ['Z', 'Y']]
 options.surface_types = ['P1', 'P2'] # Should be labeled starting with 'P'
 options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2) for i in range(64)] # initial approximation for # of beads on surface
 options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
@@ -150,11 +157,16 @@ options.int_bounds = [2, 2, 2] # for rotations, new box size, goes from -bound t
 options.exposed_surf = [0, 0, 1] ## z component must not be zero
 options.lattice_multi = [1.0, 1.0, 1.0]
 
-print 'making center file obj'
-center_file_object= CenterFile.CenterFile(options, init = None)
-center_file_object.add_one_particle(position = [0.0, 0.0, 0.0])
-#center_file_object.add_one_particle(position = [0.0, 0.0, 5.0])
-print 'center file made'
+
+center_file_object= CenterFile.CenterFile(options, init = None, surf_plane = [0,0,1], Lattice = [1, 1, 1])
+center_file_object.add_particles_on_lattice(center_type = 'W1', offset = [0.0, 0.0, 0.0])
+center_file_object.add_particles_on_lattice(center_type = 'W2', offset = [0.5, 0.5, 0.5])
+center_file_object._manual_rot_cut(int_bounds = options.int_bounds)
+options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
+options.rotm = center_file_object.rotation_matrix
+options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds)
+#center_file_object.expend_table()
+
 
 ##################################################################################################################
 ## Derived quantities, volumes are calculated in genshape functions.
@@ -164,20 +176,20 @@ print 'center file made'
 ################################
 # Making buildobj
 ################################
-options.center_types = ['W' for i in range(center_file_object.positions.__len__())]
-options.num_particles = [1 for i in range(center_file_object.positions.__len__())]
-for i in range(options.num_particles.__len__() - shapes.__len__()):
-    shapes.append(shapes[-1])
+#options.center_types = ['W' for i in range(center_file_object.positions.__len__())]
+#options.num_particles = [1 for i in range(center_file_object.positions.__len__())]
+#for i in range(options.num_particles.__len__() - shapes.__len__()):
+#    shapes.append(shapes[-1])
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
 print 'Build object constructed'
-buildobj.impose_box = [15.0, 15.0, 25.0]
+#buildobj.impose_box = [15.0, 15.0, 25.0]
 PMFlength = buildobj.num_beads
 
 #buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Na', ion_mass = 23.0/650.0,q = 1.0, ion_diam = 0.5/2.0)
 
 #buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Cl', ion_mass = 35.0/650.0, q=-1.0, ion_diam = 0.5/2.0)
 
-buildobj.set_rotation_function(mode = 'none')
+buildobj.set_rotation_function(mode = 'random')
 #buildobj.set_diameter_by_type(btype = 'W', diam = 0.0)
 #buildobj.set_diameter_by_type(btype = 'P', diam = 0.25)
 #buildobj.set_diameter_by_type(btype = 'S', diam = 0.5)
@@ -190,7 +202,7 @@ buildobj.set_rotation_function(mode = 'none')
 #buildobj.fix_remaining_charge(ptype='Na', ntype='Cl', qp=1.0, qn=-1.0, pion_mass=23.0/650, nion_mass = 35.0/650, pion_diam = 0.5/2.0, nion_diam =0.5/2.0)
 #buildobj.permittivity = 80.0
  
-buildobj.write_to_file(z_box_multi=options.z_m, export_charge= True)#, export_diameter = True)
+buildobj.write_to_file()
 
 options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
@@ -273,7 +285,7 @@ except AttributeError:
 ##################################################################################
 
 #force field setup
-lj = pair.slj(r_cut=1.5, name = 'slj')
+lj = pair.lj(r_cut=1.5, name = 'lj')
 lj.set_params(mode="shift")
 
 def attract(a,b,sigma=1.0,epsilon=1.0):
@@ -285,14 +297,14 @@ def attract(a,b,sigma=1.0,epsilon=1.0):
 def repulse(a,b,sigma=1.0,epsilon = 1.0):
     #sigma = effective radius
     #r_cut = cutoff distance at the lowest potential (will be shifted to 0)
-    #sigma = 1.00
+
     lj.pair_coeff.set(a,b,epsilon=epsilon*1.0,
                       sigma=sigma,
                       r_cut=sigma*2.0**(1.0/6))
 
 # Changed radius to a list of lists instead of tuples so it is easier to append elements to it. <- M.G.
 
-radius = [['S', 0.5], ['A', 1.0], ['B', 0.5], ['FL', 0.3], ['Na', 0.25], ['Cl',0.25]]
+radius = [['S', 0.5], ['A', 1.0], ['B', 0.5], ['FL', 0.3]]
 
 c_uniques = options.center_types
 for i in range(c_uniques.__len__()):
@@ -321,7 +333,7 @@ for i in range(options.sticky_track.__len__()):
         lja_names[i] += options.sticky_track[i][j]
 
 for i in range(options.sticky_track.__len__()):
-    lja_list.append(pair.slj(r_cut = 2.0, name = lja_names[i]))
+    lja_list.append(pair.lj(r_cut = 2.0, name = lja_names[i]))
 
     for j in range(radius.__len__()):
         for k in range(j, radius.__len__()):

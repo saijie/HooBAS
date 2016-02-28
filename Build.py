@@ -475,7 +475,7 @@ class BuildHoomdXML(object):
                 n_ind = i
 
 
-                self.__particles.append(BuildHoomdXML.Particle(center_type = self.__opts.center_types[n_ind],
+                self.__particles.append(BuildHoomdXML.Particle(center_type = self._c_t[n_ind],#self.__opts.center_types[n_ind],
                                                                loc_sh_obj = self._sh_obj[n_ind],
                                                                scale = self.__opts.scale_factor, **self._sh_obj[i].flags
                                                                ))
@@ -873,13 +873,13 @@ class BuildHoomdXML(object):
 
 
             # two cases, either we didnt care about masses in the shape and theres only 1 center bead, or we cared and theres multiples
-            if self._sh.additional_points.__len__() == 1 :
-                self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = self.mass * 2.0 / 5.0)]
-            else:
-                for i in range(self._sh.additional_points.__len__()):
-                    self.beads.append(CoarsegrainedBead.bead(position = self._sh.additional_points[i] * self.size / (2*self.scale), beadtype=center_type + self._sh.type_suffix[i], body = 0, mass = self._sh.masses[i]))
-                    self.p_num.append(self.p_num[-1]+1)
-                self.pos = np.append(self.pos, self._sh.additional_points * self.size / (2*self.scale), axis = 0)
+            #if self._sh.additional_points.__len__() == 1 :
+            self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = center_type, body = 0, mass = self.mass * 2.0 / 5.0)]
+            #else:
+            for i in range(1, self._sh.additional_points.__len__()):
+                self.beads.append(CoarsegrainedBead.bead(position = self._sh.additional_points[i] * self.size / (2*self.scale), beadtype=center_type + self._sh.type_suffix[i], body = 0, mass = self._sh.masses[i]))
+                self.p_num.append(self.p_num[-1]+1)
+            self.pos = np.append(self.pos, self._sh.additional_points[1:] * self.size / (2*self.scale), axis = 0)
 
 
 
