@@ -1292,7 +1292,12 @@ class PdbProtein(shape):
             if _s[0] == 'ATOM':
                 _l = True
                 for _k in key.iterkeys():
-                    _l = _l and _s[pdb_form[_k]] == key[_k]
+                    if hasattr(key[_k], '__iter__'): # argument passed is an iterable, e.g. 'CHAIN':[12, 14, 15]
+                        inkey = False
+                        for elem in key[_k]:
+                            inkey = inkey or _s[pdb_form[_k]] == elem
+                    else:
+                        _l = _l and _s[pdb_form[_k]] == key[_k]
                 if _l :
                     _l_list.append([float(_s[6])/20.0, float(_s[7])/20.0,float(_s[8])/20.0])
 

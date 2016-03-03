@@ -214,6 +214,21 @@ options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
 options.dih_types = buildobj.dihedral_types
 
+try :
+    for i in range(options.bond_types.__len__()):
+        _ad = False
+        for sh in range(shapes.__len__()):
+            for j in range(shapes[sh].internal_bonds.__len__()):
+                if shapes[sh].internal_bonds[j][-1] == options.bond_types[i]:
+                    #harmonic.set_coeff(options.bond_types[i], k = ktyp, r0 = shapes[sh].internal_bonds[j][-2])
+                    print shapes[sh].internal_bonds[j][-4], shapes[sh].internal_bonds[j][-3], shapes[sh].internal_bonds[j][-2], shapes[sh].internal_bonds[j][-1], buildobj.beads[shapes[sh].internal_bonds[j][-4]].positions, buildobj.beads[shapes[sh].internal_bonds[j][-3]].positions
+                    _ad = True
+                    break
+            if _ad:
+                break
+except AttributeError:
+    pass
+
 raise StandardError
 
 system = init.read_xml(filename=options.filenameformat+'.xml')
@@ -271,6 +286,7 @@ try :
             for j in range(shapes[sh].internal_bonds.__len__()):
                 if shapes[sh].internal_bonds[j][-1] == options.bond_types[i]:
                     harmonic.set_coeff(options.bond_types[i], k = ktyp, r0 = shapes[sh].internal_bonds[j][-2])
+                    print shapes[sh].internal_bonds[j][-4], shapes[sh].internal_bonds[j][-3], shapes[sh].internal_bonds[j][-2], shapes[sh].internal_bonds[j][-1], buildobj.positions[shapes[sh].internal_bonds[j][-4], :], buildobj.positions[shapes[sh].internal_bonds[j][-3], :]
                     _ad = True
                     break
             if _ad:

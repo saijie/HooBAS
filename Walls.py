@@ -222,7 +222,8 @@ class Wall(object):
         self.dihedral_types += obj.dihedral_types
 
 
-    def add_hinge_potential(self, graft_idx = -1, angle_potential = None):
+    def add_hinge_potential(self, graft_idx = -1, inner_graft_idx = 0, angle_type = None):
+        # adds a hinge potential between nn, connecting wall bead and nth chain bead
         pass
 
     def add_bond_potential(self, graft_idx = -1, inner_graft_idx = 1, bond_type = None):
