@@ -1296,6 +1296,7 @@ class PdbProtein(shape):
                         inkey = False
                         for elem in key[_k]:
                             inkey = inkey or _s[pdb_form[_k]] == elem
+                        _l = _l and inkey
                     else:
                         _l = _l and _s[pdb_form[_k]] == key[_k]
                 if _l :
