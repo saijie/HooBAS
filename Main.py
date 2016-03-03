@@ -106,21 +106,21 @@ DNA_chain = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['X','Y'])
 DNA_chain2 = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['Z','Q'])
 DNA_brush = LinearChain.DNAChain(n_ss = 1.0, n_ds = 1, sticky_end=[])
 
-
+list = [12, 15, 22]
 shapes = [GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P1'})]
-shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N'}, n_ss = 2, n_ds = 5, s_end = [], num = 0) #this just creates an empty surface
-shapes[-1].set_ext_grafts(DNA_chain, num = 20, linker_bond_type = 'S-NP') # appending stuff to the defined surface
-shapes[-1].set_ext_grafts(DNA_brush, num = 5, linker_bond_type = 'S-NP')
+shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N', 'CHAIN':list}, n_ss = 2, n_ds = 5, s_end = [], num = 0) #this just creates an empty surface
+shapes[-1].set_ext_grafts(DNA_chain, num = 2, linker_bond_type = 'S-NP') # appending stuff to the defined surface
+shapes[-1].set_ext_grafts(DNA_brush, num = 0, linker_bond_type = 'S-NP')
 shapes[-1].pdb_build_table()
 shapes[-1].fix_I_moment()
 shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
 
-list = [ 3, 4, 5]
+
 
 shapes.append(GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P2'}))
 shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N', 'CHAIN':list}, n_ss = 2, n_ds = 5, s_end = [], num = 0)
-shapes[-1].set_ext_grafts(DNA_chain2, num = 20, linker_bond_type = 'S-NP')
-shapes[-1].set_ext_grafts(DNA_brush, num = 5, linker_bond_type = 'S-NP')
+shapes[-1].set_ext_grafts(DNA_chain2, num = 2, linker_bond_type = 'S-NP')
+shapes[-1].set_ext_grafts(DNA_brush, num = 0, linker_bond_type = 'S-NP')
 shapes[-1].pdb_build_table()
 shapes[-1].fix_I_moment()
 shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)

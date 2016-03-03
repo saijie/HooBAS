@@ -1281,7 +1281,7 @@ class PdbProtein(shape):
         :return:
         """
 
-        pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 4, 'OCC' : 10, 'ATOM' : 2}
+        pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 5, 'OCC' : 10, 'ATOM' : 2}
 
         # case of no_dna key
 
@@ -1295,7 +1295,7 @@ class PdbProtein(shape):
                     if hasattr(key[_k], '__iter__'): # argument passed is an iterable, e.g. 'CHAIN':[12, 14, 15]
                         inkey = False
                         for elem in key[_k]:
-                            inkey = inkey or _s[pdb_form[_k]] == elem
+                            inkey = inkey or _s[pdb_form[_k]] == str(elem)
                         _l = _l and inkey
                     else:
                         _l = _l and _s[pdb_form[_k]] == key[_k]
