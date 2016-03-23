@@ -325,6 +325,13 @@ class CenterFile(object):
             self.options.num_particles[i] = self.table[i].__len__()
             self.built_centers.append(self.options.center_types[i])
 
+    def _fix_built_list(self):
+        if self.built_centers.__len__() == 1:
+            _ct = self.built_centers[0]
+            self.built_centers = []
+            for i in range(self.positions[0].__len__()):
+                self.built_centers.append(_ct)
+
     def add_particles_on_lattice(self, center_type, offset):
         """
         Adds particle on a orthorhombic lattice, with offset as a way to decorate (i.e. make FCC crystals), each offsets adds

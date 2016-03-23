@@ -106,11 +106,10 @@ DNA_chain = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['X','Y'])
 DNA_chain2 = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['Z','Q'])
 DNA_brush = LinearChain.DNAChain(n_ss = 1.0, n_ds = 1, sticky_end=[])
 
-list = [12, 15, 22]
-shapes = [GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P1'})]
-shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N', 'CHAIN':list}, n_ss = 2, n_ds = 5, s_end = [], num = 0) #this just creates an empty surface
-shapes[-1].set_ext_grafts(DNA_chain, num = 2, linker_bond_type = 'S-NP') # appending stuff to the defined surface
-shapes[-1].set_ext_grafts(DNA_brush, num = 0, linker_bond_type = 'S-NP')
+shapes = [GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :['LYS', 'HIS']})]
+shapes[-1].add_shell(key = {'RES':'LYS', 'ATOM':'N'}, shell_name = 'SHL1')
+shapes[-1].add_shell(key = {'RES':'HIS', 'ATOM':'C'}, shell_name = 'SHLHIS')
+shapes[-1].set_ext_shell_grafts(ext_obj=DNA_chain, num = 10, linker_bond_type = 'S-NP', shell_name = 'SHL1')
 shapes[-1].pdb_build_table()
 shapes[-1].fix_I_moment()
 shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
@@ -118,12 +117,13 @@ shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
 
 
 shapes.append(GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P2'}))
-shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N', 'CHAIN':list}, n_ss = 2, n_ds = 5, s_end = [], num = 0)
-shapes[-1].set_ext_grafts(DNA_chain2, num = 2, linker_bond_type = 'S-NP')
-shapes[-1].set_ext_grafts(DNA_brush, num = 0, linker_bond_type = 'S-NP')
+shapes[-1].add_shell(key = {'RES':'LYS', 'ATOM':'N'}, shell_name = 'SHL2')
+shapes[-1].add_shell(key = {'RES':'HIS', 'ATOM':'C'}, shell_name = 'SHL2HIS')
+shapes[-1].set_ext_shell_grafts(ext_obj=DNA_chain, num = 10, linker_bond_type = 'S-NP', shell_name = 'SHL2')
 shapes[-1].pdb_build_table()
 shapes[-1].fix_I_moment()
 shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
+
 
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
@@ -164,6 +164,7 @@ center_file_object= CenterFile.CenterFile(options, init = None, surf_plane = [0,
 center_file_object.add_particles_on_lattice(center_type = 'W1', offset = [0.0, 0.0, 0.0])
 center_file_object.add_particles_on_lattice(center_type = 'W2', offset = [0.5, 0.5, 0.5])
 center_file_object._manual_rot_cut(int_bounds = options.int_bounds)
+center_file_object._fix_built_list()
 options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
 options.rotm = center_file_object.rotation_matrix
 options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds)
@@ -178,10 +179,10 @@ options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_
 ################################
 # Making buildobj
 ################################
-#options.center_types = ['W' for i in range(center_file_object.positions.__len__())]
-#options.num_particles = [1 for i in range(center_file_object.positions.__len__())]
-#for i in range(options.num_particles.__len__() - shapes.__len__()):
-#    shapes.append(shapes[-1])
+options.center_types = ['W' for i in range(center_file_object.positions.__len__())]
+options.num_particles = [1 for i in range(center_file_object.positions.__len__())]
+for i in range(options.num_particles.__len__() - shapes.__len__()):
+    shapes.append(shapes[-1])
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
 print 'Build object constructed'
 #buildobj.impose_box = [15.0, 15.0, 25.0]
@@ -192,6 +193,7 @@ PMFlength = buildobj.num_beads
 #buildobj.add_rho_molar_ions(rho = 0.4, qtype = 'Cl', ion_mass = 35.0/650.0, q=-1.0, ion_diam = 0.5/2.0)
 
 buildobj.set_rotation_function(mode = 'random')
+buildobj.rename_type_by_RE('W', 'W')
 #buildobj.set_diameter_by_type(btype = 'W', diam = 0.0)
 #buildobj.set_diameter_by_type(btype = 'P', diam = 0.25)
 #buildobj.set_diameter_by_type(btype = 'S', diam = 0.5)
@@ -223,7 +225,9 @@ try :
             for j in range(shapes[sh].internal_bonds.__len__()):
                 if shapes[sh].internal_bonds[j][-1] == options.bond_types[i]:
                     #harmonic.set_coeff(options.bond_types[i], k = ktyp, r0 = shapes[sh].internal_bonds[j][-2])
-                    print shapes[sh].internal_bonds[j][-4], shapes[sh].internal_bonds[j][-3], shapes[sh].internal_bonds[j][-2], shapes[sh].internal_bonds[j][-1], buildobj.beads[shapes[sh].internal_bonds[j][-4]].positions, buildobj.beads[shapes[sh].internal_bonds[j][-3]].positions
+                    _bd = Build.vec(array(buildobj.beads[shapes[sh].internal_bonds[j][-4]].position) - array(buildobj.beads[shapes[sh].internal_bonds[j][-3]].position))
+                    if abs(_bd.__norm__() - shapes[sh].internal_bonds[j][-2])>0.001 :
+                        print shapes[sh].internal_bonds[j][-4], shapes[sh].internal_bonds[j][-3], shapes[sh].internal_bonds[j][-2], shapes[sh].internal_bonds[j][-1], buildobj.beads[shapes[sh].internal_bonds[j][-4]].position,buildobj.beads[shapes[sh].internal_bonds[j][-3]].position
                     _ad = True
                     break
             if _ad:
@@ -280,7 +284,7 @@ Sangle.set_coeff('A-B-B', k=2.0, t0=pi)
 Sangle.set_coeff('C-C-endFL', k=50.0, t0=pi)
 
 
-ktyp = 8000.00
+ktyp = 80000.00
 try :
     for i in range(options.bond_types.__len__()):
         _ad = False

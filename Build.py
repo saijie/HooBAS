@@ -903,9 +903,11 @@ class BuildHoomdXML(object):
             else:
 
                 if 'multiple_surface_types' in self._sh.flags and self._sh.flags['multiple_surface_types'].__len__()>1:
-                    self.__build_soft_shells() #unimplemented yet
+                    self.__build_soft_shells()
                     self.flags['mst'] = True
-                    if 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
+                    if 'shell' in self._sh.flags:
+                        init = 'shell'
+                    elif 'pdb_object' in self._sh.flags and self._sh.flags['pdb_object'] is True:
                         init = 'pdb'
                     else:
                         init = 'mst'
@@ -927,6 +929,8 @@ class BuildHoomdXML(object):
                         self.add_DNA(n_ds = n_ds[i], n_ss = n_ss[i], p_flex = p_flex[i], s_end = s_end[i], num = num[i], scale = self.scale, rem_id=i)
             elif init == 'pdb':
                 self.pdb_DNA_keys()
+            elif init == 'shell':
+                self.build_shell() # add this
             # need to add a method for diferent surfaces + diff dna to each surface
 
 
@@ -983,8 +987,13 @@ class BuildHoomdXML(object):
             for i in range(self.att_list.__len__()):
                 for j in range(self.att_list[i].__len__()):
                     self.att_list[i][j] += off
-            for i in range(self.rem_list.__len__()):
-                self.rem_list[i] += off
+            if not self.flags['mst']:
+                for i in range(self.rem_list.__len__()):
+                    self.rem_list[i] += off
+            else:
+                for rmlst in self.rem_list:
+                    for el in rmlst:
+                        el += off
         @property
         def num_beads(self):
             return self.beads.__len__()
@@ -1170,8 +1179,8 @@ class BuildHoomdXML(object):
             if self.flags['mst']:
                 if num > self.rem_list[rem_id].__len__():
                     raise ValueError('DNA chain number greater than number of surface beads')
-                elif num > self.rem_list.__len__():
-                    raise ValueError('DNA chain number greater than number of surface beads')
+            elif num > self.rem_list.__len__():
+                raise ValueError('DNA chain number greater than number of surface beads')
             try:
                 self.sticky_used.append(self._sh.ext_objects[EXT_IDX].sticky_end)
             except AttributeError:
@@ -1179,7 +1188,7 @@ class BuildHoomdXML(object):
             _tmp_a_list = []
             while _tmp_a_list.__len__() < num:
                 if self.flags['mst']:
-                    _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
+                    _tmp_a_list.append(self.rem_list[rem_id].pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
                 else:
                     _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list.__len__()-1)))
 
@@ -1225,6 +1234,11 @@ class BuildHoomdXML(object):
                 for i in range(self._sh.keys['EXT'].__len__()):
                     self.graft_EXT(rem_id = i + offset, **self._sh.keys['EXT'][i][1])
 
+        def build_shell(self):
+            for shl_idx in range(self._sh.keys['shell'].__len__()):
+                for ext_idx in range(self._sh.keys['shell'][shl_idx][2].__len__()):
+                    self.graft_EXT(rem_id = shl_idx, **self._sh.keys['shell'][shl_idx][2][ext_idx])
+
         def __build_soft_shell(self):
             for i in range(self.beads.__len__()):
                 self.beads[i].body = -1
@@ -1237,3 +1251,41 @@ class BuildHoomdXML(object):
             for i in range(self._sh.internal_bonds.__len__()):
                 self.bonds.append([self._sh.internal_bonds[i][-1], self._sh.internal_bonds[i][0], self._sh.internal_bonds[i][1]])
 
+        def __build_soft_shells(self):
+            for i in range(self.beads.__len__()):
+                self.beads[i].body = -1
+            self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / (2*self.scale)), axis = 0)
+
+            if not hasattr(self.s_type, '__iter__'):
+                self.s_type = [self.s_type]
+                if not 'warnings' in self.flags:
+                    self.flags['warnings'] = ['Build : Particle(object) : __build_soft_shells() : Surface types are not iterable while trying to build multiple shells, assuming string was passed; padding']
+                else:
+                    self.flags['warnings'].append('Build : Particle(object) : __build_soft_shells() : Surface types are not iterable while trying to build multiple shells, assuming string was passed; padding')
+
+            _c = 0
+            if self._sh.flags['multiple_surface_types'].__len__() > self.s_type.__len__() == 1:
+                _temp = self.s_type[0]
+                self.s_type = [_temp + str(i) for i in range(self._sh.flags['multiple_surface_types'].__len__())]
+            elif self._sh.flags['multiple_surface_types'].__len__() > self.s_type.__len__():
+                self.s_type = self.s_type + [self.s_type[0] + str(i) for i in range(self._sh.flags['multiple_surface_types'].__len__() - self.s_type.__len__())]
+                if not 'warnings' in self.flags:
+                    self.flags['warnings'] = []
+                self.flags['warnings'].append(['Build : Particle(object) : __build_soft_shells() : Differing lengths in # of shells compared to number of surfaces names; padding with name[0] + number'])
+            elif self._sh.flags['multiple_surface_types'] < self.s_type.__len__():
+                if not 'warnings' in self.flags:
+                    self.flags['warnings'] = []
+                self.flags['warnings'].append(['Build : Particle(object) : __build_soft_shells() : Lengths of surface types greater than the number of shells to build. Some names will remain unused'])
+
+            for i in range(self._sh.flags['multiple_surface_types'].__len__()):
+                self.rem_list.append([])
+                while _c < self._sh.flags['multiple_surface_types'][i]:
+                    self.rem_list[-1].append(1+self.p_num[-1])
+                    self.p_num.append(1 + self.p_num[-1])
+                    self.beads.append(CoarsegrainedBead.bead(position=self._sh.pos[_c] * self.size / (2*self.scale), beadtype = self.s_type[i], body = -1, mass = self.s_mass))
+                    _c  += 1
+            for i in range(self._sh.internal_bonds.__len__()):
+                self.bonds.append([self._sh.internal_bonds[i][-1], self._sh.internal_bonds[i][0], self._sh.internal_bonds[i][1]])
+
+
+            pass

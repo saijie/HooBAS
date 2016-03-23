@@ -155,6 +155,7 @@ class shape(object):
             surf_plane[:] = (x / reduce(gcd, surf_plane) for x in surf_plane)
             r_vec = [surf_plane[0] / self.__lattice[0], surf_plane[1] / self.__lattice[1], surf_plane[2] / self.__lattice[2]]
             self.__rot_mat = self.__get_rot_mat(surf_plane)
+            self.srot_mat = self.__rot_mat # temp fix
             self.__surf_plane = vec(surf_plane)
             self.__n_plane = vec(r_vec)
         elif surf_plane is None :
@@ -223,6 +224,9 @@ class shape(object):
             return _id
 
         return  _id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2)
+
+    def mat_from_plane(self, plane):
+        return self.__get_rot_mat(plane)
 
     def write_table(self, filename = None):
         if filename is None :
@@ -814,7 +818,7 @@ class shape(object):
             for j in range(1, _dumpsort.__len__()):
                 _curr = True
                 for k in range(self.internal_bonds.__len__()): # check whether we already appended this bond
-                    if self.internal_bonds[k][0] == _dumpsort[j] and self.internal_bonds[k][1] == i:
+                    if self.internal_bonds[k][0] == _dumpsort[j]+_offset and self.internal_bonds[k][1] == i + _offset:
                         _curr = False
                 if _curr:
                     _ind_to_add.append(_dumpsort[j])
@@ -1282,9 +1286,7 @@ class PdbProtein(shape):
         """
 
         pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 5, 'OCC' : 10, 'ATOM' : 2}
-
         # case of no_dna key
-
         _l_list = []
 
         for _line in self._pdb:
@@ -1336,9 +1338,100 @@ class PdbProtein(shape):
                     self.table = np.append(self.table, [np.array([self.keys['dna'][_k][0][_kk][0], self.keys['dna'][_k][0][_kk][1], self.keys['dna'][_k][0][_kk][2]])-com], axis = 0)
                     _cnt += 1
                 _t.append(_cnt)
+        if 'shell' in self.keys:
+            for shl in self.keys['shell']:
+                for idx in shl[1]:
+                    self.table = np.append(self.table, [np.array([idx[0], idx[1], idx[2]]) - com], axis = 0)
+                    _cnt += 1
+                _t.append(_cnt)
 
         if _t.__len__() > 1:
             self.flags['multiple_surface_types'] = _t
+
+    def add_shell(self, key, shell_name = None):
+        """
+        Adds a shell to the protein object. Able to key multiple commands onto the same shell
+
+        self.flags['shell'] is defined as a list of [ shell_name, positions, [dictionaries] ], this backtracks all previous shells
+        to make sure that no particle is added twice. It is possible to create an empty shell
+
+        :param key:
+        :param shell_name:
+        :return:
+        """
+
+        pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 5, 'OCC' : 10, 'ATOM' : 2}
+
+        if not 'shell' in self.keys:
+            self.keys['shell'] = []
+            self.flags['shell'] = True
+        _l_list = []
+        for _line in self._pdb:
+            _s = _line.strip().split()
+            if _s[0] == 'ATOM':
+                _l = True
+                for _k in key.iterkeys():
+                    if hasattr(key[_k], '__iter__'): # argument passed is an iterable, e.g. 'CHAIN':[12, 14, 15]
+                        inkey = False
+                        for elem in key[_k]:
+                            inkey = inkey or _s[pdb_form[_k]] == str(elem)
+                        _l = _l and inkey
+                    else:
+                        _l = _l and _s[pdb_form[_k]] == key[_k]
+
+                for _shell_idx in range(self.keys['shell'].__len__()):
+                    if not _l :
+                        break
+                    for _pos in self.keys['shell'][_shell_idx][1]:
+                        if _pos[0] == float(_s[6])/20.0 and _pos[1] == float(_s[7])/20.0 and _pos[2] == float(_s[8])/20.0 :
+                            _l = False
+                            break
+                if _l :
+                    _l_list.append([float(_s[6])/20.0, float(_s[7])/20.0,float(_s[8])/20.0])
+
+        # find whether we need to append this to an existing shell or to create a new one
+        _new_shl = True
+        for i in range(self.keys['shell'].__len__()):
+            if self.keys['shell'][i][0] == shell_name:
+                _new_shl = False
+                _shl_idx = i
+                break
+        if _new_shl:
+            _shl_idx = -1
+            self.keys['shell'].append([ shell_name, _l_list, [] ])
+        else:
+            self.keys['shell'][_shl_idx][1] += _l_list
+
+    def set_ext_shell_grafts(self, ext_obj, num = None, linker_bond_type = None, shell_name = None):
+        """
+        Overrides the default graft behavior by using shells. The key arguments point to a shell name defined by add_shell
+        methods. If no key is specified, it grafts onto the first shell. If no shells are defined it does nothing
+        :param ext_obj: external_object to be grafted onto the shell
+        :param num:
+        :param linker_bond_type:
+        :return:
+        """
+
+        if not 'shell' in self.flags:
+            if not 'warnings' in self.flags:
+                self.flags['warnings'] = []
+            self.flags['warnings'].append(['GenShape : PdbProtein(object) : set_ext_shell_grafts() : Trying to add external objects to shell ' + shell_name + ' while no shells are defined'])
+            return
+
+        # get the shell index where we need to append stuff
+        _shl_idx = -1
+        for cshl in range(self.keys['shell'].__len__()):
+            if self.keys['shell'][cshl][0] == shell_name:
+                _shl_idx = cshl
+                break
+        if _shl_idx == -1:
+            if not 'warnings' in self.flags:
+                self.keys['warnings'] = []
+            self.keys['warnings'].append(['GenShape : PdbProtein(object) : set_ext_shell_grafts() : Cannot find the shell named ' + shell_name + ' in the shell list, ignoring command'])
+            return
+        self.ext_objects.append(ext_obj)
+        self.keys['shell'][_shl_idx][2].append({'EXT_IDX':self.ext_objects.__len__() - 1, 'num' : num, 'linker_type' : linker_bond_type})
+
 
 class Sphere(shape):
     def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Num = None):
