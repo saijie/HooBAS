@@ -1311,7 +1311,7 @@ class PdbProtein(shape):
                 self.keys['no_dna'] = [[_l_list, key]]
         else:
             try:
-                self.keys['dna'].append([_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex}])
+                self.keys['dna'].append([_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num}])
             except KeyError:
                 self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
 

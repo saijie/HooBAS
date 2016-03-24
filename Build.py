@@ -1082,7 +1082,7 @@ class BuildHoomdXML(object):
             if buniform: #normal case of uniform coverage of dna
                 while _tmp_a_list.__len__() < num:
                     if self.flags['mst']:
-                        _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
+                        _tmp_a_list.append(self.rem_list[rem_id].pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
                     else:
                         _tmp_a_list.append(self.rem_list.pop(random.randint(0, self.rem_list.__len__()-1)))
 
@@ -1286,6 +1286,3 @@ class BuildHoomdXML(object):
                     _c  += 1
             for i in range(self._sh.internal_bonds.__len__()):
                 self.bonds.append([self._sh.internal_bonds[i][-1], self._sh.internal_bonds[i][0], self._sh.internal_bonds[i][1]])
-
-
-            pass

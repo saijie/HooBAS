@@ -106,25 +106,28 @@ DNA_chain = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['X','Y'])
 DNA_chain2 = LinearChain.DNAChain(n_ss = 1.0, n_ds = dsL, sticky_end=['Z','Q'])
 DNA_brush = LinearChain.DNAChain(n_ss = 1.0, n_ds = 1, sticky_end=[])
 
-shapes = [GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :['LYS', 'HIS']})]
-shapes[-1].add_shell(key = {'RES':'LYS', 'ATOM':'N'}, shell_name = 'SHL1')
-shapes[-1].add_shell(key = {'RES':'HIS', 'ATOM':'C'}, shell_name = 'SHLHIS')
-shapes[-1].set_ext_shell_grafts(ext_obj=DNA_chain, num = 10, linker_bond_type = 'S-NP', shell_name = 'SHL1')
+with_dna = genfromtxt("with_dna.dat",dtype=str)
+no_dna = genfromtxt("no_dna.dat",dtype=str)
+
+shapes = [GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' : 'P1'})]
+#shapes[-1].add_shell(key = {'RES':'LYS', 'ATOM':'N','CHAIN':with_dna}, shell_name = 'SHL1')
+#shapes[-1].add_shell(key = {'RES':'LYS', 'ATOM':'N', 'CHAIN':no_dna}, shell_name = 'SHLHIS')
+shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N','CHAIN':with_dna}, n_ss = 1, n_ds = 2, s_end = ['X','Y'], num = 5)
+shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N','CHAIN':no_dna}, n_ss = 1, n_ds = 2, s_end = ['Z','Q'], num = 5)
+#shapes[-1].set_ext_shell_grafts(ext_obj=DNA_chain, num = 40, linker_bond_type = 'S-NP', shell_name = 'SHL1')
 shapes[-1].pdb_build_table()
 shapes[-1].fix_I_moment()
-shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
+shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 1)
+shapes[-1].reduce_internal_DOF()
 
-
-
-shapes.append(GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :'P2'}))
-shapes[-1].add_shell(key = {'RES':'LYS', 'ATOM':'N'}, shell_name = 'SHL2')
-shapes[-1].add_shell(key = {'RES':'HIS', 'ATOM':'C'}, shell_name = 'SHL2HIS')
-shapes[-1].set_ext_shell_grafts(ext_obj=DNA_chain, num = 10, linker_bond_type = 'S-NP', shell_name = 'SHL2')
+shapes.append(GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :['P2','P2']}))
+shapes[-1].add_shell(key = {'RES':'LYS', 'ATOM':'N','CHAIN':with_dna}, shell_name = 'SHL1')
+shapes[-1].add_shell(key = {'RES':'LYS', 'ATOM':'N', 'CHAIN':no_dna}, shell_name = 'SHLHIS')
+shapes[-1].set_ext_shell_grafts(ext_obj=DNA_chain2, num = 40, linker_bond_type = 'S-NP', shell_name = 'SHL1')
 shapes[-1].pdb_build_table()
 shapes[-1].fix_I_moment()
-shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
-
-
+shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 1)
+shapes[-1].reduce_internal_DOF()
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
 ######################################################################
@@ -154,7 +157,7 @@ options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2) f
 options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
 options.volume = options.densities[:] # temp value, is set by genshape
 options.p_surf = options.densities[:] # same
-options.int_bounds = [2, 2, 2] # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
+options.int_bounds = [1, 1, 1] # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
 options.exposed_surf = [0, 0, 1] ## z component must not be zero
 options.lattice_multi = [1.0, 1.0, 1.0]
@@ -179,10 +182,10 @@ options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_
 ################################
 # Making buildobj
 ################################
-options.center_types = ['W' for i in range(center_file_object.positions.__len__())]
-options.num_particles = [1 for i in range(center_file_object.positions.__len__())]
-for i in range(options.num_particles.__len__() - shapes.__len__()):
-    shapes.append(shapes[-1])
+#options.center_types = ['W' for i in range(center_file_object.positions.__len__())]
+#options.num_particles = [1 for i in range(center_file_object.positions.__len__())]
+#for i in range(options.num_particles.__len__() - shapes.__len__()):
+#    shapes.append(shapes[-1])
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
 print 'Build object constructed'
 #buildobj.impose_box = [15.0, 15.0, 25.0]
@@ -235,7 +238,6 @@ try :
 except AttributeError:
     pass
 
-raise StandardError
 
 system = init.read_xml(filename=options.filenameformat+'.xml')
 mol2 = dump.mol2()
