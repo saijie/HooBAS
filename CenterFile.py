@@ -128,15 +128,20 @@ class CenterFile(object):
             for i in range(self.table[counter].__len__()-1):
                 self.table.append( np.resize(self.table[counter][-1], new_shape=(1,3)))
                 self.table[counter] = np.delete(self.table[counter], -1, 0)
+                self.built_centers.append(self.built_centers[counter])
             counter +=1
 
-    def add_one_particle(self, position, list_number = 0):
+    def add_one_particle(self, position, list_number = 0, ctype = 'W'):
         try:
             self.table[list_number] = np.append(self.table[0], np.array([[position[0], position[1], position[2]]]), axis = 0)
         except IndexError:
             if self.table.__len__() == list_number:
                 self.table.append(np.array([[position[0], position[1], position[2]]]))
+            if not ctype in self.built_centers:
+                self.built_centers.append(ctype)
         self.table_size += 1
+
+
 
     def __random_table(self):
         """

@@ -153,7 +153,7 @@ class BuildHoomdXML(object):
         self.__opts = opts
         self.impose_box = []
         self.flaglist = {}
-
+        self.warnings = []
         # list of properties defined in the Hoomd xml formats. First list refers to particle properties, second to bonded interaction types
         self.xml_proplist = ['velocity', 'acceleration', 'diameter', 'charge', 'body', 'orientation', 'angmom', 'moment_inertia', 'image']
         self.xml_inter_prop_list = ['bonds', 'angles', 'dihedrals', 'impropers']
@@ -164,6 +164,10 @@ class BuildHoomdXML(object):
         self.ext_improper_t = []
 
         self.charge_normalization = 1.00
+
+        self.c_salt = 0.0
+        self.Xsalt = np.array([0.0, 0.4865, 0.6846, 1.0, 2.0, 3.0, 4.0, 5.0], dtype= float)
+        self.Ysalt = np.array([71.7457, 62.5617, 60.1328, 56.5655, 47.8368, 40.2467, 35.8444, 32.2770], dtype = float)
 
         if init is None:
             self._c_pos = center_obj.positions
@@ -176,6 +180,7 @@ class BuildHoomdXML(object):
             self._c_t = center_obj.built_types
             self._sh_obj = shapes
             self.__build_from_shapes()
+        self.collect_warnings()
 
     @staticmethod
     def get_rot_mat(cubic_plane):
@@ -307,6 +312,52 @@ class BuildHoomdXML(object):
     @permittivity.setter
     def permittivity(self, val):
         self.charge_normalization = val**0.5
+    @property
+    def charge_list(self):
+        _tlist = []
+        for bead in self.beads:
+            if abs(bead.charge) > 1e-5: # double compare
+                _tlist.append([bead.beadtype])
+        return list(set(list(chain.from_iterable(_tlist))))
+
+    def collect_warnings(self):
+        for particle in self.__particles:
+            try:
+                self.warnings.append(particle.flags['warnings'])
+                for warn in particle.flags['warnings']:
+                    raise Warning(warn)
+            except KeyError:
+                pass
+
+    def get_type_charge_product(self, typeA, typeB):
+        _qa = 0.0
+        _qb = 0.0
+        # define some bools so we dont iterate for no reason
+        _qaf = False
+        _qbf = False
+        for bead in self.beads:
+            if bead.beadtype == typeA:
+                _qa = bead.charge * self.charge_normalization
+                _qaf = True
+            if bead.beadtype == typeB:
+                _qb = bead.charge * self.charge_normalization
+                _qbf = True
+            if _qaf and _qbf:
+                break
+        if not _qaf:
+            print 'Build : get_type_charge_product : Did not find type ' + typeA + ' in the lists, returned 0 for charge product'
+        if not _qbf:
+            print 'Build : get_type_charge_product : Did not find type ' + typeB + ' in the lists, returned 0 for charge product'
+        return _qa * _qb
+
+    def set_eps_to_salt(self, val):
+        self.c_salt = val
+        # curve source :
+        # J-W Shen, C. Li, N. F. A. Vegt, C. Peter,
+        # Transferability of coarse grained potentials : implicit solver models for hydrated ions,
+        #  J. Chem. Th. and Comp., 2011
+
+        self.permittivity = np.interp(val, self.Xsalt, self.Ysalt) * 0.2 # <- hoomd charge normalization
 
     def set_charge_to_pnum(self):
         for i in range(self.beads.__len__()):
@@ -427,11 +478,29 @@ class BuildHoomdXML(object):
                 _r_m = self.get_rot_mat(self.__particles[i].orientation.array)
                 self.__particles[i].rotate(_r_m)
 
-        if mode == 'random':
+        if mode == 'random' and mode_opts is None:
             # just random orientations
             for i in range(self.__particles.__len__()):
                 _r_m = self.gen_random_mat()
                 self.__particles[i].rotate(_r_m)
+
+        if mode == 'random' and hasattr(mode_opts, '__iter__'):
+            for particle in self.__particles:
+                _loc_logic_acc = True
+                for prop in mode_opts:
+                    if hasattr(particle, prop):
+                        _loc_logic_acc = _loc_logic_acc and getattr(particle, prop) == mode_opts[prop]
+                    elif hasattr(particle.flags, prop):
+                        _loc_logic_acc = _loc_logic_acc and getattr(particle.flags, prop) == mode_opts[prop]
+                    elif hasattr(particle.shape_flag, prop):
+                        _loc_logic_acc = _loc_logic_acc and getattr(particle.shape_flag, prop) == mode_opts[prop]
+                    else:
+                        _loc_logic_acc = False
+                        raise Warning('Build : set_rotation_function : attribute '+ str(prop) + ' not found in particle')
+                if _loc_logic_acc:
+                    _r_m = self.gen_random_mat()
+                    particle.rotate(_r_m)
+
         if mode == 'corr' and False: #unfinished
             gridphi = np.linspace(0, pi, 50)
             gridth = np.linspace(-pi, pi, 50)
@@ -950,7 +1019,7 @@ class BuildHoomdXML(object):
             return list(set(list(chain.from_iterable(self.sticky_used))))
         @property
         def center_type(self):
-            return self.c_type
+            return self.beads[0].beadtype
         @property
         def body(self):
             return self.body_num
@@ -1031,6 +1100,13 @@ class BuildHoomdXML(object):
                         _loc_tag.append(self.p_num[i])
                 _tag+=_loc_tag
             return _tag
+        @property
+        def shape_class(self):
+            return type(self._sh).__name__
+        @property
+        def shape_flag(self):
+            return self._sh.flags
+
 
         def sticky_excluded(self, _types, _rc = None):
             _exclusion_list = []

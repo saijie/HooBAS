@@ -96,6 +96,11 @@ options.size = [28.5/5.0]
 options.num_particles = [27]
 options.center_types = ['W'] #Should be labeled starting with 'W', must have distinct names
 
+def FSCoulomb(r, rmin, rmax, alpha, qiqj):
+    V = qiqj * (erfc(alpha * r)/ r - erfc(alpha * rmax) / rmax + (r-rmax) * erfc(alpha * rmax) / rmax**2.0 + 2* alpha / pi**0.5 * (r-rmax) * exp(-alpha**2.0 * rmax**2.0) / rmax)
+    F = qiqj * (erfc(alpha * r)/r**2.0 + 2 * alpha / pi**0.5 * exp(-alpha**2.0 * r**2.0) /r - erfc(alpha * rmax) / rmax**2.0 - 2* alpha / pi**0.5 *exp(-alpha**2.0 * rmax**2.0)/ rmax)
+    return (V,F)
+
 print 'setting up shapes'
 
 llen = 2
@@ -117,7 +122,7 @@ shapes[-1].add_pdb_dna_key(key = {'RES':'LYS', 'ATOM':'N','CHAIN':no_dna}, n_ss 
 #shapes[-1].set_ext_shell_grafts(ext_obj=DNA_chain, num = 40, linker_bond_type = 'S-NP', shell_name = 'SHL1')
 shapes[-1].pdb_build_table()
 shapes[-1].fix_I_moment()
-shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 1)
+shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 5)
 shapes[-1].reduce_internal_DOF()
 
 shapes.append(GenShape.PdbProtein(filename = '4BLC.pdb', properties = {'surf_type' :['P2','P2']}))

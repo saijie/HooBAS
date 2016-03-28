@@ -1535,3 +1535,5 @@ class RhombicDodecahedron(shape):
         self.flags['surface'] = 8*2**0.5 * 2**2
         self.flags['simple_I_tensor'] = True
         self.flags['call'] = 'rh_dodec'
+
+
