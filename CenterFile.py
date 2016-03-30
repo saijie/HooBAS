@@ -1,11 +1,12 @@
 __author__ = 'martin'
 
-
+import random
+from fractions import gcd
 
 import numpy as np
-import random
+
 import Readcenters
-from fractions import gcd
+
 
 class CenterFile(object):
     """
@@ -57,7 +58,11 @@ class CenterFile(object):
             self.__cubic_lattice_table()
         elif init == 'file':
             self.__load_custom_file()
-
+        self.vx = [self.BoxSize, 0.0, 0.0]
+        self.vy = [0.0, self.BoxSize, 0.0]
+        self.vz = [0.0, 0.0, self.BoxSize]
+        self.vmat = np.array([self.vx, self.vy, self.vz])
+        self.intbounds = [1, 1, 1]
     # list of usual useful properties, getters and setters
     @property
     def rot_crystal_box(self):
@@ -394,7 +399,7 @@ class CenterFile(object):
             if array.__len__() <1:
                 del self
             if parent_lattice is None :
-                parent_lattice = [1, 1, 1]
+                self.latt = [1.0, 1.0, 1.0]
             else:
                 self.latt = parent_lattice
 
@@ -437,6 +442,8 @@ class CenterFile(object):
             return _c
         def rot(self,mat):
             self.array = mat.dot(self.array)
+        def irot(self,mat):
+            self.array = np.linalg.inv(mat).dot(self.array)
         def s_proj_to_xy(self, vz):
             """
             special projection to (x,y) plane, rescales by |vz| / vec.z
@@ -468,7 +475,7 @@ class CenterFile(object):
         if _v.array[0] == 0.0 and _v.array[1] == 0.0: # surface is [001]
             return _id
 
-        return  _id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2)
+        return  np.linalg.inv(_id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2))
 
     def center_to_zero(self):
         _mean = [0,0,0]
@@ -596,7 +603,93 @@ class CenterFile(object):
         self.vx = list(_b_x.array)
         self.vy = list(_b_y.array)
         self.vz = list(_b_z.array)
+        self.int_bounds = int_bounds
+    def rotate_and_cut(self, int_bounds):
+        """
+        rotates the crystal system so that the surface plane faces the Z direction. The new crystal axes are generally
+        trigonal in nature and the number of cubes is prod(int_bounds). This does not preserve crystallinity in Z,
 
+        Possible to use the function multiple times in a row to cause multiple rotations & cuts
+
+        :param int_bounds: list of length 3 of integer bounds
+        :return: none
+        """
+
+
+        for i in range(self.table.__len__()):
+            for j in range(self.table[i].__len__()):
+                _dump_vec = CenterFile.vec(self.table[i][j,:])
+                _dump_vec.rot(mat = self.rot_mat)
+                self.table[i][j,:] = _dump_vec.array
+                del _dump_vec
+
+        _b_x = CenterFile.vec([self.BoxSize * self.lattice[0], 0, 0], parent_lattice=self.lattice)
+        _b_y = CenterFile.vec([0, self.BoxSize * self.lattice[1], 0], parent_lattice=self.lattice)
+        _b_z = CenterFile.vec([0, 0, self.BoxSize * self.lattice[2]], parent_lattice=self.lattice)
+
+        _b_x.rot(mat = self.rot_mat)
+        _b_y.rot(mat = self.rot_mat)
+        _b_z.rot(mat = self.rot_mat)
+
+
+        if self.surf_plane.z != 0 and (self.surf_plane.x != 0 or self.surf_plane.y != 0):
+            _b_xN = CenterFile.vec(_b_x.array * self.surf_plane.y - _b_y.array * self.surf_plane.x)
+        elif self.surf_plane.array[2] != 0:
+            _b_xN = _b_x
+        else:
+            _b_xN = CenterFile.vec(_b_x.array)
+
+        if self.surf_plane.z != 0 and self.surf_plane.x != 0:
+            _b_yN = CenterFile.vec(_b_x.array * self.surf_plane.z- _b_z.array * self.surf_plane.x)
+        elif self.surf_plane.array[2] != 0 and (self.surf_plane.y != 0):
+            _b_yN = CenterFile.vec(_b_y.array * self.surf_plane.z - _b_z.array * self.surf_plane.y)
+        else:
+            _b_yN = CenterFile.vec(_b_y.array)
+
+
+        _b_z.array = _b_x.array * self.surf_plane.x + _b_y.array * self.surf_plane.y #np.array([0.0, 0.0, self.BoxSize*self.surf_plane.array[2] * self.lattice[2]])
+        _b_y.array = _b_yN.array
+        _b_x.array = _b_xN.array
+        del _b_xN, _b_yN
+        #decomposition matrix
+        _mat = np.array([[_b_x.x, _b_y.x, _b_z.x], [_b_x.y, _b_y.y,_b_z.y], [_b_x.z,_b_y.z,_b_z.z]])
+
+
+        _index_to_keep = []
+        for i in range(self.table.__len__()):
+            for j in range(self.table[i].__len__()):
+                _tmp_dump = CenterFile.vec(list(self.table[i][j,:]))
+
+                # decompose into base vectors _b_x, _b_y, _b_z
+                _a1, _a2, _a3 = np.linalg.solve(_mat, _tmp_dump.array)
+
+                #check lattice params, need some tolerance check in here
+                _tol = 1e-3
+                if (-int_bounds[0] - _tol < _a1 <= int_bounds[0] + _tol) \
+                        and (-int_bounds[1]-_tol < _a2 <= int_bounds[1]+_tol) \
+                        and (-int_bounds[2]-_tol < _a3 <= int_bounds[2] + _tol) \
+                        and (-int_bounds[2]-_tol < _tmp_dump.z / _b_z.z < int_bounds[2] + _tol) : #<- change to the stupid boxsize option
+
+                    _index_to_keep.append([i,j])
+                del _tmp_dump
+
+        for i in range(self.table.__len__()):
+            _loc_list = []
+            for j in range(_index_to_keep.__len__()):
+                if _index_to_keep[j][0] == i:
+                    _loc_list.append(_index_to_keep[j][1])
+            self.table[i] = self.table[i][_loc_list, :]
+        # this discards sanity checks, should be careful.
+        self.table_size = 0
+        for i in range(self.table.__len__()):
+            self.table_size += self.table[i].__len__()
+
+        self.vx = list(_b_x.array)
+        self.vy = list(_b_y.array)
+        self.vz = list(_b_z.array)
+
+        self.vmat = _mat
+        self.int_bounds = int_bounds
     def drop_component(self, name):
         """
         Drops a component from the tables

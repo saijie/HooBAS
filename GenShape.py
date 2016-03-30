@@ -1,10 +1,13 @@
 __author__ = 'martin'
 
 from math import *
-import numpy as np
 from fractions import gcd
-import Moment_Fixer
 from scipy.optimize import minimize
+
+import numpy as np
+
+import Moment_Fixer
+
 
 class vec(object):
         """
@@ -154,7 +157,7 @@ class shape(object):
         if not (surf_plane is None) and surf_plane.__len__() == 3:# and not (surf_plane[1] == surf_plane[0] ==0):
             surf_plane[:] = (x / reduce(gcd, surf_plane) for x in surf_plane)
             r_vec = [surf_plane[0] / self.__lattice[0], surf_plane[1] / self.__lattice[1], surf_plane[2] / self.__lattice[2]]
-            self.__rot_mat = self.__get_rot_mat(surf_plane)
+            self.__rot_mat = self.__get_rot_mat(r_vec)
             self.srot_mat = self.__rot_mat # temp fix
             self.__surf_plane = vec(surf_plane)
             self.__n_plane = vec(r_vec)
@@ -223,7 +226,7 @@ class shape(object):
         if _v.array[0] == 0.0 and _v.array[1] == 0.0: # surface is [001]
             return _id
 
-        return  _id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2)
+        return  np.linalg.inv(_id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2))
 
     def mat_from_plane(self, plane):
         return self.__get_rot_mat(plane)
@@ -326,436 +329,6 @@ class shape(object):
 
         else:
             raise ImportError('unknown parse method')
-
-    def __DEPRECATEDOLDMETHODS(self):
-        pass
-        # def parse_pdb_protein(self, filename = None):
-        #     """
-        #     Parses a pdbml protein
-        #     :param filename:
-        #     :return:
-        #     """
-        #     if filename is None:
-        #         filename = self.__options.xyz_name[self.__curr_block]
-        #
-        #
-        #     with open(filename, 'r') as f:
-        #         self._pdb = f.readlines()
-        #     del f
-        #
-        #     _m =0.0
-        #     # inertia vector : ixx, iyy, izz, ixy, ixz, iyz
-        #     _i_v = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
-        #     _com = np.array([0.0, 0.0, 0.0])
-        #     _geo_c = np.array([0.0, 0.0, 0.0])
-        #     _cnt = 0
-        #
-        #     for _line in self._pdb:
-        #         _s = _line.strip().split()
-        #         if _s[0]=='ATOM':
-        #             _m_l = self.mkeys[_s[-1]]
-        #             _m += _m_l
-        #             _p = np.array([float(_s[6])/20.0, float(_s[7])/20.0, float(_s[8])/20.0])
-        #             _com += _p *_m_l
-        #             _geo_c += _p
-        #             _cnt += 1
-        #     _com /= _m
-        #     _geo_c /= _cnt
-        #     for _line in self._pdb:
-        #         _s = _line.strip().split()
-        #         if _s[0]=='ATOM':
-        #             _m_l = self.mkeys[_s[-1]]
-        #             _p = np.array([float(_s[6])/20.0, float(_s[7])/20.0, float(_s[8])/20.0])-_com
-        #             _i_v += np.array([_p[1]**2 + _p[2]**2, _p[0]**2 + _p[2]**2, _p[0]**2 + _p[1]**2, -_p[0]*_p[1], -_p[0]*_p[2], -_p[1]*_p[2]])*_m_l
-        #
-        #
-        #     self.flags['normalized'] = False
-        #     self.flags['mass'] = _m / 650.0
-        #     self.flags['simple_I_tensor'] = False
-        #     self.flags['I_tensor'] = _i_v / 650.0
-        #     self.flags['center_of_mass'] = _com
-        #     self.flags['pdb_object'] = True
-        #
-        # def add_pdb_dna_key(self, key, n_ss = None, n_ds = None, s_end = None, p_flex = None, num =None):
-        #     """
-        #     Keys some dna to pdb parsed protein
-        #
-        #     The key speficies whatever is parsed by parse_pdb_protein, rest is DNA options. Multiple DNAs can be keyed to the same site.
-        #     :param key: dictionary specifying columns to match in the pdb file. Standard use would be {'RES' : 'LYS', 'ATOM' : 'N'}. Always searches in 'ATOM'
-        #     supports 'RES' for residue name, 'TYPE' for atom element, 'CHAIN' for chain identifier, 'OCC' for occupancy, 'TYPE' includes charge (e.g. 'N1+')
-        #     :param n_ss:
-        #     :param n_ds:
-        #     :param s_end:
-        #     :param p_flex:
-        #     :return:
-        #     """
-        #
-        #     pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 4, 'OCC' : 10, 'ATOM' : 2}
-        #
-        #     # case of no_dna key
-        #
-        #     _l_list = []
-        #
-        #     for _line in self._pdb:
-        #         _s = _line.strip().split()
-        #         if _s[0] == 'ATOM':
-        #             _l = True
-        #             for _k in key.iterkeys():
-        #                 _l = _l and _s[pdb_form[_k]] == key[_k]
-        #             if _l :
-        #                 _l_list.append([float(_s[6])/20.0, float(_s[7])/20.0,float(_s[8])/20.0])
-        #
-        #     if n_ss is None and n_ds is None and s_end is None and p_flex is None:
-        #         try:
-        #             self.keys['no_dna'].append([_l_list, key])
-        #         except KeyError:
-        #             self.keys['no_dna'] = [[_l_list, key]]
-        #     else:
-        #         try:
-        #             self.keys['dna'].append([_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex}])
-        #         except KeyError:
-        #             self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
-        #
-        # def pdb_build_table(self):
-        #     """
-        #     creates the list for build, keeping only keyed particles.
-        #
-        #     Use add_pdb_dna_key(key = 'A') to keep 'A' sites, without adding DNA
-        #     :return:
-        #     """
-        #     com = self.flags['center_of_mass']
-        #     self.__table = np.zeros((0,3))
-        #     _t = []
-        #     _cnt = 0
-        #     if 'no_dna' in self.keys:
-        #         for _k in range(self.keys['no_dna'].__len__()):
-        #             for _kk in range(self.keys['no_dna'][_k].__len__()):
-        #                 self.__table = np.append(self.__table, [np.array([self.keys['no_dna'][_k][0][_kk][0], self.keys['no_dna'][_k][0][_kk][1], self.keys['no_dna'][_k][0][_kk][2]])-com], axis = 0)
-        #                 _cnt += 1
-        #             _t.append(_cnt)
-        #     if 'dna' in self.keys:
-        #         for _k in range(self.keys['dna'].__len__()):
-        #             for _kk in range(self.keys['dna'][_k][0].__len__()):
-        #                 self.__table = np.append(self.__table, [np.array([self.keys['dna'][_k][0][_kk][0], self.keys['dna'][_k][0][_kk][1], self.keys['dna'][_k][0][_kk][2]])-com], axis = 0)
-        #                 _cnt += 1
-        #             _t.append(_cnt)
-        #
-        #     if _t.__len__() > 1:
-        #         self.flags['multiple_surface_types'] = _t
-        #
-        # def sphere(self,  Num = None):
-        #     # a sphere of r = 1
-        #     if Num is None:
-        #         Num = self.__options.num_surf[self.__curr_block]
-        #     self.__table = np.zeros((0,3))
-        #     gold_ang = pi*(3-5**0.5)
-        #     th = gold_ang*np.arange(Num)
-        #     z = np.linspace(1-1.0/Num, 1.0/Num -1, Num)
-        #
-        #
-        #     for i in range(0, Num):
-        #         self.__table = np.append(self.__table, np.array([[(1-z[i]**2)**0.5*cos(th[i]), (1-z[i]**2)**0.5*sin(th[i]),z[i]]]),axis=0)
-        #
-        #     self.flags['normalized'] = True
-        #     self.flags['hard_core_safe_dist'] = 1
-        #     self.flags['surface'] = 4*pi
-        #     self.flags['volume'] = (4.0/3.0)*pi
-        #     self.flags['simple_I_tensor'] = True
-        #
-        # def cube(self, Num = None, Radius = None):
-        #
-        #     if Num is None:
-        #         Num = self.__options.num_surf[self.__curr_block]
-        #     if Radius is None:
-        #         Radius = self.__options.corner_rad[self.__curr_block]*2 / self.__options.size[self.__curr_block]
-        #     NumSide = int(round((Num * (1-Radius)**2/6)**0.5))
-        #
-        #     #Create 6 faces, with range (-1+Radius) to (1-Radius), NumSide**2 points on each
-        #     Gridbase = np.linspace(-1+Radius, 1-Radius, NumSide)
-        #     xGrid, yGrid = np.meshgrid(Gridbase,Gridbase)
-        #     Tablexy = np.zeros((0,3))
-        #
-        #     for i in range(NumSide):
-        #         for j in range(NumSide):
-        #             Tablexy = np.append(Tablexy, np.array([[xGrid[i,j], yGrid[i,j],1]]),axis=0)
-        #
-        #     # numside is the proportionality constant, pi * R /4 / (2*(1-R)) is the ratio of the side length to quarter cylinder length
-        #     PtEdge = NumSide**2 * pi * Radius / (4*2*(1-Radius))
-        #
-        #     PtAngle = int(PtEdge/NumSide)
-        #     #PtL = int((PtEdge*4*(1-Radius)/pi)**0.5)
-        #
-        #     AngleRange = np.linspace(0,pi/2,PtAngle+2)
-        #     TableEdge = np.zeros((0,3))
-        #     #XY-YZ edge
-        #     for i in range(PtAngle):
-        #         for j in range(NumSide):
-        #             TableEdge = np.append(TableEdge, np.array([[(1-Radius)+Radius*cos(AngleRange[i+1]),Gridbase[j], (1-Radius)+Radius*sin(AngleRange[i+1])]]),axis =0)
-        #
-        #     #XYZ vertice
-        #     PtVertice = NumSide**2 *(4*pi*Radius**2/8) / (2*(1-Radius))**2
-        #     TableVert = np.zeros((0,3))
-        #     PtVertice = int(PtVertice*8)
-        #     gold_ang = pi*(3-5**0.5)
-        #     th = gold_ang*np.arange(PtVertice)
-        #     if PtVertice>1:
-        #         z = np.linspace(1-1.0/PtVertice, 1.0/PtVertice -1, PtVertice)
-        #         for i in range(0, PtVertice):
-        #             if 0 < cos(th[i]) and sin(th[i]) > 0 and z[i] > 0:
-        #                 TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*(1-z[i]**2)**0.5*cos(th[i]), (1-Radius)+Radius*(1-z[i]**2)**0.5*sin(th[i]),(1-Radius)+Radius*z[i]]]),axis=0)
-        #     elif PtVertice == 1 :
-        #         TableVert = np.append(TableVert, np.array([[(1-Radius)+Radius*3**0.5, (1-Radius)+Radius*3**0.5,(1-Radius)+Radius*3**0.5]]),axis=0)
-        #
-        #     #Write 6 faces
-        #     for i in range(Tablexy.__len__()):
-        #         #XY +/-
-        #         self.__table = np.append(self.__table, [[ Tablexy[i,0], Tablexy[i,1], Tablexy[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ Tablexy[i,0], Tablexy[i,1],-Tablexy[i,2]]], axis = 0)
-        #         #YZ +/-
-        #         self.__table = np.append(self.__table, [[ Tablexy[i,2], Tablexy[i,0], Tablexy[i,1]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-Tablexy[i,2], Tablexy[i,0], Tablexy[i,1]]], axis = 0)
-        #         #ZX
-        #         self.__table = np.append(self.__table, [[ Tablexy[i,1], Tablexy[i,2], Tablexy[i,0]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ Tablexy[i,1],-Tablexy[i,2], Tablexy[i,0]]], axis = 0)
-        #         self.geometric_table[0] += 6
-        #     # Write 12 Edges
-        #     for i in range(TableEdge.__len__()):
-        #         # Y kind
-        #         self.__table = np.append(self.__table, [[ TableEdge[i,0], TableEdge[i,1], TableEdge[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-TableEdge[i,0], TableEdge[i,1], TableEdge[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-TableEdge[i,0], TableEdge[i,1],-TableEdge[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ TableEdge[i,0], TableEdge[i,1],-TableEdge[i,2]]], axis = 0)
-        #
-        #         self.__table = np.append(self.__table, [[ TableEdge[i,2], TableEdge[i,0], TableEdge[i,1]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-TableEdge[i,2], TableEdge[i,0], TableEdge[i,1]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-TableEdge[i,2],-TableEdge[i,0], TableEdge[i,1]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ TableEdge[i,2],-TableEdge[i,0], TableEdge[i,1]]], axis = 0)
-        #
-        #         self.__table = np.append(self.__table, [[ TableEdge[i,1], TableEdge[i,2], TableEdge[i,0]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ TableEdge[i,1],-TableEdge[i,2], TableEdge[i,0]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ TableEdge[i,1],-TableEdge[i,2],-TableEdge[i,0]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ TableEdge[i,1], TableEdge[i,2],-TableEdge[i,0]]], axis = 0)
-        #     #Write 8 vertices
-        #         self.geometric_table[1]+=12
-        #     for i in range(TableVert.__len__()):
-        #         self.__table = np.append(self.__table, [[ TableVert[i,0], TableVert[i,1], TableVert[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-TableVert[i,0], TableVert[i,1], TableVert[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ TableVert[i,0],-TableVert[i,1], TableVert[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ TableVert[i,0], TableVert[i,1],-TableVert[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[ TableVert[i,0],-TableVert[i,1],-TableVert[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-TableVert[i,0], TableVert[i,1],-TableVert[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-TableVert[i,0],-TableVert[i,1], TableVert[i,2]]], axis = 0)
-        #         self.__table = np.append(self.__table, [[-TableVert[i,0],-TableVert[i,1],-TableVert[i,2]]], axis = 0)
-        #         self.geometric_table[2] += 8
-        #
-        #     self.flags['normalized'] = True
-        #     self.flags['hard_core_safe_dist'] = 3**0.5
-        #     self.flags['volume'] = 2**3
-        #     self.flags['surface'] = 6*2**2
-        #     self.flags['simple_I_tensor'] = True
-        #     self.flags['call'] = 'cube'
-        #
-        # def dodecahedron(self):
-        #     #Generate one face
-        #     Num = self.__options.num_surf[self.__curr_block]*2
-        #     ang = acos(1./3.)
-        #     d = 2*sin(ang/2)
-        #     D = 2*cos(ang/2)
-        #
-        #     Numx = int(round(((2*Num/12.)**0.5 * 1/d)))
-        #     Numy = int(round(((2*Num/12.)**0.5 * 1/D)))
-        #
-        #     if Numx%2 !=1:
-        #         Numx += 1
-        #     if Numy%2 != 1:
-        #         Numy += 1
-        #
-        #     xline = np.linspace(-D/2, D/2, Numx)
-        #     yline = np.linspace(-d/2, d/2, Numy)
-        #
-        #     TableFace = np.zeros((0,3))
-        #
-        #     for i in range(xline.__len__()):
-        #         for j in range(yline.__len__()):
-        #             if abs(xline[i])*d + abs(yline[j])*D < d*D/2.0 + 1e-5:
-        #                 TableFace = np.append(TableFace, [[xline[i],yline[j],0]],axis = 0)
-        #     arot = -ang/2
-        #
-        #
-        #     for i in range(TableFace.__len__()):
-        #         TableFace[i,:] = np.array([[TableFace[i,0]*cos(arot)-TableFace[i,1]*sin(arot), TableFace[i,0]*sin(arot)+TableFace[i,1]*cos(arot),0]])
-        #
-        #
-        #
-        #     TableFace = TableFace - [[0, 0, 6**0.5/3.0]]
-        #
-        #
-        #     TableRotP = np.copy(TableFace)
-        #     TableRotM = np.copy(TableFace)
-        #     for i in range(TableFace.__len__()):
-        #         #Rotation 45 deg / z axis
-        #         #TableEdgeRot[i,:] = np.array([[(TableEdgeRotated[i,0]+TableEdgeRotated[i,1])/2**0.5, (-TableEdgeRotated[i,0]+TableEdgeRotated[i,1])/2**0.5 , TableEdgeRotated[i,2] ]])
-        #         #Rotation 60 deg / x+y axis
-        #         ux = 1
-        #         uy = 0
-        #         L = 0*-sin(pi/2 - ang)
-        #         an = pi/3
-        #         TableRotP[i,:] = np.array([[(cos(an)+ux**2*(1-cos(an)))*TableRotP[i,0]+ux*uy*(1-cos(an))*TableRotP[i,1]+uy*sin(an)*TableRotP[i,2]+L, uy*ux*(1-cos(an))*TableRotP[i,0] + (cos(an) + uy**2*(1-cos(an)))*TableRotP[i,1] - ux*sin(an)*TableRotP[i,2], -uy*sin(an)*TableRotP[i,0] +ux*sin(an)*TableRotP[i,1]+cos(an)*TableRotP[i,2]]])
-        #
-        #         ux = cos(ang/2)
-        #         uy = sin(ang/2)
-        #
-        #         vl = ux*TableRotP[i,0] + uy*TableRotP[i,1]
-        #
-        #
-        #
-        #         TableRotM[i,:] = np.array([[2*vl*ux - TableRotP[i,0], 2*vl*uy - TableRotP[i,1], TableRotP[i,2]]])
-        #
-        #
-        #     TableTot = np.zeros((0,3))
-        #
-        #     for i in range(TableFace.__len__()):
-        #         TableTot = np.append(TableTot, [[TableFace[i,0], TableFace[i,1], TableFace[i,2]]],axis = 0)
-        #         TableTot = np.append(TableTot, [[TableFace[i,0], TableFace[i,1], -TableFace[i,2]]],axis = 0)
-        #         TableTot = np.append(TableTot, [[-TableRotP[i,0], TableRotP[i,1], TableRotP[i,2]]],axis = 0)
-        #         TableTot = np.append(TableTot, [[-TableRotP[i,0], TableRotP[i,1], -TableRotP[i,2]]],axis = 0)
-        #
-        #         TableTot = np.append(TableTot, [[TableRotP[i,0], -TableRotP[i,1], -TableRotP[i,2]]],axis = 0)
-        #         TableTot = np.append(TableTot, [[TableRotP[i,0], -TableRotP[i,1], TableRotP[i,2]]],axis = 0)
-        #
-        #         TableTot = np.append(TableTot, [[-TableRotM[i,0], TableRotM[i,1], TableRotM[i,2]]],axis = 0)
-        #         TableTot = np.append(TableTot, [[-TableRotM[i,0], TableRotM[i,1], -TableRotM[i,2]]],axis = 0)
-        #
-        #         TableTot = np.append(TableTot, [[TableRotM[i,0], -TableRotM[i,1], -TableRotM[i,2]]],axis = 0)
-        #         TableTot = np.append(TableTot, [[TableRotM[i,0], -TableRotM[i,1], TableRotM[i,2]]],axis = 0)
-        #
-        #     ux = sin(ang/2)
-        #     uy = cos(ang/2)
-        #     uz = 0
-        #     TableRotS1 = np.copy(TableFace)
-        #     for i in range(TableFace.__len__()):
-        #         an = pi/2
-        #         TableRotS1[i,:] = np.array([[(cos(an)+ux**2*(1-cos(an)))*TableRotS1[i,0]+(ux*uy*(1-cos(an))-uz*sin(an))*TableRotS1[i,1]+(ux*uz*(1-cos(an))+uy*sin(an))*TableRotS1[i,2], (uy*ux*(1-cos(an))+uz*sin(an))*TableRotS1[i,0] + (cos(an) + uy**2*(1-cos(an)))*TableRotS1[i,1] +(uy*uz*(1-cos(an))- ux*sin(an))*TableRotS1[i,2], (ux*uz*(1-cos(an))-uy*sin(an))*TableRotS1[i,0] +(uz*uy*(1-cos(an))+ux*sin(an))*TableRotS1[i,1]+(cos(an)+uz**2*(1-cos(an)))*TableRotS1[i,2]]])
-        #
-        #     for i in range(TableFace.__len__()):
-        #
-        #         TableTot = np.append(TableTot, [[TableRotS1[i,0], TableRotS1[i,1], TableRotS1[i,2]]], axis = 0)
-        #         TableTot = np.append(TableTot, [[-TableRotS1[i,0], -TableRotS1[i,1], -TableRotS1[i,2]]], axis = 0)
-        #
-        #     rowsdel = np.zeros(0)
-        #     for i in range(TableTot.__len__()-1):
-        #         for j in range(i+1,TableTot.__len__()):
-        #             if abs(TableTot[i,0]-TableTot[j,0])+abs(TableTot[i,1]-TableTot[j,1])+abs(TableTot[i,2]-TableTot[j,2]) < 1e-7:
-        #                 rowsdel = np.append(rowsdel, j)
-        #     rowsdel = np.unique(rowsdel)
-        #
-        #     TableTot = np.delete(TableTot, rowsdel, axis = 0)
-        #
-        #     self.__table = 2*TableTot
-        #     self.__options.num_surf[self.__curr_block] = self.__table.__len__()
-        #     self.__options.volume[self.__curr_block] = 16.0/9.0 * 3**0.5 * (self.__options.size[self.__curr_block]*2 / self.__options.scale_factor)**3
-        #     self.__options.p_surf[self.__curr_block] = 8*2**0.5*(self.__options.size[self.__curr_block]*2.0 / self.__options.scale_factor)**2
-        #
-        # def octahedron(self):
-        #     #Creating faces; Generate triangular lattice with N points on the lower side. Triangular points are (1,sqrt(3)),(0,0), (2, 0), Limit points are
-        #
-        #     FacePoint = self.__options.num_surf[self.__curr_block] / 8
-        #     WhP = 1
-        #     Table =np.array([[0, 0]])
-        #     TableAdd = np.zeros((1,2))
-        #     tol = 1e-5
-        #
-        #     while WhP < FacePoint:
-        #         TableAdd = Table + [[1, 0]]
-        #         TableAdd = np.append(TableAdd,Table+ [[0.5, 3**0.5/2]], axis = 0)
-        #         Table = np.append(Table, TableAdd, axis = 0)
-        #
-        #         DupRows = []
-        #         for i in range(Table.__len__()-1):
-        #             for j in range(i+1, Table.__len__()):
-        #                 if (Table[i,0]-Table[j,0])**2 +(Table[i,1]-Table[j,1])**2 < tol:
-        #                     DupRows.append(j)
-        #         DupRows = np.unique(DupRows)
-        #         Table = np.delete(Table, DupRows, axis = 0)
-        #
-        #         WhP = Table.__len__()
-        #     FacePoint = Table.__len__()
-        #     delta =0
-        #     N = max(Table[:,0])+1
-        #     # #q = 2 / ((N-1)+3**0.5)
-        #     # #delta = q/2
-        #     q = (2- 2*3**0.5*delta)/ (N-1)
-        #     Table = (((Table*q) + [[delta*3**0.5, delta]])-[[1, 3**0.5 * 1/3.0]])*0.5
-        #     #
-        #     # #Find line
-        #     # ysorted = np.sort(np.unique(Table[:,1]))
-        #     # #ymin = min(Table[:,1])
-        #     # xline = []
-        #     # xline2 = []
-        #     # for i in range(Table.__len__()):
-        #     #     if (Table[i,1]-ysorted[0])**2<tol:
-        #     #         xline.append(Table[i,0])
-        #     #     elif (Table[i,1]-ysorted[1])**2<tol:
-        #     #         xline2.append(Table[i,0])
-        #     # #xline2.append(min(xline2)-q/2)
-        #     # #xline2.append(max(xline2)+q/2)
-        #     TableFace = np.zeros((Table.__len__(), 3))
-        #     FaAng = (pi - acos(1/3.0))*0.5
-        #     for i in range(TableFace.__len__()):
-        #         TableFace[i,:] = np.array([[Table[i,0], (Table[i,1])*cos(FaAng),sin(FaAng)*(Table[i,1])]])
-        #     TableFace = TableFace + [[0, -3**0.5 / 3.0 *cos(FaAng), 3**0.5 / 6.0 *sin(FaAng)]]
-        #
-        #     TotalTable = np.zeros((0,3))
-        #
-        #     #Append 8 faces by symmetry
-        #     for i in range(TableFace.__len__()):
-        #         TotalTable = np.append(TotalTable, np.array([[TableFace[i,0], TableFace[i,1], TableFace[i,2]]]), axis = 0)
-        #         TotalTable = np.append(TotalTable, np.array([[TableFace[i,0], -TableFace[i,1], TableFace[i,2]]]), axis = 0)
-        #         TotalTable = np.append(TotalTable, np.array([[TableFace[i,0], -TableFace[i,1], -TableFace[i,2]]]), axis = 0)
-        #         TotalTable = np.append(TotalTable, np.array([[TableFace[i,0], TableFace[i,1], -TableFace[i,2]]]), axis = 0)
-        #
-        #         TotalTable = np.append(TotalTable, np.array([[TableFace[i,1], TableFace[i,0], TableFace[i,2]]]), axis = 0)
-        #         TotalTable = np.append(TotalTable, np.array([[-TableFace[i,1], TableFace[i,0], TableFace[i,2]]]), axis = 0)
-        #         TotalTable = np.append(TotalTable, np.array([[-TableFace[i,1], TableFace[i,0], -TableFace[i,2]]]), axis = 0)
-        #         TotalTable = np.append(TotalTable, np.array([[TableFace[i,1], TableFace[i,0], -TableFace[i,2]]]), axis = 0)
-        #
-        #     DupRows = []
-        #     for i in range(TotalTable.__len__()):
-        #         for j in range(i+1, TotalTable.__len__()):
-        #             if (TotalTable[i,0]-TotalTable[j,0])**2 +(TotalTable[i,1]-TotalTable[j,1])**2 +(TotalTable[i,2]-TotalTable[j,2])**2 < tol:
-        #                 DupRows.append(j)
-        #     DupRows = np.unique(DupRows)
-        #     TotalTable = np.delete(TotalTable, DupRows, axis=0)
-        #
-        #     self.__table = 2*TotalTable
-        #     self.__options.num_surf[self.__curr_block] = self.__table.__len__()
-        #     self.__options.volume[self.__curr_block] = 2**0.5 / 3 * (self.__options.size[self.__curr_block]*2 / self.__options.scale_factor)**3
-        #     self.__options.p_surf[self.__curr_block] = 2*3**0.5*(self.__options.size[self.__curr_block]*2.0 / self.__options.scale_factor)**2
-        #
-        #
-        #     # Append 12 edges by symmetry
-        #     #for i in range(TableEdge.__len__()):
-        #         #TotalTable = np.append(TotalTable, np.array([[TableEdge[i,0], TableEdge[i,1], TableEdge[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[-TableEdge[i,0], TableEdge[i,1], TableEdge[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[TableEdge[i,1], TableEdge[i,0], TableEdge[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[TableEdge[i,1], -TableEdge[i,0], TableEdge[i,2]]]), axis = 0)
-        #
-        #         #TotalTable = np.append(TotalTable, np.array([[TableEdgeRotated[i,0], TableEdgeRotated[i,1], TableEdgeRotated[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[TableEdgeRotated[i,0], TableEdgeRotated[i,1], -TableEdgeRotated[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[TableEdgeRotated[i,0], -TableEdgeRotated[i,1], TableEdgeRotated[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[TableEdgeRotated[i,0], -TableEdgeRotated[i,1], -TableEdgeRotated[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[-TableEdgeRotated[i,0], TableEdgeRotated[i,1], TableEdgeRotated[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[-TableEdgeRotated[i,0], TableEdgeRotated[i,1], -TableEdgeRotated[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[-TableEdgeRotated[i,0], -TableEdgeRotated[i,1], TableEdgeRotated[i,2]]]), axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[-TableEdgeRotated[i,0], -TableEdgeRotated[i,1], -TableEdgeRotated[i,2]]]), axis = 0)
-        #     #for i in range(TableVert.__len__()):
-        #         #TotalTable = np.append(TotalTable, np.array([[TableVert[i,0], TableVert[i,1], TableVert[i,2]]]),axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[TableVert[i,0], TableVert[i,1], -TableVert[i,2]]]),axis = 0)
-        #
-        #         #TotalTable = np.append(TotalTable, np.array([[TableVertRot[i,0], TableVertRot[i,1], TableVertRot[i,2]]]),axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[-TableVertRot[i,0], TableVertRot[i,1], TableVertRot[i,2]]]),axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[TableVertRot[i,0], -TableVertRot[i,1], TableVertRot[i,2]]]),axis = 0)
-        #         #TotalTable = np.append(TotalTable, np.array([[-TableVertRot[i,0], -TableVertRot[i,1], TableVertRot[i,2]]]),axis = 0)
 
     def will_build_from_shapes(self, properties = None):
         if not (properties is None):
@@ -1226,7 +799,7 @@ class PdbProtein(shape):
 
     def parse_pdb_protein(self, filename = None):
         """
-        Parses a pdbml protein
+        Parses a pdbml protein and stores the file in self._pdb
         :param filename:
         :return:
         """
@@ -1432,7 +1005,6 @@ class PdbProtein(shape):
         self.ext_objects.append(ext_obj)
         self.keys['shell'][_shl_idx][2].append({'EXT_IDX':self.ext_objects.__len__() - 1, 'num' : num, 'linker_type' : linker_bond_type})
 
-
 class Sphere(shape):
     def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Num = None):
         shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
@@ -1535,5 +1107,73 @@ class RhombicDodecahedron(shape):
         self.flags['surface'] = 8*2**0.5 * 2**2
         self.flags['simple_I_tensor'] = True
         self.flags['call'] = 'rh_dodec'
+
+class Tetrahedron(shape):
+    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Num = None):
+        shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
+        if Num is None:  # support for deprecated option build
+            FacePoint = self.options.num_surf[self.curr_block] / 4
+        else:
+            FacePoint = Num / 4
+
+        WhP = 1
+        Table =np.array([[0, 0, 0]])
+        TableAdd = np.zeros((1,3))
+        tol = 1e-5
+
+        while WhP < FacePoint:
+            TableAdd = Table + [[1, 0, 0]]
+            TableAdd = np.append(TableAdd,Table+ [[0.5, 3**0.5/2, 0]], axis = 0)
+            Table = np.append(Table, TableAdd, axis = 0)
+
+            DupRows = []
+            for i in range(Table.__len__()-1):
+                for j in range(i+1, Table.__len__()):
+                    if (Table[i,0]-Table[j,0])**2 +(Table[i,1]-Table[j,1])**2 < tol:
+                        DupRows.append(j)
+            DupRows = np.unique(DupRows)
+            Table = np.delete(Table, DupRows, axis = 0)
+
+            WhP = Table.__len__()
+        FacePoint = Table.__len__()
+        Table /= np.max(Table)
+        _ang = acos(1.0 / 3.0)
+        _r_mat = self.mat_from_plane(plane= [0.0, sin(_ang), cos(_ang)])
+
+
+        TableZ = np.copy(Table)
+        for i in range(TableZ.__len__()):
+            TableZ[i,:] = np.dot(TableZ[i,:],_r_mat)
+        self.table = np.append(self.table, Table - [0.5, sqrt(3) / 6.0, 0.0], axis = 0)
+        TableZ -= [0.5, sqrt(3) / 6.0, 0.0]
+
+        self.table = np.append(self.table, TableZ, axis = 0)
+
+        _ang = 2*pi/3.0
+        _r_mat = np.array([[cos(_ang), sin(_ang), 0.0], [-sin(_ang), cos(_ang), 0.0], [0.0, 0.0, 1.0]])
+
+        for i in range(TableZ.__len__()):
+            TableZ[i,:] = np.dot(TableZ[i,:], _r_mat)
+        self.table = np.append(self.table, TableZ, axis = 0)
+        for i in range(TableZ.__len__()):
+            TableZ[i,:] = np.dot(TableZ[i,:], _r_mat)
+        self.table = np.append(self.table, TableZ, axis = 0)
+
+        DupRows = []
+        for i in range(self.table.__len__()):
+            for j in range(i+1, self.table.__len__()):
+                if (self.table[i,0]-self.table[j,0])**2 +(self.table[i,1]-self.table[j,1])**2 +(self.table[i,2]-self.table[j,2])**2 < tol:
+                    DupRows.append(j)
+        DupRows = np.unique(DupRows)
+        self.table = np.delete(self.table, DupRows, axis=0)
+
+
+        self.flags['normalized'] = True
+        self.flags['hard_core_safe_dist'] = 3**0.5 / 8.0**0.5
+        self.flags['volume'] = 1.0 / (sqrt(2.0) * 6.0)
+        self.flags['surface'] = sqrt(3.0)
+        self.flags['simple_I_tensor'] = True
+        self.flags['call'] = 'Tetrahedron'
+
 
 

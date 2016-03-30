@@ -154,6 +154,9 @@ class BuildHoomdXML(object):
         self.impose_box = []
         self.flaglist = {}
         self.warnings = []
+
+        self.centerobj = center_obj
+
         # list of properties defined in the Hoomd xml formats. First list refers to particle properties, second to bonded interaction types
         self.xml_proplist = ['velocity', 'acceleration', 'diameter', 'charge', 'body', 'orientation', 'angmom', 'moment_inertia', 'image']
         self.xml_inter_prop_list = ['bonds', 'angles', 'dihedrals', 'impropers']
@@ -196,7 +199,7 @@ class BuildHoomdXML(object):
 
         if _v.array[0] == 0.0 and _v.array[1] == 0.0: # surface is [001]
             return _id
-        return  _id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2)
+        return  np.linalg.inv(_id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2))
     @staticmethod
     def get_inv_rot_mat(cubic_plane):
         _cp = vec(cubic_plane)
@@ -379,7 +382,6 @@ class BuildHoomdXML(object):
             self.__p_num.append(self.__p_num[-1]+1)
             self.bonds.append(['EC-bond', self.__particles[i].pnum_offset, self.__p_num[-1]])
 
-
     def sticky_excluded(self, sticky_pair, r_cut = None):
         #######
         # Generates exclusion list for hoomd
@@ -412,7 +414,7 @@ class BuildHoomdXML(object):
         if _s == 0 :
             _hoomd_mat = _id
         else:
-            _hoomd_mat = _id + _vx + np.linalg.matrix_power(_vx,2)*(1-_c)/(_s**2)
+            _hoomd_mat = np.linalg.inv(_id + _vx + np.linalg.matrix_power(_vx,2)*(1-_c)/(_s**2))
 
         for i in range(self.beads.__len__()):
             self.beads[i].position = list(np.dot(_hoomd_mat, self.beads[i].position))
@@ -646,6 +648,7 @@ class BuildHoomdXML(object):
     def current_box(self):
         if self.impose_box.__len__() == 0:
             if self.__opts.flag_surf_energy:
+                # TODO : move the hoomd box calculation here from main
                 L = self.__opts.rot_box
             else:
                 Mx = 0
@@ -777,13 +780,13 @@ class BuildHoomdXML(object):
     def write_to_file(self, z_box_multi = None, export_charge = False, export_diameter = False):
         L = self.current_box()
         if self.__opts.flag_surf_energy:
-            for i in range(self.__particles.__len__()):
-                for j in range(self.__particles[i].beads.__len__()):
-                    _p, _fl = PeriodicBC.PeriodicBC(r = copy.deepcopy(self.__particles[i].beads[j].position), opts = self.__opts, z_multi = z_box_multi)
-                    self.__particles[i].pos[j,:] = _p
-                    self.__particles[i].beads[j].position = _p
-                    self.__particles[i].beads[j].image = _fl
-                    del _p, _fl
+            if (self.centerobj.lattice[0] == self.centerobj.lattice[1] == self.centerobj.lattice[2]) or\
+                    (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.y == 0) or \
+                    (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.z == 0) or \
+                    (self.centerobj.surf_plane.y == 0 and self.centerobj.surf_plane.z == 0): # cubic
+                self.enforce_PBC(z_box_multi)
+            else:
+                self.enforce_XYPBC()
             self.set_rot_to_hoomd()
 
         self.__opts.sys_box = L
@@ -852,6 +855,56 @@ class BuildHoomdXML(object):
             f.write('''</configuration>\n''')
             f.write('''</hoomd_xml>''')
 
+    def enforce_PBC(self, z_box_multi):
+        _b_1 = vec(self.centerobj.vx)
+        _b_2 = vec(self.centerobj.vy)
+        _b_z = vec(self.centerobj.vz)
+        if not z_box_multi is None:
+            _b_z.array *= z_box_multi
+
+        _mat = np.array([[_b_1.x, _b_2.x, 0.0], [_b_1.y, _b_2.y, 0.0], [0.0, 0.0, _b_z.z]])
+
+        for bead in self.beads:
+            _a = list(np.linalg.solve(_mat, np.array(bead.position)))
+            for i in range(_a.__len__()):
+                _ctmp = 0
+                while _a[i] > self.centerobj.int_bounds[i]:
+                    _a[i] -= 2*self.centerobj.int_bounds[i]
+                    _ctmp += 1
+                while _a[i] < -self.centerobj.int_bounds[i]:
+                    _a[i] += 2*self.centerobj.int_bounds[i]
+                    _ctmp -= 1
+
+            bead.position = np.dot(_a, _mat)
+            #bead.image = _ctmp
+
+    def enforce_XYPBC(self):
+        """
+        special decomposition for XY periodic (bx, by) and (bz) not periodic
+        :return:
+        """
+        _b_1 = vec(self.centerobj.vx)
+        _b_2 = vec(self.centerobj.vy)
+
+        _mat = np.array([[_b_1.x, _b_2.x], [_b_1.y, _b_2.y]])
+        if abs(_b_1.z) > 1e-5:
+            self.warnings.append(['Build : enforce_XYPBC : XY bound vector (b1) has non-zero z component'])
+        if abs(_b_2.z) > 1e-5:
+            self.warnings.append(['Build : enforce_XYPBC : XY bound vector (b2) has non-zero z component'])
+
+        for bead in self.beads:
+            _a = list(np.linalg.solve(_mat, np.array(bead.position[0:2])))
+            for i in range(_a.__len__()):
+                _ctmp = 0
+                while _a[i] > self.centerobj.int_bounds[i]:
+                    _a[i] -= 2* self.centerobj.int_bounds[i]
+                    _ctmp += 1
+                while _a[i] < -self.centerobj.int_bounds[i]:
+                    _a[i] += 2* self.centerobj.int_bounds[i]
+                    _ctmp -= 1
+                _xypos = np.dot(_mat, _a)
+                bead.position[0] = _xypos[0]
+                bead.position[1] = _xypos[1]
 
     class Particle(object):
         """
@@ -1362,3 +1415,24 @@ class BuildHoomdXML(object):
                     _c  += 1
             for i in range(self._sh.internal_bonds.__len__()):
                 self.bonds.append([self._sh.internal_bonds[i][-1], self._sh.internal_bonds[i][0], self._sh.internal_bonds[i][1]])
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
