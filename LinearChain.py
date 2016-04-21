@@ -6,49 +6,8 @@ from math import *
 import numpy as np
 
 import CoarsegrainedBead
+from Util import vector as vec
 
-
-class vec(object):
-        """
-        simple vector class with useful tools; should be reusable
-        """
-        def __init__(self, array, ntol = 1e-5):
-            self.array = np.array(array, dtype=float)
-            self.ntol = ntol
-            if array.__len__() <1:
-                del self
-        def __neg__(self):
-            self.array = -self.array
-            return self
-        @property
-        def x(self):
-            return self.array[0]
-        @property
-        def y(self):
-            return self.array[1]
-        @property
-        def z(self):
-            return self.array[2]
-
-        def __norm__(self):
-            _c = 0.0
-            for i in range(self.array.__len__()):
-                _c += self.array[i]**2
-            _c **= 0.5
-            return _c
-        def normalize(self):
-            self.array /= self.__norm__()
-        def rot(self,mat):
-            self.array = mat.dot(self.array)
-        def inv_rot(self, mat):
-            if self.x != 0 or self.y != 0 or self.z !=0:
-                self.array = np.linalg.solve(mat, np.array([0.0, 0.0, 1.0])*self.__norm__())
-        def x_prod_by001(self):
-            _c = vec([-self.array[1], self.array[0], 0.0])
-            return _c
-        def i_prod_by001(self):
-            _c = self.array[2]
-            return _c
 
 class LinearChain(object):
     """

@@ -7,47 +7,7 @@ from scipy.optimize import minimize
 import numpy as np
 
 import Moment_Fixer
-
-
-class vec(object):
-        """
-        simple vector class with useful tools; should be reusable
-        """
-        def __init__(self, array, ntol = 1e-5):
-            self.array = np.array(array, dtype=float)
-            self.ntol = ntol
-            if array.__len__() <1:
-                del self
-
-        @property
-        def x(self):
-            return self.array[0]
-        @property
-        def y(self):
-            return self.array[1]
-        @property
-        def z(self):
-            return self.array[2]
-
-        def __norm__(self):
-            _c = 0.0
-            for i in range(self.array.__len__()):
-                _c += self.array[i]**2
-            _c **= 0.5
-            return _c
-        def normalize(self):
-            self.array /= self.__norm__()
-        def rot(self,mat):
-            self.array = mat.dot(self.array)
-        def inv_rot(self, mat):
-            _t_mat = np.linalg.inv(mat)
-            self.array = _t_mat.dot(self.array)
-        def x_prod_by001(self):
-            _c = vec([-self.array[1], self.array[0], 0.0])
-            return _c
-        def i_prod_by001(self):
-            _c = self.array[2]
-            return _c
+from Util import vector as vec
 
 
 class shape(object):
@@ -118,10 +78,7 @@ class shape(object):
 
     """
 
-    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None):
-
-        self.curr_block = curr_block
-        self.options = options
+    def __init__(self, surf_plane = None, lattice = None, properties = None):
 
         self.table = np.zeros((0,3), dtype=float)
 
@@ -165,13 +122,6 @@ class shape(object):
             self.__surf_plane = vec([0.0, 0.0, 1.0])
             self.__n_plane = vec([0.0, 0.0, 1.0])
 
-    @property
-    def opts(self):
-        """
-        options structure properties
-        :return: structure
-        """
-        return self.options
     @property
     def num_surf(self):
         return self.table.__len__()
@@ -231,104 +181,51 @@ class shape(object):
     def mat_from_plane(self, plane):
         return self.__get_rot_mat(plane)
 
-    def write_table(self, filename = None):
-        if filename is None :
-            filename = self.options.off_name+'_'+str(self.curr_block)
-        with open(filename, 'w') as f:
-            f.write('OFF\n')
-            f.write(str(self.table.__len__())+' 0 0\n')
-            f.write('0 0 0\n')
-
-            for i in range(self.table.__len__()):
-                f.write(str(self.table[i,0]) + ' ' + str(self.table[i,1]) + ' ' + str(self.table[i,2]) + '\n')
-
-    def load_file_Angstroms(self, parser = None, file_name = None):
+    def load_file_Angstroms(self, file_name):
 
         self.flags['normalized'] = False
         self.flags['simple_I_tensor'] = False
 
-        if (parser is None or parser == 'xyz') and file_name is None :
+        with open(file_name, 'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                l = line.strip().split()
+                self.table = np.append(self.table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
 
-            with open(self.options.off_name[self.curr_block], 'r') as f :
-                lines = f.readlines()
-                for line in lines:
-                    l = line.strip().split()
-                    self.table = np.append(self.table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
-            self.options.num_surf[self.curr_block] = self.table.__len__()
-        elif parser is None or parser == 'xyz':
-            with open(file_name, 'r') as f:
-                lines = f.readlines()
-                for line in lines:
-                    l = line.strip().split()
-                    self.table = np.append(self.table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
-
-    def load_file(self, parser = None, file_name = None):
+    def load_file(self, file_name):
 
         self.flags['normalized'] = False
         self.flags['simple_I_tensor'] = False
 
-        if (parser is None or parser == 'xyz') and file_name is None:
-
-            with open(self.options.off_name[self.curr_block], 'r') as f :
-                lines = f.readlines()
-                for line in lines:
-                    l = line.strip().split()
-                    self.table = np.append(self.table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
-            self.options.num_surf[self.curr_block] = self.table.__len__()
-
-        elif parser is None or parser == 'xyz':
-            with open(file_name, 'r') as f :
-                lines = f.readlines()
-                for line in lines:
-                    l = line.strip().split()
-                    self.table = np.append(self.table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
+        with open(file_name, 'r') as f :
+            lines = f.readlines()
+            for line in lines:
+                l = line.strip().split()
+                self.table = np.append(self.table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
 
 
         self.flags['hard_core_safe_dist'] = np.amax(self.table)
 
-    def load_file_Angstrom_m(self, parser = None, files = None):
+    def load_file_Angstrom_m(self, files = None):
         """
         Load multiple different files for surfaces, i.e., make proteins with different dnas attached to different sites.
-        off_name[curr_block] has to be a list of M elements, where M is the number different attachment sites.
         :return:
         """
 
-
-        if (parser is None or parser == 'xyz') and files is None:
-            _t = []
-            for i in range(self.options.off_name[self.curr_block].__len__()):
-                with open(self.options.off_name[self.curr_block][i], 'r') as f :
-                    lines = f.readlines()
-                    _c = 0
-                    for line in lines:
-                        l = line.strip().split()
-                        self.table = np.append(self.table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
-                        _c += 1
-                del f
-                _t.append(_c)
-
-            self.flags['multiple_surface_types'] = _t
-            self.flags['hard_core_safe_dist'] = np.amax(self.table)
-            self.flags['simple_I_tensor'] = False
-
-        elif parser is None or parser == 'xyz':
-            _t = []
-            for i in range(files.__len__()):
-                with open(files[i], 'r') as f :
-                    lines = f.readlines()
-                    _c = 0
-                    for line in lines:
-                        l = line.strip().split()
-                        self.table = np.append(self.table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
-                        _c += 1
-                del f
-                _t.append(_c)
-            self.flags['multiple_surface_types'] = _t
-            self.flags['hard_core_safe_dist'] = np.amax(self.table)
-            self.flags['simple_I_tensor'] = False
-
-        else:
-            raise ImportError('unknown parse method')
+        _t = []
+        for i in range(files.__len__()):
+            with open(files[i], 'r') as f :
+                lines = f.readlines()
+                _c = 0
+                for line in lines:
+                    l = line.strip().split()
+                    self.table = np.append(self.table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
+                    _c += 1
+            del f
+            _t.append(_c)
+        self.flags['multiple_surface_types'] = _t
+        self.flags['hard_core_safe_dist'] = np.amax(self.table)
+        self.flags['simple_I_tensor'] = False
 
     def will_build_from_shapes(self, properties = None):
         if not (properties is None):
@@ -534,13 +431,11 @@ class shape(object):
             self.keys['EXT'].append([_l_list, {'EXT_IDX' : self.ext_objects.__len__() - 1, 'num' : num, 'linker_type' : linker_bond_type}, key])
 
 class Cube(shape):
-    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Radius = None, Num = None):
-        shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
+    def __init__(self, Num,  surf_plane = None, lattice = None, properties = None, Radius = None):
+        shape.__init__(self, surf_plane, lattice, properties)
 
-        if Num is None:
-            Num = self.options.num_surf[self.curr_block]
         if Radius is None:
-            Radius = self.options.corner_rad[self.curr_block]*2 / self.options.size[self.curr_block]
+            Radius = 0.0
         NumSide = int(round((Num * (1-Radius)**2/6)**0.5))
 
         #Create 6 faces, with range (-1+Radius) to (1-Radius), NumSide**2 points on each
@@ -627,13 +522,11 @@ class Cube(shape):
         self.flags['call'] = 'cube'
 
 class Octahedron(shape):
-    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Num = None):
-        shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
+    def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
+        shape.__init__(self,  surf_plane, lattice, properties)
                 #Creating faces; Generate triangular lattice with N points on the lower side. Triangular points are (1,sqrt(3)),(0,0), (2, 0), Limit points are
-        if Num is None:
-            FacePoint = self.options.num_surf[self.curr_block] / 8
-        else:
-            FacePoint = Num / 8
+
+        FacePoint = Num / 8
         WhP = 1
         Table =np.array([[0, 0]])
         TableAdd = np.zeros((1,2))
@@ -697,115 +590,18 @@ class Octahedron(shape):
         self.flags['simple_I_tensor'] = True
         self.flags['call'] = 'oct'
 
-class __DEPRECATEDRhombicDodecahedron(shape):
-    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Num = None):
-        shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
-        #Generate one face
-        if Num is None:
-            Num = self.options.num_surf[self.curr_block]*2
-
-        ang = acos(1./3.)
-        d = 2*sin(ang/2)
-        D = 2*cos(ang/2)
-
-        Numx = int(round(((2*Num/12.)**0.5 * 1/d)))
-        Numy = int(round(((2*Num/12.)**0.5 * 1/D)))
-
-        if Numx%2 !=1:
-            Numx += 1
-        if Numy%2 != 1:
-            Numy += 1
-
-        xline = np.linspace(-D/2, D/2, Numx, dtype = float)
-        yline = np.linspace(-d/2, d/2, Numy, dtype = float)
-        linedst = xline[1]-xline[0]
-        TableFace = np.zeros((0,3))
-
-        for i in range(xline.__len__()):
-            for j in range(yline.__len__()):
-                if abs(xline[i])*d + abs(yline[j])*D < d*D/2.0 + 1e-5:
-                    TableFace = np.append(TableFace, [[xline[i],yline[j],0]],axis = 0)
-        arot = -ang/2
-
-        for i in range(TableFace.__len__()):
-            TableFace[i,:] = np.array([[TableFace[i,0]*cos(arot)-TableFace[i,1]*sin(arot), TableFace[i,0]*sin(arot)+TableFace[i,1]*cos(arot),0]])
-
-        TableFace = TableFace - [[0, 0, 6**0.5/3.0]]
-
-        TableRotP = np.copy(TableFace)
-        TableRotM = np.copy(TableFace)
-        for i in range(TableFace.__len__()):
-            #Rotation 60 deg / x+y axis
-            ux = 1
-            uy = 0
-            L = 0*-sin(pi/2 - ang)
-            an = pi/3
-            TableRotP[i,:] = np.array([[(cos(an)+ux**2*(1-cos(an)))*TableRotP[i,0]+ux*uy*(1-cos(an))*TableRotP[i,1]+uy*sin(an)*TableRotP[i,2]+L, uy*ux*(1-cos(an))*TableRotP[i,0] + (cos(an) + uy**2*(1-cos(an)))*TableRotP[i,1] - ux*sin(an)*TableRotP[i,2], -uy*sin(an)*TableRotP[i,0] +ux*sin(an)*TableRotP[i,1]+cos(an)*TableRotP[i,2]]])
-
-            ux = cos(ang/2)
-            uy = sin(ang/2)
-
-            vl = ux*TableRotP[i,0] + uy*TableRotP[i,1]
-
-
-
-            TableRotM[i,:] = np.array([[2*vl*ux - TableRotP[i,0], 2*vl*uy - TableRotP[i,1], TableRotP[i,2]]])
-
-
-        TableTot = np.zeros((0,3))
-
-        for i in range(TableFace.__len__()):
-            TableTot = np.append(TableTot, [[TableFace[i,0], TableFace[i,1], TableFace[i,2]]],axis = 0)
-            TableTot = np.append(TableTot, [[TableFace[i,0], TableFace[i,1], -TableFace[i,2]]],axis = 0)
-            TableTot = np.append(TableTot, [[-TableRotP[i,0], TableRotP[i,1], TableRotP[i,2]]],axis = 0)
-            TableTot = np.append(TableTot, [[-TableRotP[i,0], TableRotP[i,1], -TableRotP[i,2]]],axis = 0)
-
-            TableTot = np.append(TableTot, [[TableRotP[i,0], -TableRotP[i,1], -TableRotP[i,2]]],axis = 0)
-            TableTot = np.append(TableTot, [[TableRotP[i,0], -TableRotP[i,1], TableRotP[i,2]]],axis = 0)
-
-            TableTot = np.append(TableTot, [[-TableRotM[i,0], TableRotM[i,1], TableRotM[i,2]]],axis = 0)
-            TableTot = np.append(TableTot, [[-TableRotM[i,0], TableRotM[i,1], -TableRotM[i,2]]],axis = 0)
-
-            TableTot = np.append(TableTot, [[TableRotM[i,0], -TableRotM[i,1], -TableRotM[i,2]]],axis = 0)
-            TableTot = np.append(TableTot, [[TableRotM[i,0], -TableRotM[i,1], TableRotM[i,2]]],axis = 0)
-
-        ux = sin(ang/2)
-        uy = cos(ang/2)
-        uz = 0
-        TableRotS1 = np.copy(TableFace)
-        for i in range(TableFace.__len__()):
-            an = pi/2
-            TableRotS1[i,:] = np.array([[(cos(an)+ux**2*(1-cos(an)))*TableRotS1[i,0]+(ux*uy*(1-cos(an))-uz*sin(an))*TableRotS1[i,1]+(ux*uz*(1-cos(an))+uy*sin(an))*TableRotS1[i,2], (uy*ux*(1-cos(an))+uz*sin(an))*TableRotS1[i,0] + (cos(an) + uy**2*(1-cos(an)))*TableRotS1[i,1] +(uy*uz*(1-cos(an))- ux*sin(an))*TableRotS1[i,2], (ux*uz*(1-cos(an))-uy*sin(an))*TableRotS1[i,0] +(uz*uy*(1-cos(an))+ux*sin(an))*TableRotS1[i,1]+(cos(an)+uz**2*(1-cos(an)))*TableRotS1[i,2]]])
-
-        for i in range(TableFace.__len__()):
-
-            TableTot = np.append(TableTot, [[TableRotS1[i,0], TableRotS1[i,1], TableRotS1[i,2]]], axis = 0)
-            TableTot = np.append(TableTot, [[-TableRotS1[i,0], -TableRotS1[i,1], -TableRotS1[i,2]]], axis = 0)
-
-        self.table = 2*TableTot
-        self.remove_duplicates(tol = float(linedst * 0.90))
-        self.flags['normalized'] = True
-        self.flags['hard_core_safe_dist'] = 3**0.5
-        self.flags['volume'] = 16.0 / 9.0 *3**0.5 * 2.0**3
-        self.flags['surface'] = 8*2**0.5 * 2**2
-        self.flags['simple_I_tensor'] = True
-        self.flags['call'] = 'rh_dodec'
-
 class PdbProtein(shape):
-    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, filename = None):
-        shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
+    def __init__(self, surf_plane = None, lattice = None, properties = None, filename = None):
+        shape.__init__(self, surf_plane, lattice, properties)
         if filename is not None:
             self.parse_pdb_protein(filename)
 
-    def parse_pdb_protein(self, filename = None):
+    def parse_pdb_protein(self, filename):
         """
         Parses a pdbml protein and stores the file in self._pdb
         :param filename:
         :return:
         """
-        if filename is None:
-            filename = self.options.xyz_name[self.curr_block]
-
 
         with open(filename, 'r') as f:
             self._pdb = f.readlines()
@@ -1006,11 +802,10 @@ class PdbProtein(shape):
         self.keys['shell'][_shl_idx][2].append({'EXT_IDX':self.ext_objects.__len__() - 1, 'num' : num, 'linker_type' : linker_bond_type})
 
 class Sphere(shape):
-    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Num = None):
-        shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
+    def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
+        shape.__init__(self, surf_plane, lattice, properties)
         # a sphere of r = 1
-        if Num is None:
-            Num = self.options.num_surf[self.curr_block]
+
         self.table = np.zeros((0,3))
         gold_ang = pi*(3-5**0.5)
         th = gold_ang*np.arange(Num)
@@ -1027,11 +822,9 @@ class Sphere(shape):
         self.flags['simple_I_tensor'] = True
 
 class RhombicDodecahedron(shape):
-    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Num = None):
-        shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
+    def __init__(self, Num,  surf_plane = None, lattice = None, properties = None):
+        shape.__init__(self, surf_plane, lattice, properties)
         #Generate one face
-        if Num is None:
-            Num = self.options.num_surf[self.curr_block]*2
 
         ang = acos(1./3.)
 
@@ -1109,12 +902,11 @@ class RhombicDodecahedron(shape):
         self.flags['call'] = 'rh_dodec'
 
 class Tetrahedron(shape):
-    def __init__(self, curr_block = None, options = None, surf_plane = None, lattice = None, properties = None, Num = None):
-        shape.__init__(self, curr_block, options, surf_plane, lattice, properties)
-        if Num is None:  # support for deprecated option build
-            FacePoint = self.options.num_surf[self.curr_block] / 4
-        else:
-            FacePoint = Num / 4
+    def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
+        shape.__init__(self,  surf_plane, lattice, properties)
+
+
+        FacePoint = Num / 4
 
         WhP = 1
         Table =np.array([[0, 0, 0]])
