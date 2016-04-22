@@ -23,6 +23,7 @@ def c_hoomd_box(v, int_bounds, z_multi =1.00):
         vx[_i] *= 2*int_bounds[0]
         vy[_i] *= 2*int_bounds[1]
         vz[_i] *= 2*int_bounds[2]*z_multi
+#        vz[_i] *= z_multi
 
 
     lx = (dot(vx, vx))**0.5
@@ -84,8 +85,8 @@ options.flag_dsDNA_angle = False ## Initialization values, these are calculated 
 options.flag_flexor_angle = False
 
 options.center_sec_factor = (3**0.5)*1.35 # security factor for center-center. min dist between particles in random config.
-options.z_m = 1.0 # box z multiplier for surface energy calculations.
-options.exposed_surf = [1, 1, 1] ## z component must not be zero
+options.z_m = 1.7 # box z multiplier for surface energy calculations.
+options.exposed_surf = [1, 0, 1] ## z component must not be zero
 options.delta_surface = 0.00
 options.density_multiplier = 1.00
 
@@ -112,11 +113,9 @@ DNA_brush = LinearChain.DNAChain(n_ss = 1, n_ds = 1, sticky_end =[], bond_length
 
 shapes = [GenShape.Cube(Num=150, Radius = 0.0, surf_plane = options.exposed_surf, lattice = [1.0, 1.0, lz])]
 
-shapes[-1].will_build_from_shapes(properties = {'size' : S, 'surf_type' : 'P', 'density' : 14.29, 'nonuniformDNA' : False, 'delta':options.delta_surface})
-shapes[-1].set_dna(n_ss = 1, n_ds = dsL, s_end = ['X','Y','Z'], p_flex = array([-1]), num = int(0*options.density_multiplier))
+shapes[-1].set_properties(properties = {'size' : S, 'surf_type' : 'P', 'density' : 14.29})
+shapes[-1].set_ext_grafts(DNA_chain, num = int(0*options.density_multiplier), linker_bond_type='S-NP')
 shapes[-1].set_ext_grafts(DNA_brush, num = 2*1, linker_bond_type = 'S-NP')
-shapes[-1].generate_internal_bonds(signature = 'P', num_nn = 0)
-shapes[-1].reduce_internal_DOF(n_rel_tol=2e-2)
 shapes[-1].rotate_tables(shapes[-1].srot_mat)
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
@@ -125,86 +124,23 @@ options.sticky_pairs = [['X', 'Z'], ['Y', 'Y']]
 options.sticky_track = [['X', 'Z'], ['Y', 'Y']]
 
 
-###########################
-## Generally one does not have to really change
-## code below this unless for some specific hoomd
-## temperature control, at the end of the file
-## some options are obsolete.
-###########################
-
-
-
-
-options.corner_rad = [2.5]
-options.n_double_stranded = [5]
-options.flexor = [array([4])]# flexors with low k constant along the dsDNA chain. Does not return any error if there
-# is no flexor, but options.flag_flexor_angle will stay false
-options.n_single_stranded = [3]
-options.sticky_ends = [['X','X', 'X'], ['Y', 'Y']]
-options.surface_types = ['P1', 'P2'] # Should be labeled starting with 'P'
-options.num_surf = [5*int((options.size[0]*2.0 / options.scale_factor)**2 * 2) for i in range(64)] # initial approximation for # of beads on surface
-options.densities = [14.29] # in units of 2.5 ssDNA per unit volume. 14.29 for gold
-options.volume = options.densities[:] # temp value, is set by genshape
-options.p_surf = options.densities[:] # same
 options.int_bounds = [2, 2, 2] # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
-options.lattice_multi = [1.0, 1.0, lz]
 
-
-
-if options.flag_surf_energy:
-    center_file_object = CenterFile.CenterFile(options, init = None, surf_plane = options.exposed_surf, Lattice = options.lattice_multi)
-    center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0, 0, 0])
-    center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0.5, 0.5, 0.5])
-    center_file_object.rotate_and_cut(int_bounds = options.int_bounds)
-    options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
-    options.rotm = center_file_object.rotation_matrix
-    options.vz = [0.0, 0.0, options.vz[2]]
-    options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds, z_multi=options.z_m)
-    center_file_object.expend_table()
-else:
-    center_file_object = CenterFile.CenterFile(options)
-    TargetBx = options.box_size[0]*options.target_dim/options.scale_factor
-    TargetBy = options.box_size[1]*options.target_dim/options.scale_factor
-    TargetBz = options.box_size[2]*options.target_dim/options.scale_factor
-    options.target_dims = [TargetBx, TargetBy, TargetBz]
-
-
-options.non_centrosymmetric_moment = True
-
-if options.non_centrosymmetric_moment:
-    options.mass = []
-    options.m_w = []
-    options.m_surf = []
-    options.dna_coverage = []
-else:
-    options.dna_coverage = [10] # total number of DNA chains
-
-##################################################################################################################
-## Derived quantities, volumes are calculated in genshape functions.
-#################################################################################################################
-
-if options.non_centrosymmetric_moment:
-    for i in range(options.volume.__len__()):
-        options.mass.append(options.densities[i] * options.volume[i])
-        options.m_w.append(options.mass[i]*2.0 / 5.0)
-        options.m_surf.append(options.mass[i]*3.0 / 5.0 / options.num_surf[i])
-        options.box_size_packing += 2.5*options.size[i] / options.scale_factor # special
-        options.dna_coverage.append(int(round(0.17*(options.size[i]*2.0 / options.scale_factor)**2 * 6)))
-else:
-    for i in range(options.volume.__len__()):
-        options.box_size_packing += 2.5*amax(abs(array(shapes[i].pos)))*2.0 / options.scale_factor
-
+options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*options.target_dim]
+center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, lattice = options.lattice_multi, int_bounds=options.int_bounds)
+center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0, 0, 0])
+center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0.5, 0.5, 0.5])
+center_file_object.rotate_and_cut(int_bounds = options.int_bounds)
+options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
+options.rotm = center_file_object.rotation_matrix
+options.vz = [0.0, 0.0, options.vz[2]]
+options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds, z_multi=options.z_m)
 
 # Target box sizes
 ################################
 # Making buildobj
 ################################
-
-options.center_types = ['W' for i in range(center_file_object.positions.__len__())]
-options.num_particles = [1 for i in range(center_file_object.positions.__len__())]
-for i in range(options.num_particles.__len__() - shapes.__len__()):
-    shapes.append(shapes[-1])
 
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
 buildobj.set_rotation_function(mode = 'none')

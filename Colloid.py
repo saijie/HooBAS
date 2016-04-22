@@ -127,13 +127,10 @@ class Colloid(object):
         for i in range(self.att_list.__len__()):
             for j in range(self.att_list[i].__len__()):
                 self.att_list[i][j] += off
-        if not self.flags['mst']:
-            for i in range(self.rem_list.__len__()):
-                self.rem_list[i] += off
-        else:
-            for rmlst in self.rem_list:
-                for el in rmlst:
-                    el += off
+
+        for rmlst in self.rem_list:
+            for el in rmlst:
+                el += off
     @property
     def num_beads(self):
         return self.beads.__len__()
@@ -207,18 +204,14 @@ class Colloid(object):
 
         if num > self.rem_list[rem_id].__len__():
             raise ValueError('DNA chain number greater than number of surface beads')
-
         try:
             self.sticky_used.append(self._sh.ext_objects[EXT_IDX].sticky_end)
         except AttributeError:
             pass
 
         _tmp_a_list = []
-
         while _tmp_a_list.__len__() < num:
-
             _tmp_a_list.append(self.rem_list[rem_id].pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
-
 
         self.att_list.append(_tmp_a_list)
 
@@ -252,7 +245,6 @@ class Colloid(object):
 
 class RigidStructure(object):
     def __init__(self):
-
         self.body_num = 0
         self.body_beads = []
 
@@ -271,8 +263,10 @@ class SimpleColloid(Colloid, RigidStructure):
     be a normalized one
     """
     def __init__(self, size, **args):
+
         Colloid.__init__(self, **args)
         RigidStructure.__init__(self)
+
         # set the surface mass to be 3/5 of the overall mass to fix the rigid body intertia
         self.s_mass = self.mass * 3.0 / 5.0 / self._sh.num_surf
         self.size = size
@@ -306,6 +300,7 @@ class SimpleColloid(Colloid, RigidStructure):
 
 class ComplexColloid(Colloid, RigidStructure):
     def __init__(self, **args):
+
         Colloid.__init__(self, **args)
         RigidStructure.__init__(self)
 
@@ -332,7 +327,6 @@ class ComplexColloid(Colloid, RigidStructure):
         if self.bonds.__len__() == 0:
             self.body = -1
         self.build_shell()
-
 
     def __build_shells(self):
         for i in range(self.beads.__len__()):
@@ -370,7 +364,6 @@ class ComplexColloid(Colloid, RigidStructure):
                 self.body_beads.append(self.beads[-1])
         for i in range(self._sh.internal_bonds.__len__()):
             self.bonds.append([self._sh.internal_bonds[i][-1], self._sh.internal_bonds[i][0], self._sh.internal_bonds[i][1]])
-
 
     def build_shell(self):
         for shl_idx in range(self._sh.keys['shell'].__len__()):

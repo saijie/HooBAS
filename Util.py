@@ -9,15 +9,17 @@ class vector(object):
     """
     simple vector class with useful tools; should be reusable
     """
-    def __init__(self, array, ntol = 1e-5, parent_lattice = None):
+    def __init__(self, array, ntol = 1e-5):
         self.array = np.array(array, dtype=float)
         self.ntol = ntol
         if array.__len__() <1:
             del self
-        if parent_lattice is None :
-            self.latt = [1.0, 1.0, 1.0]
-        else:
-            self.latt = parent_lattice
+    def __add__(self, other):
+        return vector(self.array + other.array)
+    def __mul__(self, other):
+        return vector(self.array * other)
+    def __neg__(self):
+        return vector(-self.array)
 
     @property
     def x(self):
@@ -33,19 +35,6 @@ class vector(object):
         _c = 0.0
         for i in range(self.array.__len__()):
             _c += self.array[i]**2
-        _c **= 0.5
-        return _c
-    def cnorm(self, Lattice = None):
-        """
-        Returns crystallographic plane distance for a non-cubic lattice
-        :param Lattice: List of length dim, lattice parameters for orthorhombic
-        :return:
-        """
-        if Lattice is None:
-            Lattice = [1, 1, 1]
-        _c = 0.0
-        for i in range(self.array.__len__()):
-            _c += self.array[i]**2 / Lattice[i]**2
         _c **= 0.5
         return _c
     def normalize(self):
@@ -124,3 +113,17 @@ def gen_random_mat():
     _r_z = random.uniform(0,1)
     _r_ori = [(1-_r_z**2)**0.5*cos(_r_th), (1-_r_z**2)**0.5*sin(_r_th), _r_z]
     return get_rot_mat(_r_ori)
+
+
+def isdiagonal(lattice):
+    if (np.diag(lattice) == lattice).all():
+        return True
+    else:
+        return False
+
+def iscubic(lattice):
+    diag = np.diag(lattice)
+    if isdiagonal(lattice) and (diag[0] == diag[1] == diag[2]):
+        return True
+    else:
+        return False

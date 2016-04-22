@@ -2,10 +2,12 @@ __author__ = 'martin'
 
 import random
 from fractions import gcd
+from math import *
 
 import numpy as np
 
 from Util import vector
+from Util import get_rot_mat
 
 
 class CenterFile(object):
@@ -36,12 +38,12 @@ class CenterFile(object):
         self.BoxSize = 0
         self.built_centers = []
 
-        #self.vx = [self.BoxSize, 0.0, 0.0]
-        #self.vy = [0.0, self.BoxSize, 0.0]
-        #self.vz = [0.0, 0.0, self.BoxSize]
-        #self.vmat = np.array([self.vx, self.vy, self.vz])
-        self.intbounds = [1, 1, 1]
-        self.lattice = np.zeros((3,3), dtype=float)
+        self.vx = [self.BoxSize, 0.0, 0.0]
+        self.vy = [0.0, self.BoxSize, 0.0]
+        self.vz = [0.0, 0.0, self.BoxSize]
+        self.vmat = np.array([self.vx, self.vy, self.vz])
+        #self.intbounds = [1, 1, 1]
+        #self.lattice = np.zeros((3,3), dtype=float)
 
     # list of usual useful properties, getters and setters
     @property
@@ -230,65 +232,57 @@ class CenterFile(object):
             self.table_size -= self.table[drop_index].__len__()
             self.table[drop_index] = np.zeros((0,3))
 
+
+
 class Lattice(CenterFile):
 
     def __init__(self,  lattice, surf_plane = None, int_bounds = None):
         CenterFile.__init__(self)
 
+
+        # if lattice is a constant, assume cubic symmetry, if three numbers are passed, assume orthorhombic, otherwise
+        # assume [v1, v2, v3] are passed
+        self.lattice = np.ndarray((3,3))
+        self.parse_input_lattice(lattice)
+
+        self.reciprocal = 2*pi*np.transpose(np.linalg.inv(self.lattice))
+
+
         if not (surf_plane is None) and surf_plane.__len__() == 3:
             surf_plane[:] = (x / reduce(gcd, surf_plane) for x in surf_plane)
 
-            r_vec = [surf_plane[0] / self.lattice[0], surf_plane[1] / self.lattice[1], surf_plane[2] / self.lattice[2]]
-            self.rot_mat = self.__get_rot_mat(r_vec)
+            r_vec = surf_plane[0] * self.reciprocal[:,0] + surf_plane[1] * self.reciprocal[:,1] + surf_plane[2] * self.reciprocal[2]
+
+            #r_vec = [surf_plane[0] / self.lattice[0], surf_plane[1] / self.lattice[1], surf_plane[2] / self.lattice[2]]
+            self.rot_mat = get_rot_mat(r_vec)
             self.rot_flag = True
             self.surf_plane = vector(surf_plane)
             self.n_plane = vector(r_vec)
-        if not int_bounds is None:
-            self.int_bounds = [1,1,1]
-        self.lattice = lattice
-
-    def add_particles_on_lattice(self, center_type, offset):
-        """
-        Adds particle on a orthorhombic lattice, with offset as a way to decorate (i.e. make FCC crystals), each offsets adds
-        one particle per unit cell; if Lattice is unset, defaults to cubic
-
-        Useful decorators (cubic lattice)
-
-        BCC : [0.5, 0.5, 0.5]
-        FCC : [0.5, 0.5, 0], plus permutations, 3 offsets
-        Diamond : FCC + [1/4, 1/4, 1/4]
+        if int_bounds is None:
+            self.int_bounds = [4,4,4]
+        else:
+            self.int_bounds = [int_bounds[0] * 2, int_bounds[1] * 2, int_bounds[2] * 2]
 
 
-        :param center_type: str to write in xyz table
-        :param offset: list of length 3 in units of lattice
-        :return: None
-        """
 
+    def parse_input_lattice(self, lattice):
+        e = IndexError('CenterFile : Lattice : parse_input_lattice : cannot parse the supplied lattice')
 
-        new_table = np.zeros(( (self.int_bounds[0]+1) *(self.int_bounds[1] + 1) * (self.int_bounds[2] + 1),3), dtype= float)
-
-        for _ in range(new_table.shape[0]):
-            new_table[_, :] += offset[0] * self.lattice[0,:] + offset[1] * self.lattice[1,:] + offset[2] * self.lattice[2,:]
-
-        _ = 0
-        for _a1 in range(0, self.int_bounds[0] + 1):
-            for _a2 in range(0, self.int_bounds[1] + 1):
-                for _a3 in range(0, self.int_bounds[2] + 1):
-                    new_table[_,:] += _a1 * self.lattice[0,:] + _a2 * self.lattice[1,:] + _a3 * self.lattice[2,:]
-                    _ += 1
-
-
-        is_built = False
-        for i in range(self.built_centers.__len__()):
-            if self.built_centers[i] == center_type:
-                self.table[i] = np.append(self.table[i], new_table, axis = 0)
-                self.table_size += new_table.__len__()
-                is_built = True
-
-        if not is_built:
-            self.table.append(new_table)
-            self.table_size+= new_table.__len__()
-            self.built_centers.append(center_type)
+        if isinstance(lattice, np.ndarray) and lattice.shape == (3,3):
+            self.lattice = lattice
+            return
+        if isinstance(lattice, float):
+            self.lattice = np.array([[lattice, 0, 0], [0, lattice,0], [0,0,lattice]], dtype = float)
+        elif hasattr(lattice, '__iter__'):
+            if isinstance(lattice[0], float):
+                self.lattice = np.array([[lattice[0], 0, 0], [0,lattice[1],0], [0,0,lattice[2]]], dtype=float)
+            elif hasattr(lattice[0], '__iter__'):
+                self.lattice = np.array([[lattice[0][0], lattice[1][0],lattice[2][0]],[lattice[0][1], lattice[1][1],lattice[2][1]],[lattice[0][2], lattice[1][2],lattice[2][2]]],
+                                    dtype=float)
+            else:
+                raise e
+        else:
+            raise e
 
     def _manual_rot_cut(self, int_bounds):
         """
@@ -374,36 +368,32 @@ class Lattice(CenterFile):
                 self.table[i][j,:] = _dump_vec.array
                 del _dump_vec
 
-        _b_x = vector([self.BoxSize * self.lattice[0], 0, 0], parent_lattice=self.lattice)
-        _b_y = vector([0, self.BoxSize * self.lattice[1], 0], parent_lattice=self.lattice)
-        _b_z = vector([0, 0, self.BoxSize * self.lattice[2]], parent_lattice=self.lattice)
+        _b_x = vector(self.lattice[:,0])
+        _b_y = vector(self.lattice[:,1])
+        _b_z = vector(self.lattice[:,2])
 
         _b_x.rot(mat = self.rot_mat)
         _b_y.rot(mat = self.rot_mat)
         _b_z.rot(mat = self.rot_mat)
-
-
-        if self.surf_plane.z != 0 and (self.surf_plane.x != 0 or self.surf_plane.y != 0):
-            _b_xN = vector(_b_x.array * self.surf_plane.y - _b_y.array * self.surf_plane.x)
-        elif self.surf_plane.array[2] != 0:
-            _b_xN = _b_x
+        if abs(_b_z.z) > abs(_b_x.z) and abs(_b_z.z) > abs(_b_y.z):
+            # usual case, take bz as reference for z axis
+            _b_xN = _b_x + -_b_z * (_b_x.z / _b_z.z)
+            _b_yN = _b_y + -_b_z * (_b_y.z / _b_z.z)
         else:
-            _b_xN = vector(_b_x.array)
+            if abs(_b_x.z) > abs(_b_y.z):
+                _b_xN = _b_z + -_b_x * (_b_z.z / _b_x.z)
+                _b_yN = _b_y + -_b_x * (_b_y.z / _b_x.z)
+                _b_z.array = _b_x.array
+            else:
+                _b_xN = _b_x + -_b_y * (_b_x.z / _b_y.z)
+                _b_yN = _b_z + -_b_y * (_b_z.z / _b_y.z)
+                _b_z.array = _b_y.array
 
-        if self.surf_plane.z != 0 and self.surf_plane.x != 0:
-            _b_yN = vector(_b_x.array * self.surf_plane.z- _b_z.array * self.surf_plane.x)
-        elif self.surf_plane.array[2] != 0 and (self.surf_plane.y != 0):
-            _b_yN = vector(_b_y.array * self.surf_plane.z - _b_z.array * self.surf_plane.y)
-        else:
-            _b_yN = vector(_b_y.array)
-
-
-        _b_z.array = _b_x.array * self.surf_plane.x + _b_y.array * self.surf_plane.y #np.array([0.0, 0.0, self.BoxSize*self.surf_plane.array[2] * self.lattice[2]])
         _b_y.array = _b_yN.array
         _b_x.array = _b_xN.array
-        del _b_xN, _b_yN
+        # del _b_xN, _b_yN
         #decomposition matrix
-        _mat = np.array([[_b_x.x, _b_y.x, _b_z.x], [_b_x.y, _b_y.y,_b_z.y], [_b_x.z,_b_y.z,_b_z.z]])
+        _mat = np.array([[_b_x.x, _b_y.x,0.0* _b_z.x], [_b_x.y, _b_y.y,0.0*_b_z.y], [0.0,0.0,_b_z.z]])
 
 
         _index_to_keep = []
@@ -418,8 +408,7 @@ class Lattice(CenterFile):
                 _tol = 1e-3
                 if (-int_bounds[0] - _tol < _a1 <= int_bounds[0] + _tol) \
                         and (-int_bounds[1]-_tol < _a2 <= int_bounds[1]+_tol) \
-                        and (-int_bounds[2]-_tol < _a3 <= int_bounds[2] + _tol) \
-                        and (-int_bounds[2]-_tol < _tmp_dump.z / _b_z.z < int_bounds[2] + _tol) : #<- change to the stupid boxsize option
+                        and (-int_bounds[2]-_tol < _a3 <= int_bounds[2] + _tol) :
 
                     _index_to_keep.append([i,j])
                 del _tmp_dump
@@ -442,6 +431,48 @@ class Lattice(CenterFile):
         self.vmat = _mat
         self.int_bounds = int_bounds
 
+    def add_particles_on_lattice(self, center_type, offset):
+        """
+        Adds particle on a orthorhombic lattice, with offset as a way to decorate (i.e. make FCC crystals), each offsets adds
+        one particle per unit cell; if Lattice is unset, defaults to cubic
+
+        Useful decorators (cubic lattice)
+
+        BCC : [0.5, 0.5, 0.5]
+        FCC : [0.5, 0.5, 0], plus permutations, 3 offsets
+        Diamond : FCC + [1/4, 1/4, 1/4]
+
+
+        :param center_type: str to write in xyz table
+        :param offset: list of length 3 in units of lattice
+        :return: None
+        """
+
+
+        new_table = np.zeros(( (2*self.int_bounds[0]+1) *(2*self.int_bounds[1]+1) * (2*self.int_bounds[2]+1),3), dtype= float)
+
+        for _ in range(new_table.shape[0]):
+            new_table[_, :] += offset[0] * self.lattice[0,:] + offset[1] * self.lattice[1,:] + offset[2] * self.lattice[2,:]
+
+        _ = 0
+        for _a1 in range(-self.int_bounds[0], self.int_bounds[0] + 1):
+            for _a2 in range(-self.int_bounds[1], self.int_bounds[1] + 1):
+                for _a3 in range(-self.int_bounds[2], self.int_bounds[2] + 1):
+                    new_table[_,:] += _a1 * self.lattice[0,:] + _a2 * self.lattice[1,:] + _a3 * self.lattice[2,:]
+                    _ += 1
+
+
+        is_built = False
+        for i in range(self.built_centers.__len__()):
+            if self.built_centers[i] == center_type:
+                self.table[i] = np.append(self.table[i], new_table, axis = 0)
+                self.table_size += new_table.__len__()
+                is_built = True
+
+        if not is_built:
+            self.table.append(new_table)
+            self.table_size+= new_table.__len__()
+            self.built_centers.append(center_type)
 
 
 class RandomPositions(CenterFile):
@@ -455,6 +486,10 @@ class RandomPositions(CenterFile):
         self.table_size = 0
 
         self.lattice = np.array([[system_size, 0, 0], [0, system_size, 0], [0, 0, system_size]], dtype=float)
+        self.vx = [system_size,0.0,0.0]
+        self.vy = [0.0, system_size, 0.0]
+        self.vz = [0.0, 0.0, system_size]
+        self.vmat = [self.vx, self.vy, self.vz]
 
         local_min_dist = np.zeros(particle_numbers.__len__(), dtype = float)
         if shape_objects is not None:

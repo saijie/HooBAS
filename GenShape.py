@@ -227,30 +227,17 @@ class shape(object):
         self.flags['hard_core_safe_dist'] = np.amax(self.table)
         self.flags['simple_I_tensor'] = False
 
-    def will_build_from_shapes(self, properties = None):
+    #DEPRECATED METHOD, name overload
+    def will_build_from_shapes(self, **args):
+        self.set_properties(**args)
+
+
+    def set_properties(self, properties = None):
         if not (properties is None):
             self.flags.update(properties)
         self.flags['pdb_object'] = True
 
-    def set_dna(self, key = None, n_ss = None, n_ds = None, s_end = None, p_flex = None, num =None):
-        """
-        Emulates pdb type DNA keying for non-pdb shapes. Used after will_build_from_shapes
-        :param key:
-        :param n_ss:
-        :param n_ds:
-        :param s_end:
-        :param p_flex:
-        :param num:
-        :return:
-        """
-        _l_list = []
-        for i in range(self.table.__len__()):
-            _l_list.append([self.table[0, 0], self.table[0, 1], self.table[0, 2]])
-        if not 'dna' in self.keys:
-            self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
-        else:
-            self.keys['dna'] = self.keys['dna'].append([_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key])
-
+    #DEPRECATED METHOD, name overload
     def generate_surface_bonds(self, *args):
         #old name for this function
         self.generate_internal_bonds(*args)

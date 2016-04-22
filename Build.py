@@ -13,6 +13,7 @@ import CoarsegrainedBead
 import Colloid
 import PeriodicBC
 from Util import vector as vec
+from Util import iscubic
 
 
 class BuildHoomdXML(object):
@@ -132,13 +133,8 @@ class BuildHoomdXML(object):
         self.Xsalt = np.array([0.0, 0.4865, 0.6846, 1.0, 2.0, 3.0, 4.0, 5.0], dtype= float)
         self.Ysalt = np.array([71.7457, 62.5617, 60.1328, 56.5655, 47.8368, 40.2467, 35.8444, 32.2770], dtype = float)
 
-        if init is None:
-            self._c_pos = center_obj.positions
-            self._c_t = center_obj.built_types
-            self._sh_obj = shapes
-            self.__build_from_options()
 
-        if init == 'from_shapes':
+        if True:
             self._c_pos = center_obj.positions
             self._c_t = center_obj.built_types
             self._sh_obj = shapes
@@ -513,7 +509,7 @@ class BuildHoomdXML(object):
                                                                 **self._sh_obj[i].flags
                                                                ))
                 else:
-                    self.__particles.append(Colloid.ComplexColloid(size = self._sh_obj[n_ind].flags['size'],center_type = self._c_t[n_ind],
+                    self.__particles.append(Colloid.SimpleColloid(center_type = self._c_t[n_ind],
                                                                loc_sh_obj = self._sh_obj[n_ind],
                                                                 **self._sh_obj[i].flags
                                                                ))
@@ -709,7 +705,7 @@ class BuildHoomdXML(object):
     def write_to_file(self, z_box_multi = None, export_charge = False, export_diameter = False):
         L = self.current_box()
         if self.__opts.flag_surf_energy:
-            if (self.centerobj.lattice[0] == self.centerobj.lattice[1] == self.centerobj.lattice[2]) or\
+            if iscubic(self.centerobj.lattice) or\
                     (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.y == 0) or \
                     (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.z == 0) or \
                     (self.centerobj.surf_plane.y == 0 and self.centerobj.surf_plane.z == 0): # cubic
