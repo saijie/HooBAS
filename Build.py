@@ -5,6 +5,7 @@ import random
 import copy
 import types
 import re
+import warnings
 from itertools import chain
 
 import numpy as np
@@ -14,6 +15,7 @@ import Colloid
 import PeriodicBC
 from Util import vector as vec
 from Util import iscubic
+import Util
 
 
 class BuildHoomdXML(object):
@@ -98,7 +100,8 @@ class BuildHoomdXML(object):
     dna_tags, center_tags : returns all bead tags that will be printed for HOOMD for either the center beads or all the sticky ends.
 
     """
-    def __init__(self, center_obj, shapes, opts , init = None):
+
+    def __init__(self, center_obj, shapes, **kwargs):
         self.positions = np.zeros((0,3))
         self.__particles = []
 
@@ -111,16 +114,29 @@ class BuildHoomdXML(object):
         self.__types = []
         self.__p_num = []
         self.__obj_index = []
-        self.__opts = opts
+
+
+
+        # DEFAULT ARGUMENTS
+        self.z_multiplier = 1.0
+        self.filename = 'HOOBAS_FILE'
+        # list of properties defined in the Hoomd xml formats. First list refers to particle properties, second to bonded interaction types
+        self.xml_proplist = ['velocity', 'acceleration', 'diameter', 'charge', 'body', 'orientation', 'angmom',
+                             'moment_inertia', 'image']
+        self.xml_inter_prop_list = ['bonds', 'angles', 'dihedrals', 'impropers']
+
+        # overriding defaults
+        for key in kwargs: setattr(self, key, kwargs.get(key))
+
+
+
+
         self.impose_box = []
         self.flaglist = {}
         self.warnings = []
 
         self.centerobj = center_obj
 
-        # list of properties defined in the Hoomd xml formats. First list refers to particle properties, second to bonded interaction types
-        self.xml_proplist = ['velocity', 'acceleration', 'diameter', 'charge', 'body', 'orientation', 'angmom', 'moment_inertia', 'image']
-        self.xml_inter_prop_list = ['bonds', 'angles', 'dihedrals', 'impropers']
 
         self.ext_ang_t = []
         self.ext_bond_t = []
@@ -133,13 +149,10 @@ class BuildHoomdXML(object):
         self.Xsalt = np.array([0.0, 0.4865, 0.6846, 1.0, 2.0, 3.0, 4.0, 5.0], dtype= float)
         self.Ysalt = np.array([71.7457, 62.5617, 60.1328, 56.5655, 47.8368, 40.2467, 35.8444, 32.2770], dtype = float)
 
-
-        if True:
-            self._c_pos = center_obj.positions
-            self._c_t = center_obj.built_types
-            self._sh_obj = shapes
-            self.__build_from_shapes()
-        self.collect_warnings()
+        self._c_pos = center_obj.positions
+        self._c_t = center_obj.built_types
+        self._sh_obj = shapes
+        self.__build_from_shapes()
 
     @staticmethod
     def get_rot_mat(cubic_plane):
@@ -183,9 +196,11 @@ class BuildHoomdXML(object):
         for i in range(self.__particles.__len__()):
             _tmp.append(self.__particles[i].center_type)
         return _tmp
+
+    # this is a name overload
     @property
     def sys_box(self):
-        return self.__opts.sys_box
+        return self.current_box()
     @property
     def flags(self):
         return self.flaglist
@@ -279,15 +294,6 @@ class BuildHoomdXML(object):
                 _tlist.append([bead.beadtype])
         return list(set(list(chain.from_iterable(_tlist))))
 
-    def collect_warnings(self):
-        for particle in self.__particles:
-            try:
-                self.warnings.append(particle.flags['warnings'])
-                for warn in particle.flags['warnings']:
-                    raise Warning(warn)
-            except KeyError:
-                pass
-
     def get_type_charge_product(self, typeA, typeB):
         _qa = 0.0
         _qb = 0.0
@@ -304,9 +310,13 @@ class BuildHoomdXML(object):
             if _qaf and _qbf:
                 break
         if not _qaf:
-            print 'Build : get_type_charge_product : Did not find type ' + typeA + ' in the lists, returned 0 for charge product'
+            warnings.warn(
+                'Build : get_type_charge_product : Did not find type ' + typeA + ' in the lists, returned 0 for charge product',
+                UserWarning)
         if not _qbf:
-            print 'Build : get_type_charge_product : Did not find type ' + typeB + ' in the lists, returned 0 for charge product'
+            warnings.warn(
+                'Build : get_type_charge_product : Did not find type ' + typeB + ' in the lists, returned 0 for charge product',
+                UserWarning)
         return _qa * _qb
 
     def set_eps_to_salt(self, val):
@@ -355,7 +365,12 @@ class BuildHoomdXML(object):
             self.beads[i].position[index] += d
 
     def set_rot_to_hoomd(self):
-        _v_a = self.__opts.vx
+
+        if not type(self.centerobj).__name__ == 'Lattice':
+            return
+        vx, vy, vz = self.centerobj.rot_crystal_box
+
+        _v_a = vx
         _t = np.dot(_v_a, _v_a)**0.5
         for i in range(_v_a.__len__()):
             _v_a[i] /= _t
@@ -454,7 +469,9 @@ class BuildHoomdXML(object):
                         _loc_logic_acc = _loc_logic_acc and getattr(particle.shape_flag, prop) == mode_opts[prop]
                     else:
                         _loc_logic_acc = False
-                        raise Warning('Build : set_rotation_function : attribute '+ str(prop) + ' not found in particle')
+                        warnings.warn(
+                            'Build : set_rotation_function : attribute ' + str(prop) + ' not found in particle',
+                            SyntaxWarning)
                 if _loc_logic_acc:
                     _r_m = self.gen_random_mat()
                     particle.rotate(_r_m)
@@ -504,7 +521,7 @@ class BuildHoomdXML(object):
 
                 # determine which type of colloid to create
                 if 'shell' in self._sh_obj[n_ind].keys and self._sh_obj[n_ind].keys['shell']:
-                    self.__particles.append(Colloid.ComplexColloid(center_type = self._c_t[n_ind],#self.__opts.center_types[n_ind],
+                    self.__particles.append(Colloid.ComplexColloid(center_type=self._c_t[n_ind],
                                                                loc_sh_obj = self._sh_obj[n_ind],
                                                                 **self._sh_obj[i].flags
                                                                ))
@@ -570,10 +587,18 @@ class BuildHoomdXML(object):
 
     def current_box(self):
         if self.impose_box.__len__() == 0:
-            if self.__opts.flag_surf_energy:
-                # TODO : move the hoomd box calculation here from main
-                L = self.__opts.rot_box
-            else:
+            if type(self.centerobj).__name__ == 'Lattice':
+                # T#ODO : move the hoomd box calculation here from main
+                # L = self.__opts.rot_box
+                vx, vy, vz = self.centerobj.rot_crystal_box
+                # rotm = self.centerobj.rotation_matrix
+                # cut the z periodicity
+                if self.centerobj.flags['vertical_slice']:
+                    vz = [0.0, 0.0, vz[2]]
+                L = Util.c_hoomd_box([vx, vy, vz], self.centerobj.int_bounds, z_multi=self.z_multiplier)
+
+
+            elif type(self.centerobj).__name__ == 'RandomPositions':
                 Mx = 0
                 My = 0
                 Mz = 0
@@ -586,6 +611,21 @@ class BuildHoomdXML(object):
                         if abs(self.__particles[i].pos[j,2]) > Mz:
                             Mz = abs(self.__particles[i].pos[j,2])
                 L = [2 * Mx * 1.1, 2 * My * 1.1, 2 * Mz *1.1]
+            else:
+                warnings.warn(SyntaxWarning, 'unknown center object type : "' + type(self.centerobj).__name__
+                              + '" using whatever fits box')
+                Mx = 0
+                My = 0
+                Mz = 0
+                for i in range(self.__particles.__len__()):
+                    for j in range(self.__particles[i].pos.__len__()):
+                        if abs(self.__particles[i].pos[j, 0]) > Mx:
+                            Mx = abs(self.__particles[i].pos[j, 0])
+                        if abs(self.__particles[i].pos[j, 1]) > My:
+                            My = abs(self.__particles[i].pos[j, 1])
+                        if abs(self.__particles[i].pos[j, 2]) > Mz:
+                            Mz = abs(self.__particles[i].pos[j, 2])
+                L = [2 * Mx * 1.1, 2 * My * 1.1, 2 * Mz * 1.1]
             return L
         else:
             return self.impose_box
@@ -663,12 +703,16 @@ class BuildHoomdXML(object):
         L = self.current_box()
         for i in range(N):
             _rej_check = True
+            _gen_pos = np.array([random.uniform(-L[0] / 2.1, L[0] / 2.1), random.uniform(-L[1] / 2.1, L[1] / 2.1),
+                                 random.uniform(-L[2] / 2.1, L[2] / 2.1)])
             while _rej_check:
                 _rej_check = False
-                _gen_pos = np.array([random.uniform(-L[0]/2.1, L[0]/2.1), random.uniform(-L[1]/2.1, L[1]/2.1), random.uniform(-L[2]/2.1, L[2]/2.1)])
                 for j in range(self.__particles.__len__()):
                     try:
                         if np.linalg.norm(self.__particles[j].center_position - _gen_pos) < self.__particles[j]._sh.flags['hard_core_safe_dist'] * self.__particles[j]._sh.flags['size']:
+                            _gen_pos = np.array(
+                                [random.uniform(-L[0] / 2.1, L[0] / 2.1), random.uniform(-L[1] / 2.1, L[1] / 2.1),
+                                 random.uniform(-L[2] / 2.1, L[2] / 2.1)])
                             _rej_check = True
                     except KeyError:
                         pass
@@ -700,28 +744,32 @@ class BuildHoomdXML(object):
         if not isrerun and _rerun_check:
             self.fix_remaining_charge(ptype,ntype,pion_mass, nion_mass, qp, qn, pion_diam, nion_diam, isrerun=True)
         elif _rerun_check:
-            print 'Cannot fix the intrinsic charge in the system'
+            warnings.warn('Cannot fix the intrinsic charge in the system', UserWarning)
 
-    def write_to_file(self, z_box_multi = None, export_charge = False, export_diameter = False):
+    def write_to_file(self, **kwargs):
+
+        if kwargs:
+            warnings.warn(DeprecationWarning,
+                          'supplied extra arguments which are not used, all file writing options are internal to build')
+
         L = self.current_box()
-        if self.__opts.flag_surf_energy:
+        if type(self.centerobj).__name__ == 'Lattice':
             if iscubic(self.centerobj.lattice) or\
                     (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.y == 0) or \
                     (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.z == 0) or \
                     (self.centerobj.surf_plane.y == 0 and self.centerobj.surf_plane.z == 0): # cubic
-                self.enforce_PBC(z_box_multi)
+                self.enforce_PBC(self.z_multiplier)
             else:
                 self.enforce_XYPBC()
             self.set_rot_to_hoomd()
 
-        self.__opts.sys_box = L
 
         for i in range(self.beads.__len__()):
             self.beads[i].charge /= self.charge_normalization
         self.__writeXML(L)
 
     def __writeXML(self, L):
-        with open(self.__opts.filenameformat+'.xml','w') as f:
+        with open(self.filename + '.xml', 'w') as f:
             f.write('''<?xml version="1.0" encoding="UTF-8"?>\n''')
             f.write('''<hoomd_xml version="1.6" dimensions="3">\n''')
             f.write('''<!-- HOOBAS XML Export -->\n''')

@@ -28,15 +28,13 @@ class CenterFile(object):
     def __init__(self):
         """
         Init method
-        :param options: structure options, must contain options.num_particles
-        :param init: initizaliation method, 'random', 'lattice, 'file'; anything else does not initialize.
-        :param surf_plane : set z surface plane list of length (3), anything else is treated as [0 0 1]
         :return:
         """
         self.table_size = 0
         self.table = []
         self.BoxSize = 0
         self.built_centers = []
+        self.flags = {}
 
         self.vx = [self.BoxSize, 0.0, 0.0]
         self.vy = [0.0, self.BoxSize, 0.0]
@@ -166,55 +164,6 @@ class CenterFile(object):
                 for k in range(_mean.__len__()):
                     self.table[i][j,k] -= _mean[k]
 
-    def add_particles_at_random(self, num, center_type, particle_size, max_try=10000):
-        """
-        add a component to the tables, placed at random in the simulation domain
-        :param num: number of particles to add
-        :param center_type: centerbeadtype to write in xyz file
-        :param particle_size: size (assuming same shape as other particles, needs eventual modification)
-        :param max_try: maximum number of tries that the system allows (default = 10000). raises StandardError on failure
-        :return: none
-        """
-        if self.BoxSize == 0:
-            self.BoxSize = 1.7*self.options.target_dim / self.options.scale_factor
-
-        new_table = np.zeros((num, 3))
-        i = 0
-        current_try = 0
-
-        while i < num:
-            new_table[i, 0] = (self.BoxSize*self.options.box_size[0])*random.uniform(-0.5, 0.5)
-            new_table[i, 1] = (self.BoxSize*self.options.box_size[1])*random.uniform(-0.5, 0.5)
-            new_table[i, 2] = (self.BoxSize*self.options.box_size[2])*random.uniform(-0.5, 0.5)
-
-            IsOk = True
-            for j in range(self.table.__len__()):
-                for k in range(self.table[j].__len__()):
-                    value = ((new_table[i, 0] - self.table[j][k, 0])**2 + (new_table[i, 1] - self.table[j][k, 1])**2 + (new_table[i, 2] - self.table[j][k, 2])**2)**0.5
-                    IsOk = IsOk and value > (self.options.size[j] + particle_size)*self.options.center_sec_factor/2.0 / self.options.scale_factor
-
-            for j in range(i):
-                value = ((new_table[i, 0] - new_table[j, 0])**2 + (new_table[i, 1] - new_table[j, 1])**2 + (new_table[i, 2] - new_table[j, 2])**2)*0.5
-                IsOk = IsOk and value > particle_size * self.options.center_sec_factor / self.options.scale_factor
-
-            if IsOk:
-                i += 1
-                current_try = 0
-            else:
-                current_try += 1
-
-            if current_try > max_try:
-                raise StandardError('failed to add particles to list')
-
-        flag = False
-        for i in range(self.built_centers.__len__()):
-            if self.built_centers[i] == center_type:
-                self.table[i] = np.append(self.table[i], new_table, axis = 0)
-                self.options.num_particles[i] += num
-                flag = True
-        if not flag:
-            self.table.append(new_table)
-        self.table_size += new_table.__len__()
 
     def drop_component(self, name):
         """
@@ -238,10 +187,7 @@ class Lattice(CenterFile):
 
     def __init__(self,  lattice, surf_plane = None, int_bounds = None):
         CenterFile.__init__(self)
-
-
-        # if lattice is a constant, assume cubic symmetry, if three numbers are passed, assume orthorhombic, otherwise
-        # assume [v1, v2, v3] are passed
+        self.flags['vertical_slice'] = False
         self.lattice = np.ndarray((3,3))
         self.parse_input_lattice(lattice)
 
@@ -263,10 +209,14 @@ class Lattice(CenterFile):
         else:
             self.int_bounds = [int_bounds[0] * 2, int_bounds[1] * 2, int_bounds[2] * 2]
 
-
-
     def parse_input_lattice(self, lattice):
-        e = IndexError('CenterFile : Lattice : parse_input_lattice : cannot parse the supplied lattice')
+        """
+        try to parse the supplied lattice, which can be a constant for cubic lattices, three numbers for orthorhombic or
+        nine for other symmetries
+        :param lattice:
+        :return:
+        """
+        _e = IndexError('CenterFile : Lattice : parse_input_lattice : cannot parse the supplied lattice')
 
         if isinstance(lattice, np.ndarray) and lattice.shape == (3,3):
             self.lattice = lattice
@@ -280,87 +230,20 @@ class Lattice(CenterFile):
                 self.lattice = np.array([[lattice[0][0], lattice[1][0],lattice[2][0]],[lattice[0][1], lattice[1][1],lattice[2][1]],[lattice[0][2], lattice[1][2],lattice[2][2]]],
                                     dtype=float)
             else:
-                raise e
+                raise _e
         else:
-            raise e
-
-    def _manual_rot_cut(self, int_bounds):
-        """
-        manual exposition of surface plane; options rescales to new size in rotated (x,y), z vectors. Some restrictions
-        may cause the system to have less particles than prod(int_bounds), e.g., for (110) of simple cubic, the rule
-        bx + bz = even makes the system have prod(int_bound)/2 particles.
-
-        Possible to use the function multiple times in a row to cause multiple rotations & cuts
-
-        :param int_bounds: list of length 3 of integer bounds
-        :return: none
-        """
-
-
-        for i in range(self.table.__len__()):
-            for j in range(self.table[i].__len__()):
-                _dump_vec = vector(self.table[i][j,:])
-                _dump_vec.rot(mat = self.rot_mat)
-                self.table[i][j,:] = _dump_vec.array
-                del _dump_vec
-
-        _b_x = vector([self.BoxSize * self.lattice[0], 0, 0], parent_lattice=self.lattice)
-        _b_y = vector([0, self.BoxSize * self.lattice[1], 0], parent_lattice=self.lattice)
-        _b_z = vector([0, 0, 1], parent_lattice=self.lattice)
-
-        _b_z.array *= self.BoxSize / self.surf_plane.cnorm(self.lattice)
-
-        _b_x.rot(mat = self.rot_mat)
-        _b_y.rot(mat = self.rot_mat)
-
-        _b_x.s_proj_to_xy(_b_z)
-        _b_y.s_proj_to_xy(_b_z)
-
-        #decomposition matrix
-        _mat = np.array([[_b_x.x, _b_y.x,0], [_b_x.y, _b_y.y,0], [0,0,_b_z.z]])
-
-
-        _index_to_keep = []
-        for i in range(self.table.__len__()):
-            for j in range(self.table[i].__len__()):
-                _tmp_dump = vector(list(self.table[i][j,:]))
-
-                # decompose into base vectors _b_x, _b_y
-                _a1, _a2, _a3 = np.linalg.solve(_mat, _tmp_dump.array)
-
-                #check lattice params
-                if -int_bounds[0]*100 < int(round(_a1*100)) <= int_bounds[0]*100 and -int_bounds[1]*100 < int(round(_a2*100)) <= int_bounds[1]*100 and -int_bounds[2]*100 < int(round(_a3*100)) <= int_bounds[2]*100: #<- change to the stupid boxsize option
-                    _index_to_keep.append([i,j])
-                del _tmp_dump
-
-        for i in range(self.table.__len__()):
-            _loc_list = []
-            for j in range(_index_to_keep.__len__()):
-                if _index_to_keep[j][0] == i:
-                    _loc_list.append(_index_to_keep[j][1])
-            self.table[i] = self.table[i][_loc_list, :]
-        # this discards sanity checks, should be careful.
-        self.table_size = 0
-        for i in range(self.table.__len__()):
-            self.table_size += self.table[i].__len__()
-
-        self.vx = list(_b_x.array)
-        self.vy = list(_b_y.array)
-        self.vz = list(_b_z.array)
-        self.int_bounds = int_bounds
+            raise _e
 
     def rotate_and_cut(self, int_bounds):
         """
         rotates the crystal system so that the surface plane faces the Z direction. The new crystal axes are generally
-        trigonal in nature and the number of cubes is prod(int_bounds). This does not preserve crystallinity in Z,
-
-        Possible to use the function multiple times in a row to cause multiple rotations & cuts
+        trigonal in nature and the crystallinity in Z is not guaranteed unless the rotated axes point along Z.
 
         :param int_bounds: list of length 3 of integer bounds
         :return: none
         """
 
-
+        self.flags['vertical_slice'] = True
         for i in range(self.table.__len__()):
             for j in range(self.table[i].__len__()):
                 _dump_vec = vector(self.table[i][j,:])
@@ -473,7 +356,6 @@ class Lattice(CenterFile):
             self.table.append(new_table)
             self.table_size+= new_table.__len__()
             self.built_centers.append(center_type)
-
 
 class RandomPositions(CenterFile):
     def __init__(self, system_size, particle_numbers, shape_objects = None, sizes = None, centertags = None):

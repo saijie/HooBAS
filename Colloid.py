@@ -2,6 +2,7 @@ __author__ = 'martin'
 import copy
 import random
 from itertools import chain
+import warnings
 
 import numpy as np
 
@@ -61,6 +62,8 @@ class Colloid(object):
         self.dihedrals = []
         self.impropers = []
 
+        self.warnings = []
+
         self.types = [center_type]
         self.p_num = [0]
         self.c_type = center_type
@@ -83,7 +86,8 @@ class Colloid(object):
             try:
                 self.mass = self._sh.flags['density'] * self._sh.flags['volume']
             except KeyError:
-                print 'Unable to determine solid body mass, using value of 10.0, something is wrong here'
+                warnings.warn('Unable to determine solid body mass, using value of 10.0, something is wrong here',
+                              UserWarning)
                 self.mass = 10.0
 
 
@@ -257,6 +261,10 @@ class RigidStructure(object):
         for rigid_bead in self.body_beads:
             rigid_bead.body = val
 
+    @property
+    def body_typelist(self):
+        return [bead.type for bead in self.body_beads]
+
 class SimpleColloid(Colloid, RigidStructure):
     """
     This is the class used for simple rigid bodies, i.e., polyhedra, with a single surface atom type. Shape function must
@@ -335,24 +343,25 @@ class ComplexColloid(Colloid, RigidStructure):
 
         if not hasattr(self.s_type, '__iter__'):
             self.s_type = [self.s_type]
-            if not 'warnings' in self.flags:
-                self.flags['warnings'] = ['Build : Particle(object) : __build_soft_shells() : Surface types are not iterable while trying to build multiple shells, assuming string was passed; padding']
-            else:
-                self.flags['warnings'].append('Build : Particle(object) : __build_soft_shells() : Surface types are not iterable while trying to build multiple shells, assuming string was passed; padding')
+            warnings.warn(
+                'ComplexColloid : __build_shells() : Surface types are not iterable while trying to build multiple shells, assuming string was passed; padding',
+                SyntaxWarning)
 
         _c = 0
         if self._sh.flags['multiple_surface_types'].__len__() > self.s_type.__len__() == 1:
             _temp = self.s_type[0]
             self.s_type = [_temp + str(i) for i in range(self._sh.flags['multiple_surface_types'].__len__())]
+
         elif self._sh.flags['multiple_surface_types'].__len__() > self.s_type.__len__():
             self.s_type = self.s_type + [self.s_type[0] + str(i) for i in range(self._sh.flags['multiple_surface_types'].__len__() - self.s_type.__len__())]
-            if not 'warnings' in self.flags:
-                self.flags['warnings'] = []
-            self.flags['warnings'].append(['Build : Particle(object) : __build_soft_shells() : Differing lengths in # of shells compared to number of surfaces names; padding with name[0] + number'])
+            warnings.warn(
+                'ComplexColloid : __build_shells() : Differing lengths in # of shells compared to number of surfaces names; padding with name[0] + number',
+                SyntaxWarning)
+
         elif self._sh.flags['multiple_surface_types'] < self.s_type.__len__():
-            if not 'warnings' in self.flags:
-                self.flags['warnings'] = []
-            self.flags['warnings'].append(['Build : Particle(object) : __build_soft_shells() : Lengths of surface types greater than the number of shells to build. Some names will remain unused'])
+            warnings.warn(
+                'ComplexColloid : __build_shells() : Lengths of surface types greater than the number of shells to build. Some names will remain unused',
+                SyntaxWarning)
 
         for i in range(self._sh.flags['multiple_surface_types'].__len__()):
             self.rem_list.append([])

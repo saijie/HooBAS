@@ -14,31 +14,6 @@ import Build
 import LinearChain
 
 
-def c_hoomd_box(v, int_bounds, z_multi =1.00):
-    vx = v[0][:]
-    vy = v[1][:]
-    vz = v[2][:]
-
-    for _i in range(vx.__len__()):
-        vx[_i] *= 2*int_bounds[0]
-        vy[_i] *= 2*int_bounds[1]
-        vz[_i] *= 2*int_bounds[2]*z_multi
-#        vz[_i] *= z_multi
-
-
-    lx = (dot(vx, vx))**0.5
-    a2x = dot(vx, vy) / lx
-    ly = (dot(vy, vy) - a2x**2.0)**0.5
-    xy = a2x / ly
-    v0xv1 = cross(vx, vy)
-    v0xv1mag = sqrt(dot(v0xv1, v0xv1))
-    lz = dot(vz, v0xv1) / v0xv1mag
-    a3x = dot(vx, vz) / lx
-    xz = a3x / lz
-    yz = (dot(vy,vz) - a2x*a3x) / (ly*lz)
-
-    return [lx,ly,lz, xy, xz, yz]
-
 ###########################################
 # List of future improvements :
 ###########################################
@@ -132,17 +107,18 @@ center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, latti
 center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0, 0, 0])
 center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0.5, 0.5, 0.5])
 center_file_object.rotate_and_cut(int_bounds = options.int_bounds)
-options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
-options.rotm = center_file_object.rotation_matrix
-options.vz = [0.0, 0.0, options.vz[2]]
-options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds, z_multi=options.z_m)
+# options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
+# options.rotm = center_file_object.rotation_matrix
+# options.vz = [0.0, 0.0, options.vz[2]]
+# options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds, z_multi=options.z_m)
 
 # Target box sizes
 ################################
 # Making buildobj
 ################################
 
-buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, opts=options, init='from_shapes')
+buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, z_multiplier=options.z_m,
+                               filename=options.filenameformat)
 buildobj.set_rotation_function(mode = 'none')
 
 d_tags = buildobj.dna_tags
@@ -153,8 +129,7 @@ d_tags_loc_len = d_tags[0].__len__()
 #buildobj.set_charge_to_pnum()
 buildobj.set_charge_to_dna_types()
 
-
-buildobj.write_to_file(z_box_multi=options.z_m, export_charge= True)
+buildobj.write_to_file()
 
 
 #options.sys_box = buildobj.sys_box

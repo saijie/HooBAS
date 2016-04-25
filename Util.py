@@ -57,7 +57,6 @@ class vector(object):
             self.array *= vz.__norm__()/(self.array[2])
             self.array[2] = 0.0
 
-
 def read_centers(f_center):
     """
     legacy, remove this soon
@@ -76,7 +75,6 @@ def read_centers(f_center):
         type.append(l[0])
 
     return type, positions
-
 
 def get_rot_mat(cubic_plane):
     _cp = vector(cubic_plane)
@@ -114,7 +112,6 @@ def gen_random_mat():
     _r_ori = [(1-_r_z**2)**0.5*cos(_r_th), (1-_r_z**2)**0.5*sin(_r_th), _r_z]
     return get_rot_mat(_r_ori)
 
-
 def isdiagonal(lattice):
     if (np.diag(lattice) == lattice).all():
         return True
@@ -127,3 +124,27 @@ def iscubic(lattice):
         return True
     else:
         return False
+
+
+def c_hoomd_box(v, int_bounds, z_multi=1.00):
+    vx = v[0][:]
+    vy = v[1][:]
+    vz = v[2][:]
+
+    for _i in range(vx.__len__()):
+        vx[_i] *= 2 * int_bounds[0]
+        vy[_i] *= 2 * int_bounds[1]
+        vz[_i] *= 2 * int_bounds[2] * z_multi
+
+    lx = (np.dot(vx, vx)) ** 0.5
+    a2x = np.dot(vx, vy) / lx
+    ly = (np.dot(vy, vy) - a2x ** 2.0) ** 0.5
+    xy = a2x / ly
+    v0xv1 = np.cross(vx, vy)
+    v0xv1mag = sqrt(np.dot(v0xv1, v0xv1))
+    lz = np.dot(vz, v0xv1) / v0xv1mag
+    a3x = np.dot(vx, vz) / lx
+    xz = a3x / lz
+    yz = (np.dot(vy, vz) - a2x * a3x) / (ly * lz)
+
+    return [lx, ly, lz, xy, xz, yz]
