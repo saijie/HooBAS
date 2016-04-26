@@ -734,6 +734,20 @@ class BuildHoomdXML(object):
             if self.beads[i].beadtype == btype:
                 self.beads[i].charge = charge
 
+    def set_attr_by_type(self, btype, attr, val):
+        for bead in self.beads:
+            if bead.type == btype:
+                setattr(bead, attr, val)
+
+    def set_attr_by_attr(self, attribute_test, test_value, attribute_change, value):
+        for bead in self.beads:
+            if isinstance(test_value, float):
+                if abs(getattr(bead, attribute_test) - test_value) < 1e-2:
+                    setattr(bead, attribute_change, value)
+            else:
+                if getattr(bead, attribute_test) == test_value:
+                    setattr(bead, attribute_change, value)
+
     def fix_remaining_charge(self, ptype = 'ion', ntype = 'ion', pion_mass = 1.0, nion_mass = 1.0,
                              qp = 1.0, qn = -1.0, pion_diam = 1.0, nion_diam = 1.0, isrerun = False):
         _internal_charge = 0.0
