@@ -525,6 +525,12 @@ class BuildHoomdXML(object):
                                                                loc_sh_obj = self._sh_obj[n_ind],
                                                                 **self._sh_obj[i].flags
                                                                ))
+                elif 'tesselation' in self._sh_obj[n_ind].keys:
+                    self.__particles.append(Colloid.SurfaceTesselationColloid(center_type=self._c_t[n_ind],
+                                                                              loc_sh_obj=self._sh_obj[n_ind],
+                                                                              **self._sh_obj[i].flags
+                                                                              ))
+
                 else:
                     self.__particles.append(Colloid.SimpleColloid(center_type = self._c_t[n_ind],
                                                                loc_sh_obj = self._sh_obj[n_ind],

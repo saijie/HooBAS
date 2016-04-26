@@ -380,3 +380,12 @@ class ComplexColloid(Colloid, RigidStructure):
                 self.graft_EXT(rem_id = shl_idx, **self._sh.keys['shell'][shl_idx][2][ext_idx])
 
 
+class SurfaceTesselationColloid(SimpleColloid):
+    def __init__(self, **args):
+        super(SurfaceTesselationColloid, self).__init__(**args)
+        self.charge_to_var_cosine(**args)
+
+    def charge_to_var_cosine(self, function_cosine):
+        for bead in self.beads:
+            cth = bead.position[2] / (bead.position[0] ** 2.0 + bead.position[1] ** 2.0) ** 0.5
+            bead.charge = function_cosine(cth)

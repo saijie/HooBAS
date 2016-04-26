@@ -181,8 +181,6 @@ class CenterFile(object):
             self.table_size -= self.table[drop_index].__len__()
             self.table[drop_index] = np.zeros((0,3))
 
-
-
 class Lattice(CenterFile):
 
     def __init__(self,  lattice, surf_plane = None, int_bounds = None):
