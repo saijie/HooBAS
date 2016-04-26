@@ -539,7 +539,7 @@ class BuildHoomdXML(object):
                 try:
                     self.__types.append([type(self.__particles[-1]).__name__ + self.flags['call']])
                 except KeyError:
-                    self.__types.append('unknown')
+                    self.__types.append(['unknown'])
 
                 #set center to value from the center list
                 self.__particles[-1].center_position = self._c_pos[i][j,:]
@@ -736,7 +736,7 @@ class BuildHoomdXML(object):
 
     def set_attr_by_type(self, btype, attr, val):
         for bead in self.beads:
-            if bead.type == btype:
+            if bead.beadtype == btype:
                 setattr(bead, attr, val)
 
     def set_attr_by_attr(self, attribute_test, test_value, attribute_change, value):
