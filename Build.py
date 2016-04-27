@@ -773,15 +773,19 @@ class BuildHoomdXML(object):
                           'supplied extra arguments which are not used, all file writing options are internal to build')
 
         L = self.current_box()
-        if type(self.centerobj).__name__ == 'Lattice':
-            if iscubic(self.centerobj.lattice) or\
-                    (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.y == 0) or \
-                    (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.z == 0) or \
-                    (self.centerobj.surf_plane.y == 0 and self.centerobj.surf_plane.z == 0): # cubic
-                self.enforce_PBC(self.z_multiplier)
-            else:
-                self.enforce_XYPBC()
-            self.set_rot_to_hoomd()
+        if self.impose_box.__len__() == 0:
+            if type(self.centerobj).__name__ == 'Lattice':
+                if iscubic(self.centerobj.lattice) or \
+                        (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.y == 0) or \
+                        (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.z == 0) or \
+                        (self.centerobj.surf_plane.y == 0 and self.centerobj.surf_plane.z == 0):  # cubic
+                    self.enforce_PBC(self.z_multiplier)
+                else:
+                    self.enforce_XYPBC()
+                self.set_rot_to_hoomd()
+        else:
+            self.enforce_PBC(z_box_multi=1.0)
+
 
 
         for i in range(self.beads.__len__()):
