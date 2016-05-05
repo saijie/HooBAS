@@ -120,26 +120,22 @@ class BuildHoomdXML(object):
         self.__p_num = []
         self.__obj_index = []
 
-
-
         # DEFAULT ARGUMENTS
         self.z_multiplier = 1.0
         self.filename = 'HOOBAS_FILE'
-        # list of properties defined in the Hoomd xml formats. First list refers to particle properties, second to bonded interaction types
+        # list of properties defined in the Hoomd xml formats. First list refers to particle properties,
+        # second to bonded interaction types
         self.xml_proplist = ['velocity', 'acceleration', 'diameter', 'charge', 'body', 'orientation', 'angmom',
                              'moment_inertia', 'image', 'orientation']
         self.xml_inter_prop_list = ['bonds', 'angles', 'dihedrals', 'impropers']
 
         # overriding defaults
-        for key in kwargs: setattr(self, key, kwargs.get(key))
-
-
-
+        for key in kwargs:
+            setattr(self, key, kwargs.get(key))
 
         self.impose_box = []
         self.flaglist = {}
         self.centerobj = center_obj
-
 
         ###################################
         # external bonded interaction types
@@ -166,8 +162,6 @@ class BuildHoomdXML(object):
         self._sh_obj = shapes
         self.__build_from_shapes()
 
-
-
     @property
     def centers(self):
         _tmp = []
@@ -179,9 +173,11 @@ class BuildHoomdXML(object):
     @property
     def sys_box(self):
         return self.current_box()
+
     @property
     def flags(self):
         return self.flaglist
+
     @property
     def bond_types(self):
         _d = []
@@ -189,6 +185,7 @@ class BuildHoomdXML(object):
             _d.append(self.__particles[i].bond_types)
         _d += self.ext_bond_t
         return list(set(list(chain.from_iterable(_d))))
+
     @property
     def ang_types(self):
         _d = []
@@ -196,6 +193,7 @@ class BuildHoomdXML(object):
             _d.append(self.__particles[i].ang_types)
         _d += self.ext_ang_t
         return list(set(list(chain.from_iterable(_d))))
+
     @property
     def dihedral_types(self):
         _d = []
@@ -203,6 +201,7 @@ class BuildHoomdXML(object):
             _d.append(self.__particles[i].dihedral_types)
         _d += self.ext_dihedral_t
         return list(set(list(chain.from_iterable(_d))))
+
     @property
     def improper_types(self):
         _d = []
@@ -210,6 +209,7 @@ class BuildHoomdXML(object):
             _d.append(self.__particles[i].improper_types)
         _d += self.ext_improper_t
         return list(set(list(chain.from_iterable(_d))))
+
     @property
     def center_types(self):
         _ct = []
@@ -219,6 +219,7 @@ class BuildHoomdXML(object):
             else:
                 _ct.append([self.__particles[i].center_type])
         return list(set(list(chain.from_iterable(_ct))))
+
     @property
     def surface_types(self):
         _st = []
@@ -228,6 +229,7 @@ class BuildHoomdXML(object):
             else:
                 _st.append([self.__particles[i].surface_type])
         return list(set(list(chain.from_iterable(_st))))
+
     @property
     def sticky_types(self):
         _st = []
@@ -237,33 +239,41 @@ class BuildHoomdXML(object):
             else:
                 _st.append([self.__particles[i].sticky_types])
         return list(set(list(chain.from_iterable(_st))))
+
     @property
     def dna_tags(self):
         _d = []
         for i in range(self.__particles.__len__()):
             _d.append(self.__particles[i].sticky_tags)
         return _d
+
     @property
     def center_tags(self):
         _tags = []
         for i in range(self.__particles.__len__()):
             _tags.append(self.__particles[i].pnum_offset)
         return _tags
+
     @property
     def num_beads(self):
         return self.beads.__len__()
+
     @property
     def charge_norm(self):
         return self.charge_normalization
+
     @charge_norm.setter
     def charge_norm(self, val):
         self.charge_normalization = val
+
     @property
     def permittivity(self):
         return self.charge_normalization**2.0
+
     @permittivity.setter
     def permittivity(self, val):
         self.charge_normalization = val**0.5
+
     @property
     def charge_list(self):
         _tlist = []
@@ -418,8 +428,8 @@ class BuildHoomdXML(object):
             self.__particles[i].body = i
             self.__particles[i].pnum_offset = self.__particles[i-1].pnum_offset + self.__particles[i-1].num_beads
 
-    def set_rotation_function(self, mode = None, mode_opts = None):
-
+    def set_rotation_function(self, mode=None, mode_opts=None):
+        # TODO : change mode_opts to **kwargs
         if mode is None:
             ####################################################
             # Grabs orientation from definition of particles and rotate them, could move s_plane setter to here
@@ -455,21 +465,20 @@ class BuildHoomdXML(object):
                     particle.rotate(_r_m)
 
     def __build_from_shapes(self):
-        #initial body value, also a body count
+        # initial body value, also a body count
         b_cnt = 0
         for i in range(self._c_pos.__len__()):
             for j in range(self._c_pos[i].__len__()):
-                n_ind = i
 
                 # determine which type of colloid to create
-
-                if 'ColloidType' in self._sh_obj[n_ind].keys:
-                    self.__particles.append(self._sh_obj[n_ind].keys['ColloidType'](center_type=self._c_t[n_ind],
-                                                                                    loc_sh_obj=self._sh_obj[n_ind],
+                if 'ColloidType' in self._sh_obj[i].keys:
+                    self.__particles.append(self._sh_obj[i].keys['ColloidType'](center_type=self._c_t[i],
+                                                                                loc_sh_obj=self._sh_obj[i],
                                                                                     **self._sh_obj[i].flags))
+                # no colloid class given yields a simple colloid
                 else:
-                    self.__particles.append(Colloid.SimpleColloid(center_type = self._c_t[n_ind],
-                                                               loc_sh_obj = self._sh_obj[n_ind],
+                    self.__particles.append(Colloid.SimpleColloid(center_type=self._c_t[i],
+                                                                  loc_sh_obj=self._sh_obj[i],
                                                                 **self._sh_obj[i].flags
                                                                ))
                 try:
@@ -477,8 +486,8 @@ class BuildHoomdXML(object):
                 except KeyError:
                     self.__types.append(['unknown'])
 
-                #set center to value from the center list
-                self.__particles[-1].center_position = self._c_pos[i][j,:]
+                # set center to value from the center list
+                self.__particles[-1].center_position = self._c_pos[i][j, :]
 
                 #########################################
                 # set body tags too the center tag

@@ -733,7 +733,7 @@ class Sphere(shape):
 class RhombicDodecahedron(shape):
     def __init__(self, Num,  surf_plane = None, lattice = None, properties = None):
         shape.__init__(self, surf_plane, lattice, properties)
-        #Generate one face
+        # Generate one face
 
         ang = acos(1./3.)
 
@@ -759,7 +759,7 @@ class RhombicDodecahedron(shape):
         TableRotP = np.copy(TableFace)
         TableRotM = np.copy(TableFace)
         for i in range(TableFace.__len__()):
-            #Rotation 60 deg / x+y axis
+            # Rotation 60 deg / x+y axis
             ux = 1
             uy = 0
             L = 0*-sin(pi/2 - ang)

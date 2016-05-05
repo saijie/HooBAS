@@ -1,4 +1,3 @@
-__author__ = 'martin'
 import copy
 import random
 from itertools import chain
@@ -74,17 +73,17 @@ class Colloid(object):
         self.surf_tags = []
 
         self.sticky_used = []
-
-        self._sh = copy.deepcopy(loc_sh_obj) # associated shape, contains list of surface, and directives in .flags
+        # associated shape, contains list of surface, and directives in .flags
+        self._sh = copy.deepcopy(loc_sh_obj)
         self.orientation = self._sh.n_plane
+        # table of table
         self.rem_list = []
-        self.att_list = [] #table of tables
+        self.att_list = []
 
         self.diagI = self._sh.Itensor
 
         # colloid quaternion is shared with local object quaternion
         self.quaternion = self._sh.quaternion
-
 
         ## get mass from shape object
         try:
@@ -96,7 +95,6 @@ class Colloid(object):
                 warnings.warn('Unable to determine solid body mass, using value of 10.0, something is wrong here',
                               UserWarning)
                 self.mass = 10.0
-
 
         # all colloids have well defined orientations with respect to the base shape function
         if self.orientation is None:
@@ -112,24 +110,30 @@ class Colloid(object):
     @property
     def surface_type(self):
         return self.s_type
+
     @property
     def sticky_types(self):
         return list(set(list(chain.from_iterable(self.sticky_used))))
+
     @property
     def center_type(self):
         return self.beads[0].beadtype
+
     @property
     def center_position(self):
         return self.pos[0,:]
+
     @center_position.setter
     def center_position(self, val):
         tr = val - self.pos[0,:]
         self.pos += tr
         for i in range(self.beads.__len__()):
             self.beads[i].position += tr
+
     @property
     def pnum_offset(self):
         return self.p_num[0]
+
     @pnum_offset.setter
     def pnum_offset(self, val):
         off = val - self.p_num[0]
@@ -149,33 +153,39 @@ class Colloid(object):
         for rmlst in self.rem_list:
             for el in rmlst:
                 el += off
+
     @property
     def num_beads(self):
         return self.beads.__len__()
+
     @property
     def bond_types(self):
         _d = []
         for i in range(self.bonds.__len__()):
             _d.append(self.bonds[i][0])
         return list(set(_d))
+
     @property
     def ang_types(self):
         _d = []
         for i in range(self.angles.__len__()):
             _d.append(self.angles[i][0])
         return list(set(_d))
+
     @property
     def dihedral_types(self):
         _d = []
         for i in range(self.dihedrals.__len__()):
             _d.append(self.dihedrals[i][0])
         return list(set(_d))
+
     @property
     def improper_types(self):
         _d = []
         for i in range(self.impropers.__len__()):
             _d.append(self.impropers[i][0])
         return list(set(_d))
+
     @property
     def sticky_tags(self):
         _tag = []
@@ -186,9 +196,11 @@ class Colloid(object):
                     _loc_tag.append(self.p_num[i])
             _tag+=_loc_tag
         return _tag
+
     @property
     def shape_class(self):
         return type(self._sh).__name__
+
     @property
     def shape_flag(self):
         return self._sh.flags
@@ -208,43 +220,42 @@ class Colloid(object):
         return [bead.type for bead in self.body_beads]
 
     def relative_positions(self):
+        """
+        retrieve relative positions with respect to particle center
+        :return: list of tuples
+        """
         _ = []
         for position in self._sh.pos:
             _.append((position[0], position[1], position[2]))
         return _
 
-
-    def sticky_excluded(self, _types, _rc = None):
-        _exclusion_list = []
-        for i in range(self.beads.__len__()):
-            for j in range(i+1, self.beads.__len__()):
-                if ((self.beads[i].beadtype == _types[0] and self.beads[j].beadtype == _types[1]) or (self.beads[j].beadtype == _types[0] and self.beads[i].beadtype == _types[1])) and abs(i - j) != 3:
-                    if _rc is None:
-                        _exclusion_list.append([self.p_num[i],self.p_num[j]])
-                        self.bonds.append(['UselessBond', self.p_num[i], self.p_num[j]])
-                    elif np.sum((self.beads[i].position - self.beads[j].position)**2)**0.5 < _rc:
-                        _exclusion_list.append([self.p_num[i],self.p_num[j]])
-                        self.bonds.append(['UselessBond', self.p_num[i], self.p_num[j]])
-
-        return _exclusion_list
-
     def rotate(self, operation):
+        """
+        rotates the colloid
+        :param operation: transform operation
+        :return:
+        """
         _t = self.pos[0,:]
         self.pos = self.pos - _t
-        Q_op = Quat(operation)
-        r_mat = Q_op.transform
+        q_op = Quat(operation)
+        r_mat = q_op.transform
         for i in range(self.body_beads.__len__(), self.pos.__len__()):
-            _tmp_dump = vec(self.pos[i,:])
-            _tmp_dump.rot(mat = r_mat)
+            _tmp_dump = vec(self.pos[i, :])
+            _tmp_dump.rot(mat=r_mat)
             self.pos[i,:] = _tmp_dump.array
             self.beads[i].position = _tmp_dump.array + _t
             del _tmp_dump
         self.pos = self.pos + _t
-        self.quaternion *= Q_op
-
+        self.quaternion *= q_op
 
     def graft_EXT(self, EXT_IDX, rem_id, num, linker_type):
-
+        """
+        grafts external objects unto a colloid
+        :param EXT_IDX int external index
+        :param rem_id int index of list
+        :param num number to graft
+        :param linker_type string bond name
+        """
         if num > self.rem_list[rem_id].__len__():
             raise ValueError('DNA chain number greater than number of surface beads')
         try:
@@ -261,12 +272,14 @@ class Colloid(object):
         for obj_copy_idx in range(num):
             _dump_copy = copy.deepcopy(self._sh.ext_objects[EXT_IDX])
             _p_off = self.p_num[-1]+1
-            _att_vec = vec(copy.deepcopy(self.pos[self.att_list[-1][obj_copy_idx],:] - self.pos[0,:]))
+            _att_vec = vec(copy.deepcopy(self.pos[self.att_list[-1][obj_copy_idx], :] - self.pos[0, :]))
+            _att_vec.rot(mat=self.quaternion.transform)
             _rot_matrix = get_rot_mat(_att_vec.array)
             for obj_int_crd in range(_dump_copy.beads.__len__()):
                 _v = vec(_dump_copy.beads[obj_int_crd].position)
                 _v.rot(_rot_matrix)
-                _dump_copy.beads[obj_int_crd].position = self.pos[0,:] + _att_vec.array*(1.00 + 0.8 / _att_vec.__norm__()) +_v.array
+                _dump_copy.beads[obj_int_crd].position = self.pos[0, :] + _att_vec.array * (
+                1.00 + 0.8 / _att_vec.__norm__()) + _v.array
                 del _v
                 self.pos = np.append(self.pos, np.array([_dump_copy.beads[obj_int_crd].position[:]]), axis = 0)
                 self.beads.append(_dump_copy.beads[obj_int_crd])
@@ -289,19 +302,16 @@ class Colloid(object):
 
 class SimpleColloid(Colloid):
     """
-    This is the class used for simple rigid bodies, i.e., polyhedra, with a single surface atom type. Shape function must
-    be a normalized one
+    This is the class used for simple rigid bodies, i.e., polyhedra, with a single surface atom type.
     """
     def __init__(self, size, **args):
 
         Colloid.__init__(self, **args)
 
-
         # set the surface mass to be 3/5 of the overall mass to fix the rigid body intertia
         self.s_mass = self.mass * 3.0 / 5.0 / self._sh.num_surf
         self.size = size
         self.body_mass = self.mass
-
 
         # normalized shapes have simple moment of inertia (diagonal)
         self.beads = [CoarsegrainedBead.bead(position=np.array([0.0, 0.0, 0.0]), beadtype=self.c_type, body=0,
@@ -309,11 +319,11 @@ class SimpleColloid(Colloid):
                                              moment_inertia=self.diagI)]
 
         self.__build_surface()
-        #check if the system is rigid
+        # check if the system is rigid
         if self.bonds.__len__() == 0:
             self.body = -1
 
-        #mass in shape class is normalized
+        # mass in shape class is normalized
         self.mass *= (self.size/2.0)**3
 
         self.__build_grafts()
@@ -322,15 +332,15 @@ class SimpleColloid(Colloid):
         self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos * self.size / 2.0), axis = 0)
         self.rem_list.append([1+i for i in range(self._sh.pos.__len__())])
         self.p_num = [i for i in range(self._sh.pos.__len__() + 1)]
-        self.beads += [CoarsegrainedBead.bead(position = copy.deepcopy(self._sh.pos[i] * self.size / 2.0),
-                                              beadtype = self.s_type, body = 0, mass = self.s_mass)
-                                                for i in range(self._sh.pos.__len__())]
+        self.beads += [CoarsegrainedBead.bead(position=copy.deepcopy(self._sh.pos[i] * self.size / 2.0),
+                                              beadtype=self.s_type, body=0, mass=self.s_mass) for i in
+                       range(self._sh.pos.__len__())]
         self.body_beads += [self.beads[i] for i in range(1, self.beads.__len__())]
 
     def __build_grafts(self):
         if 'EXT' in self._sh.keys:
             for i in range(self._sh.keys['EXT'].__len__()):
-                self.graft_EXT(rem_id = 0, **self._sh.keys['EXT'][i][1])
+                self.graft_EXT(rem_id=0, **self._sh.keys['EXT'][i][1])
 
 
 class ComplexColloid(Colloid):
@@ -372,8 +382,8 @@ class ComplexColloid(Colloid):
         if not hasattr(self.s_type, '__iter__'):
             self.s_type = [self.s_type]
             warnings.warn(
-                'ComplexColloid : __build_shells() : Surface types are not iterable while trying to build multiple shells, assuming string was passed; padding',
-                SyntaxWarning)
+                'ComplexColloid : __build_shells() : Surface types are not iterable while trying to build multiple '
+                'shells, assuming string was passed; padding', SyntaxWarning)
 
         _c = 0
         if self._sh.flags['multiple_surface_types'].__len__() > self.s_type.__len__() == 1:
@@ -382,22 +392,21 @@ class ComplexColloid(Colloid):
 
         elif self._sh.flags['multiple_surface_types'].__len__() > self.s_type.__len__():
             self.s_type = self.s_type + [self.s_type[0] + str(i) for i in range(self._sh.flags['multiple_surface_types'].__len__() - self.s_type.__len__())]
-            warnings.warn(
-                'ComplexColloid : __build_shells() : Differing lengths in # of shells compared to number of surfaces names; padding with name[0] + number',
-                SyntaxWarning)
+            warnings.warn('ComplexColloid : __build_shells() : Differing lengths in # of shells compared to '
+                          'number of surfaces names; padding with name[0] + number', SyntaxWarning)
 
         elif self._sh.flags['multiple_surface_types'] < self.s_type.__len__():
-            warnings.warn(
-                'ComplexColloid : __build_shells() : Lengths of surface types greater than the number of shells to build. Some names will remain unused',
-                SyntaxWarning)
+            warnings.warn('ComplexColloid : __build_shells() : Lengths of surface types greater than the number of '
+                          'shells to build. Some names will remain unused', SyntaxWarning)
 
         for i in range(self._sh.flags['multiple_surface_types'].__len__()):
             self.rem_list.append([])
             while _c < self._sh.flags['multiple_surface_types'][i]:
                 self.rem_list[-1].append(1+self.p_num[-1])
                 self.p_num.append(1 + self.p_num[-1])
-                self.beads.append(CoarsegrainedBead.bead(position=self._sh.pos[_c], beadtype = self.s_type[i], body = self.body, mass = self.s_mass))
-                _c  += 1
+                self.beads.append(CoarsegrainedBead.bead(position=self._sh.pos[_c], beadtype=self.s_type[i],
+                                                         body=self.body, mass=self.s_mass))
+                _c += 1
                 self.body_beads.append(self.beads[-1])
         for i in range(self._sh.internal_bonds.__len__()):
             self.bonds.append([self._sh.internal_bonds[i][-1], self._sh.internal_bonds[i][0], self._sh.internal_bonds[i][1]])
