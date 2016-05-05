@@ -9,34 +9,33 @@ del angle
 from math import *
 import CenterFile
 import GenShape
-import Simulation_options
 import Build
 import LinearChain
 
+###########################
+# installation dependant stuff
+#############################
+import sys
 
-###########################################
-# List of future improvements :
-###########################################
-#
-# :: export vec classes to vec.py and import it to clean stuff?
+sys.path.append(['/projects/b1030/hoomd-2.0-cuda7/'])
+sys.path.append('/projects/b1030/hoomd-2.0-cuda7/hoomd/')
 
+from hoomd import *
+from md import *
+
+context.initialize()
 
 ##############################
 #### Simulation parameters####
 ##############################
 
-options = Simulation_options.simulation_options()
 
-#############################################################################
-## Scalar option values
-############################################################################
-
+options = type('', (), {})()
+_d = 0
 F = 7.0  # :: Full length binding energies, usual = 7
 Dump = 2e5 #dump period for dcd
-
 options.Um = 1.00
 
-_d = 0
 options.target_dim = 14.1748
 options.scale_factor = 1.0
 options.fix_temp = 1.2
@@ -91,7 +90,8 @@ shapes = [GenShape.Cube(Num=150, Radius = 0.0, surf_plane = options.exposed_surf
 shapes[-1].set_properties(properties = {'size' : S, 'surf_type' : 'P', 'density' : 14.29})
 shapes[-1].set_ext_grafts(DNA_chain, num = int(0*options.density_multiplier), linker_bond_type='S-NP')
 shapes[-1].set_ext_grafts(DNA_brush, num = 2*1, linker_bond_type = 'S-NP')
-shapes[-1].rotate_tables(shapes[-1].srot_mat)
+
+
 ######################################################################
 ### Attractive pairs. no requirement on length. Must not start with 'P', 'W', 'A', 'S'
 ######################################################################
@@ -142,7 +142,6 @@ options.sticky_types = buildobj.sticky_types
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
-raise StandardError
 
 system = init.read_xml(filename=options.filenameformat+'.xml')
 #mol2 = dump.mol2()

@@ -2,12 +2,12 @@ __author__ = 'martin'
 
 from math import *
 from fractions import gcd
-from scipy.optimize import minimize
 
 import numpy as np
 
-import Moment_Fixer
 from Util import vector as vec
+from Util import get_rot_mat
+from Quaternion import Quat
 
 
 class shape(object):
@@ -77,7 +77,6 @@ class shape(object):
     adds ficticious beads in the center of the shape to correct the moment of inertia
 
     """
-
     def __init__(self, surf_plane = None, lattice = None, properties = None):
 
         self.table = np.zeros((0,3), dtype=float)
@@ -104,7 +103,9 @@ class shape(object):
         self._pdb = []
         # keying atomic symbols to masses
         self.mkeys = {'C' : 12.011, 'O' : 15.999, 'H' : 1.008, 'N' : 14.007, 'S' : 32.06}
-        self.I_fixer = None
+
+        self.quaternion = Quat(np.eye(3))
+        self.Itensor = (0.0, 0.0, 0.0)
 
         if lattice is None :
             self.__lattice = [1, 1, 1]
@@ -114,7 +115,7 @@ class shape(object):
         if not (surf_plane is None) and surf_plane.__len__() == 3:# and not (surf_plane[1] == surf_plane[0] ==0):
             surf_plane[:] = (x / reduce(gcd, surf_plane) for x in surf_plane)
             r_vec = [surf_plane[0] / self.__lattice[0], surf_plane[1] / self.__lattice[1], surf_plane[2] / self.__lattice[2]]
-            self.__rot_mat = self.__get_rot_mat(r_vec)
+            self.__rot_mat = get_rot_mat(r_vec)
             self.srot_mat = self.__rot_mat # temp fix
             self.__surf_plane = vec(surf_plane)
             self.__n_plane = vec(r_vec)
@@ -144,7 +145,7 @@ class shape(object):
 
             r_vec = [surf_plane[0] / self.__lattice[0], surf_plane[1] / self.__lattice[1], surf_plane[2] / self.__lattice[2]]
             self.__n_plane = vec(r_vec)
-            self.__rot_mat = self.__get_rot_mat(r_vec)
+            self.__rot_mat = get_rot_mat(r_vec)
             self.__surf_plane = vec(surf_plane)
     @property
     def n_plane(self):
@@ -158,89 +159,91 @@ class shape(object):
             return self.flags['normalized']
         except KeyError:
             return None
-    @staticmethod
-    def __get_rot_mat(cubic_plane):
-        #normalize plane orientation
-        _cp = vec(cubic_plane)
-        _cp.array /= _cp.__norm__()
 
-        #build rotation matrix
-        _v = _cp.x_prod_by001() # crossprod by 001
-
-        _sl = _v.__norm__()
-        _cl = _cp.i_prod_by001()
-
-        _mat_vx = np.array([[0.0, -_v.z, _v.y], [_v.z, 0.0, -_v.x], [-_v.y, _v.x, 0.0]])
-        _id = np.array([[1.0,0,0],[0,1.0,0], [0,0,1.0]])
-
-        if _v.array[0] == 0.0 and _v.array[1] == 0.0: # surface is [001]
-            return _id
-
-        return  np.linalg.inv(_id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2))
-
-    def mat_from_plane(self, plane):
-        return self.__get_rot_mat(plane)
-
-    def load_file_Angstroms(self, file_name):
-
-        self.flags['normalized'] = False
-        self.flags['simple_I_tensor'] = False
-
-        with open(file_name, 'r') as f:
-            lines = f.readlines()
-            for line in lines:
-                l = line.strip().split()
-                self.table = np.append(self.table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
-
-    def load_file(self, file_name):
-
-        self.flags['normalized'] = False
-        self.flags['simple_I_tensor'] = False
-
-        with open(file_name, 'r') as f :
-            lines = f.readlines()
-            for line in lines:
-                l = line.strip().split()
-                self.table = np.append(self.table, [[float(l[0]), float(l[1]), float(l[2])]], axis = 0)
-
-
-        self.flags['hard_core_safe_dist'] = np.amax(self.table)
-
-    def load_file_Angstrom_m(self, files = None):
-        """
-        Load multiple different files for surfaces, i.e., make proteins with different dnas attached to different sites.
-        :return:
-        """
-
-        _t = []
-        for i in range(files.__len__()):
-            with open(files[i], 'r') as f :
-                lines = f.readlines()
-                _c = 0
-                for line in lines:
-                    l = line.strip().split()
-                    self.table = np.append(self.table, [[float(l[0])/20, float(l[1])/20, float(l[2])/20]], axis = 0)
-                    _c += 1
-            del f
-            _t.append(_c)
-        self.flags['multiple_surface_types'] = _t
-        self.flags['hard_core_safe_dist'] = np.amax(self.table)
-        self.flags['simple_I_tensor'] = False
-
-    #DEPRECATED METHOD, name overload
-    def will_build_from_shapes(self, **args):
-        self.set_properties(**args)
-
-
-    def set_properties(self, properties = None):
+    def set_properties(self, properties=None):
         if not (properties is None):
             self.flags.update(properties)
         self.flags['pdb_object'] = True
 
-    #DEPRECATED METHOD, name overload
-    def generate_surface_bonds(self, *args):
-        #old name for this function
-        self.generate_internal_bonds(*args)
+    def remove_duplicates(self, tol=1e-4):
+        DupRows = []
+        for i in range(self.table.__len__() - 1):
+            for j in range(i + 1, self.table.__len__()):
+                if (self.table[i, 0] - self.table[j, 0]) ** 2 + (self.table[i, 1] - self.table[j, 1]) ** 2 + +(
+                            self.table[i, 2] - self.table[j, 2]) ** 2 < tol * tol:
+                    DupRows.append(j)
+        DupRows = np.unique(DupRows)
+        self.table = np.delete(self.table, DupRows, axis=0)
+
+    def set_ext_grafts(self, ext_obj, num=None, key=None, linker_bond_type=None):
+
+        _l_list = []
+        for i in range(self.table.__len__()):
+            _l_list.append([self.table[0, 0], self.table[0, 1], self.table[0, 2]])
+        self.ext_objects.append(ext_obj)
+        if not 'EXT' in self.keys:
+            self.keys['EXT'] = [
+                [_l_list, {'EXT_IDX': self.ext_objects.__len__() - 1, 'num': num, 'linker_type': linker_bond_type},
+                 key]]
+        else:
+            self.keys['EXT'].append(
+                [_l_list, {'EXT_IDX': self.ext_objects.__len__() - 1, 'num': num, 'linker_type': linker_bond_type},
+                 key])
+
+    def initial_rotation(self):
+        try:
+            for i in range(self.table.__len__()):
+                dmp_vec = vec(self.table[i, :])
+                dmp_vec.rot(mat=self.srot_mat)
+                self.table[i, :] = dmp_vec.array
+            self.quaternion *= Quat(self.srot_mat)
+        except AttributeError:
+            pass
+
+    def rotate_object(self, operator):
+        if operator is None:
+            operator = np.eye(3)
+        Q_op = Quat(operator)
+        #        mat = Q_op.transform
+        #        for i in range(self.table.__len__()):
+        #            self.table[i] = np.dot(mat, self.table[i])
+        #        for i in range(self.additional_points.__len__()):
+        #            self.additional_points[i] = np.dot(mat, self.additional_points[i])
+        self.quaternion *= Q_op
+
+    def Set_Geometric_Quaternion(self):
+        # calculate the initial tensor
+        inertia_tensor = np.zeros((3, 3))
+        for point in self.table:
+            inertia_tensor[0, 0] += point[1] * point[1] + point[2] * point[2]
+            inertia_tensor[1, 1] += point[0] * point[0] + point[2] * point[2]
+            inertia_tensor[2, 2] += point[0] * point[0] + point[1] * point[1]
+            inertia_tensor[0, 1] -= point[0] * point[1]
+            inertia_tensor[0, 2] -= point[0] * point[2]
+            inertia_tensor[1, 2] -= point[1] * point[2]
+        inertia_tensor[1, 0] = inertia_tensor[0, 1]
+        inertia_tensor[2, 0] = inertia_tensor[0, 2]
+        inertia_tensor[2, 1] = inertia_tensor[1, 2]
+
+        w, v = np.linalg.eigh(inertia_tensor)
+
+        # sort the eigenvalues
+
+        idx = w.argsort()[::-1]
+        w = w[idx]
+        v = v[:, idx]
+
+        # invert one axis
+        if np.linalg.det(v) < 0:
+            v[:, 0] = -v[:, 0]
+
+        self.quaternion = Quat(v)
+        self.Itensor = (w[0] * 3.0 / 5.0, w[1] * 3.0 / 5.0, w[2] * 3.0 / 5.0)
+
+
+class SoftSurfaces(object):
+    def __init__(self):
+        pass
 
     def generate_internal_bonds(self, signature, num_nn = 3):
         """
@@ -308,114 +311,6 @@ class shape(object):
                     self.internal_angles[j][-1] = self.internal_angles[i][-1]
                     self.internal_angles[j][-2] = self.internal_angles[j][-2]
 
-    def rotate_tables(self, mat = None):
-        if mat is None :
-            mat = np.eye(3)
-        for i in range(self.table.__len__()):
-            self.table[i] = np.dot(mat, self.table[i])
-        for i in range(self.additional_points.__len__()):
-            self.additional_points[i] = np.dot(mat, self.additional_points[i])
-        try:
-            _c_In = self.flags['I_tensor']
-            _c_tensor =np.array([[_c_In[0], _c_In[3], _c_In[4]], [_c_In[3], _c_In[1], _c_In[5]], [_c_In[4], _c_In[5], _c_In[2]]])
-            _c_tensor = np.dot(np.dot( np.transpose(mat), _c_tensor), mat)
-            self.flags['I_tensor'] = np.array([_c_tensor[0,0], _c_tensor[1, 1], _c_tensor[2,2], _c_tensor[0,1],_c_tensor[0,2], _c_tensor[1,2]], dtype = float)
-        except KeyError:
-            pass
-
-    def fix_I_moment(self, c_type = '', m_tol = 5e-2):
-        """
-        Fixes the moment of inertia of the shape by adding 12 ficticious particles in the middle. Some directives needs to be
-        defined or this will throw an error. Self.flags['mass'] must be set to some value and self.flags['I_tensor'] must be defined.
-        Note that using parse pdb will create those values from the pdb file.
-        :param c_type: prefix to add to ficticious types. Default is empty string
-        :return:
-        """
-        _c_In = self.flags['I_tensor']
-        #rotate the stuff to get it on its principal axis
-        _c_tensor =np.array([[_c_In[0], _c_In[3], _c_In[4]], [_c_In[3], _c_In[1], _c_In[5]], [_c_In[4], _c_In[5], _c_In[2]]])
-        eigval, eigvec = np.linalg.eig(_c_tensor)
-        self.rotate_tables(mat = eigvec) # precondition the system
-        #self.flags['I_tensor'] = np.array([eigval[0], eigval[1], eigval[2], 0,0,0], dtype = float)
-        self.I_fixer = Moment_Fixer.Added_Beads(c_type=c_type, shape_pos=self.table, shape_num_surf=self.num_surf, d_tensor= self.flags['I_tensor'], mass =self.flags['mass'])
-
-        #define a merit function for the I_fixer mass values, as a function of center mass and rotation parameters
-
-        def merit_funct(v):
-            self.rotate_tables(mat =
-                               np.dot(np.dot(np.array([[cos(v[1]), - sin(v[1]), 0], [sin(v[1]), cos(v[1]), 0], [0,0,1]]),
-                               np.array([[cos(v[2]), 0, sin(v[2])], [0,1,0], [-sin(v[2]),0, cos(v[2])]])),
-                               np.array([[1,0,0],[0,cos(v[3]), - sin(v[3])], [0,sin(v[3]), cos(v[3])]])))
-            self.I_fixer.cmass = v[0]
-            self.I_fixer.target_tensor = self.flags['I_tensor']
-            self.I_fixer.calc_surf_inertia()
-            self.I_fixer.update_values()
-            vals = self.I_fixer.masses
-            _sum = 0
-            for i in range(vals.__len__()):
-                _sum += (np.sign(vals[i])-1) *vals[i]
-            self.rotate_tables(mat =
-                               np.transpose(np.dot(np.dot(np.array([[cos(v[1]), - sin(v[1]), 0], [sin(v[1]), cos(v[1]), 0], [0,0,1]]),
-                               np.array([[cos(v[2]), 0, sin(v[2])], [0,1,0], [-sin(v[2]),0, cos(v[2])]])),
-                               np.array([[1,0,0],[0,cos(v[3]), - sin(v[3])], [0,sin(v[3]), cos(v[3])]]))))
-            return _sum
-
-        _opt_mass = minimize(merit_funct, x0 = np.array([1.0, 0.05, 0.10, 0.02]), bounds= ((1, self.flags['mass']), (-pi,pi), (-pi/2,pi/2), (-pi,pi)), method = 'SLSQP')
-
-        v = _opt_mass.x
-        self.rotate_tables(mat =
-                               np.dot(np.dot(np.array([[cos(v[1]), - sin(v[1]), 0], [sin(v[1]), cos(v[1]), 0], [0,0,1]]),
-                               np.array([[cos(v[2]), 0, sin(v[2])], [0,1,0], [-sin(v[2]),0, cos(v[2])]])),
-                               np.array([[1,0,0],[0,cos(v[3]), - sin(v[3])], [0,sin(v[3]), cos(v[3])]])))
-        self.masses = np.append(self.masses, v[0])
-        _offset = self.additional_points.__len__()
-
-
-
-        #should check that masses are sufficiently large before appending (i.e. avoid a mass of ~0.01)
-
-        for i in range(self.I_fixer.intertwined_positions.__len__()):
-            if self.I_fixer.intertwined_masses[i] > m_tol :
-                self.additional_points = np.append(self.additional_points, [self.I_fixer.intertwined_positions[i]], axis = 0)
-                self.masses = np.append(self.masses, self.I_fixer.intertwined_masses[i])
-                if i % 2:
-                    self.type_suffix += self.I_fixer.intertwined_types[i]
-                if 'soft_shell' in self.flags and self.flags['soft_shell'] is True:
-                    if i < 6 :
-                        self.internal_bonds.append([0, i+_offset, 1.0, self.flags['soft_signature']+'_IF_xx'])
-                    else:
-                        self.internal_bonds.append([0, i+_offset, 2**0.5, self.flags['soft_signature']+'_IF_xy'])
-#TODO:Add a list that tracks the positions of the I_tensor beads so that we can remove them with another method
-
-    def rotate(self):
-        try:
-            for i in range(self.table.__len__()):
-                dmp_vec = vec(self.table[i,:])
-                dmp_vec.rot(mat = self.__rot_mat)
-                self.table[i,:] = dmp_vec.array
-                del dmp_vec
-        except AttributeError:
-            pass
-
-    def remove_duplicates(self, tol = 1e-4):
-        DupRows = []
-        for i in range(self.table.__len__()-1):
-            for j in range(i+1, self.table.__len__()):
-                if (self.table[i,0]-self.table[j,0])**2 +(self.table[i,1]-self.table[j,1])**2 + +(self.table[i,2]-self.table[j,2])**2 < tol*tol:
-                    DupRows.append(j)
-        DupRows = np.unique(DupRows)
-        self.table = np.delete(self.table, DupRows, axis = 0)
-
-    def set_ext_grafts(self, ext_obj, num = None, key = None, linker_bond_type = None):
-
-        _l_list = []
-        for i in range(self.table.__len__()):
-            _l_list.append([self.table[0, 0], self.table[0, 1], self.table[0, 2]])
-        self.ext_objects.append(ext_obj)
-        if not 'EXT' in self.keys:
-            self.keys['EXT'] = [[_l_list, {'EXT_IDX' : self.ext_objects.__len__() - 1, 'num' : num, 'linker_type' : linker_bond_type}, key]]
-        else:
-            self.keys['EXT'].append([_l_list, {'EXT_IDX' : self.ext_objects.__len__() - 1, 'num' : num, 'linker_type' : linker_bond_type}, key])
 
 class Cube(shape):
     def __init__(self, Num,  surf_plane = None, lattice = None, properties = None, Radius = None):
@@ -508,6 +403,10 @@ class Cube(shape):
         self.flags['simple_I_tensor'] = True
         self.flags['call'] = 'cube'
 
+        self.Set_Geometric_Quaternion()
+        self.initial_rotation()
+
+
 class Octahedron(shape):
     def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
         shape.__init__(self,  surf_plane, lattice, properties)
@@ -577,9 +476,13 @@ class Octahedron(shape):
         self.flags['simple_I_tensor'] = True
         self.flags['call'] = 'oct'
 
+        self.Set_Geometric_Quaternion()
+        self.initial_rotation()
+
 class PdbProtein(shape):
     def __init__(self, surf_plane = None, lattice = None, properties = None, filename = None):
         shape.__init__(self, surf_plane, lattice, properties)
+        self.pdbITensor = np.zeros((3, 3))
         if filename is not None:
             self.parse_pdb_protein(filename)
 
@@ -624,10 +527,25 @@ class PdbProtein(shape):
         self.flags['mass'] = _m / 650.0
         self.flags['simple_I_tensor'] = False
         self.flags['I_tensor'] = _i_v / 650.0
+
         self.flags['center_of_mass'] = _com
         self.flags['pdb_object'] = True
 
-    def add_pdb_dna_key(self, key, n_ss = None, n_ds = None, s_end = None, p_flex = None, num =None):
+        pdbITensor = np.array([[_i_v[0], _i_v[3], _i_v[4]], [_i_v[3], _i_v[1], _i_v[5]], [_i_v[4], _i_v[5], _i_v[2]]])
+        pdbITensor /= 650.0
+        w, v = np.linalg.eigh(self.pdbITensor)
+        idx = w.argsort()[::-1]
+        w = w[idx]
+        v = v[:, idx]
+
+        # invert one axis
+        if np.linalg.det(v) < 0:
+            v[:, 0] = -v[:, 0]
+
+        self.quaternion = Quat(v)
+        self.Itensor = (w[0], w[1], w[2])
+
+    def add_pdb_dna_key(self, key, n_ss=None, n_ds=None, s_end=None, p_flex=None, num=None):
         """
         Keys some dna to pdb parsed protein
 
@@ -638,6 +556,7 @@ class PdbProtein(shape):
         :param n_ds:
         :param s_end:
         :param p_flex:
+        :param num:
         :return:
         """
 
@@ -704,7 +623,7 @@ class PdbProtein(shape):
         if _t.__len__() > 1:
             self.flags['multiple_surface_types'] = _t
 
-    def add_shell(self, key, shell_name = None):
+    def add_shell(self, key, shell_name=None):
         """
         Adds a shell to the protein object. Able to key multiple commands onto the same shell
 
@@ -736,13 +655,13 @@ class PdbProtein(shape):
                         _l = _l and _s[pdb_form[_k]] == key[_k]
 
                 for _shell_idx in range(self.keys['shell'].__len__()):
-                    if not _l :
+                    if not _l:
                         break
                     for _pos in self.keys['shell'][_shell_idx][1]:
                         if _pos[0] == float(_s[6])/20.0 and _pos[1] == float(_s[7])/20.0 and _pos[2] == float(_s[8])/20.0 :
                             _l = False
                             break
-                if _l :
+                if _l:
                     _l_list.append([float(_s[6])/20.0, float(_s[7])/20.0,float(_s[8])/20.0])
 
         # find whether we need to append this to an existing shell or to create a new one
@@ -807,6 +726,9 @@ class Sphere(shape):
         self.flags['surface'] = 4*pi
         self.flags['volume'] = (4.0/3.0)*pi
         self.flags['simple_I_tensor'] = True
+
+        self.Set_Geometric_Quaternion()
+        self.initial_rotation()
 
 class RhombicDodecahedron(shape):
     def __init__(self, Num,  surf_plane = None, lattice = None, properties = None):
@@ -888,6 +810,9 @@ class RhombicDodecahedron(shape):
         self.flags['simple_I_tensor'] = True
         self.flags['call'] = 'rh_dodec'
 
+        self.Set_Geometric_Quaternion()
+        self.initial_rotation()
+
 class Tetrahedron(shape):
     def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
         shape.__init__(self,  surf_plane, lattice, properties)
@@ -954,5 +879,5 @@ class Tetrahedron(shape):
         self.flags['simple_I_tensor'] = True
         self.flags['call'] = 'Tetrahedron'
 
-
-
+        self.Set_Geometric_Quaternion()
+        self.initial_rotation()

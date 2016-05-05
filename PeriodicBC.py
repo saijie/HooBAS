@@ -2,55 +2,8 @@
 
 import numpy as np
 
+from Util import vector as vec
 
-class vec(object):
-        """
-        simple vector class with useful tools; should be reusable
-        """
-        def __init__(self, array, ntol = 1e-5):
-            self.array = np.array(array, dtype=float)
-            self.ntol = ntol
-            if array.__len__() <1:
-                del self
-
-        @property
-        def x(self):
-            return self.array[0]
-        @property
-        def y(self):
-            return self.array[1]
-        @property
-        def z(self):
-            return self.array[2]
-        def __add__(self,other):
-            return self.array + other.array
-        def __neg__(self):
-            self.array =  -self.array
-        def __sub__(self, other):
-            return self.array - other.array
-        def __norm__(self):
-            _c = 0.0
-            for i in range(self.array.__len__()):
-                _c += self.array[i]**2
-            _c **= 0.5
-            return _c
-        def normalize(self):
-            self.array /= self.__norm__()
-        def x_prod_by001(self):
-            _c = vec([-self.array[1], self.array[0], 0.0])
-            return _c
-        def i_prod_by001(self):
-            _c = self.array[2]
-            return _c
-        def rot(self,mat):
-            self.array = mat.dot(self.array)
-        def s_proj_to_xy(self, vz):
-            """
-            special projection to (x,y) plane, rescales by |vz| / vec.z
-            """
-            if not(abs(self.array[2]) < self.ntol):
-                self.array *= vz.__norm__()/self.array[2]
-                self.array[2] = 0.0
 
 def PeriodicBC(r, opts = None, z_multi = 1.0):
 # :: grab base box vectors, decompose the points, reduce into int_bounds. way more complicated than cubic box.

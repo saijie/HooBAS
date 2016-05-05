@@ -1,5 +1,3 @@
-__Author__ = 'Martin Girard'
-
 from math import *
 import random
 import copy
@@ -15,6 +13,8 @@ import Colloid
 import PeriodicBC
 from Util import vector as vec
 from Util import iscubic
+from Util import get_rot_mat
+from Util import gen_random_mat
 import Util
 
 
@@ -102,6 +102,7 @@ class BuildHoomdXML(object):
     """
 
     def __init__(self, center_obj, shapes, **kwargs):
+
         self.positions = np.zeros((0,3))
         self.__particles = []
 
@@ -111,6 +112,10 @@ class BuildHoomdXML(object):
         self.impropers = []
         
         self.beads = []
+
+        #################################
+        # used for internal representation
+        #################################
         self.__types = []
         self.__p_num = []
         self.__obj_index = []
@@ -122,7 +127,7 @@ class BuildHoomdXML(object):
         self.filename = 'HOOBAS_FILE'
         # list of properties defined in the Hoomd xml formats. First list refers to particle properties, second to bonded interaction types
         self.xml_proplist = ['velocity', 'acceleration', 'diameter', 'charge', 'body', 'orientation', 'angmom',
-                             'moment_inertia', 'image']
+                             'moment_inertia', 'image', 'orientation']
         self.xml_inter_prop_list = ['bonds', 'angles', 'dihedrals', 'impropers']
 
         # overriding defaults
@@ -133,11 +138,12 @@ class BuildHoomdXML(object):
 
         self.impose_box = []
         self.flaglist = {}
-        self.warnings = []
-
         self.centerobj = center_obj
 
 
+        ###################################
+        # external bonded interaction types
+        ###################################
         self.ext_ang_t = []
         self.ext_bond_t = []
         self.ext_dihedral_t = []
@@ -145,51 +151,23 @@ class BuildHoomdXML(object):
 
         self.charge_normalization = 1.00
 
+        ###########################################
+        # Data for salt dielectric constant values
+        ###########################################
         self.c_salt = 0.0
         self.Xsalt = np.array([0.0, 0.4865, 0.6846, 1.0, 2.0, 3.0, 4.0, 5.0], dtype= float)
         self.Ysalt = np.array([71.7457, 62.5617, 60.1328, 56.5655, 47.8368, 40.2467, 35.8444, 32.2770], dtype = float)
 
+        #######################################
+        # other external objects used for building
+        #######################################
         self._c_pos = center_obj.positions
         self._c_t = center_obj.built_types
         self._sh_obj = shapes
         self.__build_from_shapes()
 
-    @staticmethod
-    def get_rot_mat(cubic_plane):
-        _cp = vec(cubic_plane)
-        _cp.array /= _cp.__norm__()
 
-        _v = _cp.x_prod_by001()
-        _sl = _v.__norm__()
-        _cl = _cp.i_prod_by001()
 
-        _mat_vx = np.array([[0.0, -_v.z, _v.y], [_v.z, 0.0, -_v.x], [-_v.y, _v.x, 0.0]])
-        _id = np.array([[1.0,0,0],[0,1.0,0], [0,0,1.0]])
-
-        if _v.array[0] == 0.0 and _v.array[1] == 0.0: # surface is [001]
-            return _id
-        return  np.linalg.inv(_id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2))
-    @staticmethod
-    def get_inv_rot_mat(cubic_plane):
-        _cp = vec(cubic_plane)
-        _cp.array /= _cp.__norm__()
-
-        _v = -_cp.x_prod_by001()
-        _sl = _v.__norm__()
-        _cl = _cp.i_prod_by001()
-
-        _mat_vx = np.array([[0.0, -_v.z, _v.y], [_v.z, 0.0, -_v.x], [-_v.y, _v.x, 0.0]])
-        _id = np.array([[1.0,0,0],[0,1.0,0], [0,0,1.0]])
-
-        if _v.array[0] == 0.0 and _v.array[1] == 0.0: # surface is [001]
-            return _id
-        return  _id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2)
-    @staticmethod
-    def gen_random_mat():
-        _r_th = random.uniform(0, 2*pi)
-        _r_z = random.uniform(0,1)
-        _r_ori = [(1-_r_z**2)**0.5*cos(_r_th), (1-_r_z**2)**0.5*sin(_r_th), _r_z]
-        return BuildHoomdXML.get_rot_mat(_r_ori)
     @property
     def centers(self):
         _tmp = []
@@ -443,18 +421,18 @@ class BuildHoomdXML(object):
     def set_rotation_function(self, mode = None, mode_opts = None):
 
         if mode is None:
-            #############
-            # Grabs orientation from definition of particles and rotate them, could move s_plane setter to here and leave
-            # all lattice considerations out of GenShape
-            #############
+            ####################################################
+            # Grabs orientation from definition of particles and rotate them, could move s_plane setter to here
+            # and leave all lattice considerations out of GenShape
+            ##################################################
             for i in range(self.__particles.__len__()):
-                _r_m = self.get_rot_mat(self.__particles[i].orientation.array)
+                _r_m = get_rot_mat(self.__particles[i].orientation.array)
                 self.__particles[i].rotate(_r_m)
 
         if mode == 'random' and mode_opts is None:
             # just random orientations
             for i in range(self.__particles.__len__()):
-                _r_m = self.gen_random_mat()
+                _r_m = gen_random_mat()
                 self.__particles[i].rotate(_r_m)
 
         if mode == 'random' and hasattr(mode_opts, '__iter__'):
@@ -473,44 +451,8 @@ class BuildHoomdXML(object):
                             'Build : set_rotation_function : attribute ' + str(prop) + ' not found in particle',
                             SyntaxWarning)
                 if _loc_logic_acc:
-                    _r_m = self.gen_random_mat()
+                    _r_m = gen_random_mat()
                     particle.rotate(_r_m)
-
-        if mode == 'corr' and False: #unfinished
-            gridphi = np.linspace(0, pi, 50)
-            gridth = np.linspace(-pi, pi, 50)
-
-            # TODO : finish this stuff, incomplete at the moment
-            ##############################################
-            #iterates over all orientations, generates a new one with gaussian energy, min(v_n . v_1, v_n . v_2, ...), where
-            # the v_1, v_2, ..., are the degenerated orientations (i.e., 6 for cubes). Iteration must be repeated untill all traces
-            # of original orientations are wiped
-            ##########################################
-
-
-            # build adjacency matrix; grab min(dist, dist + x_p, dist - x_p, dist + x_p + y_p, dist + y_p, ...)
-            def min_dist(v_1, v_2): # incomplete
-                #Calculates min distance between two vectors with respect to all periodic conditions
-                _v = vec(v_1 - v_2)
-                return _v.__norm__()
-            def build_adj_mat(obj, opts):
-                _Adj = []
-                for i in range(obj.__particles.__len__()):
-                    for j in range(obj.__particles.__len__()):
-                        if i != j:
-                            if min_dist(obj.__particles[i].pos, obj.__particles[j].pos) < opts.rcut:
-                                _Adj.append([i,j, min_dist(obj.__particles[i].pos, obj.__particles[j].pos)])
-                return _Adj
-            Adj = build_adj_mat(self, mode_opts)
-
-            def iterate():
-                for ii in range(self.__particles.__len__()):
-                    pass
-                    # make grid of possible orientations, assign energies -> probabilities, normalize sum to 1,
-                    # generate random number from 0 to 1, assign orientation based on partial sum
-
-                    # to calculate energies, use min[ E(o1, o2), E(R.o1, o2), ...], where R is a degeneracy rotation matrix
-                    # i.e., given by get rotation matrix method applied to ([1 0 0], [-1 0 0], ...).
 
     def __build_from_shapes(self):
         #initial body value, also a body count
@@ -520,17 +462,11 @@ class BuildHoomdXML(object):
                 n_ind = i
 
                 # determine which type of colloid to create
-                if 'shell' in self._sh_obj[n_ind].keys and self._sh_obj[n_ind].keys['shell']:
-                    self.__particles.append(Colloid.ComplexColloid(center_type=self._c_t[n_ind],
-                                                               loc_sh_obj = self._sh_obj[n_ind],
-                                                                **self._sh_obj[i].flags
-                                                               ))
-                elif 'tesselation' in self._sh_obj[n_ind].keys:
-                    self.__particles.append(Colloid.SurfaceTesselationColloid(center_type=self._c_t[n_ind],
-                                                                              loc_sh_obj=self._sh_obj[n_ind],
-                                                                              **self._sh_obj[i].flags
-                                                                              ))
 
+                if 'ColloidType' in self._sh_obj[n_ind].keys:
+                    self.__particles.append(self._sh_obj[n_ind].keys['ColloidType'](center_type=self._c_t[n_ind],
+                                                                                    loc_sh_obj=self._sh_obj[n_ind],
+                                                                                    **self._sh_obj[i].flags))
                 else:
                     self.__particles.append(Colloid.SimpleColloid(center_type = self._c_t[n_ind],
                                                                loc_sh_obj = self._sh_obj[n_ind],
@@ -544,15 +480,18 @@ class BuildHoomdXML(object):
                 #set center to value from the center list
                 self.__particles[-1].center_position = self._c_pos[i][j,:]
 
-                #only change the body index if the current colloid is rigid
+                #########################################
+                # set body tags too the center tag
+                #########################################
                 if not self.__particles[-1].body == -1:
-                    self.__particles[-1].body = b_cnt
+                    self.__particles[-1].body = self.__p_num[-1] + 1
                     b_cnt += 1
 
                 try:
                     self.__particles[-1].pnum_offset = self.__p_num[-1]+1
                 except IndexError:
                     pass
+
                 for k in range(self.__particles[-1].p_num.__len__()):
                     self.__p_num.append(self.__particles[-1].p_num[k])
                 for k in range(self.__particles[-1].bonds.__len__()):
@@ -885,9 +824,9 @@ class BuildHoomdXML(object):
 
         _mat = np.array([[_b_1.x, _b_2.x], [_b_1.y, _b_2.y]])
         if abs(_b_1.z) > 1e-5:
-            self.warnings.append(['Build : enforce_XYPBC : XY bound vector (b1) has non-zero z component'])
+            warnings.warn(UserWarning, 'XY bound vector (b1) has non-zero z component; check results')
         if abs(_b_2.z) > 1e-5:
-            self.warnings.append(['Build : enforce_XYPBC : XY bound vector (b2) has non-zero z component'])
+            warnings.warn(UserWarning, 'XY bound vector (b2) has non-zero z component; check results')
 
         for bead in self.beads:
             _a = list(np.linalg.solve(_mat, np.array(bead.position[0:2])))

@@ -9,6 +9,7 @@ import numpy as np
 import CoarsegrainedBead
 from Util import vector as vec
 from Util import get_rot_mat
+from Quaternion import Quat
 
 
 class Colloid(object):
@@ -79,6 +80,12 @@ class Colloid(object):
         self.rem_list = []
         self.att_list = [] #table of tables
 
+        self.diagI = self._sh.Itensor
+
+        # colloid quaternion is shared with local object quaternion
+        self.quaternion = self._sh.quaternion
+
+
         ## get mass from shape object
         try:
             self.mass = self._sh.flags['mass']
@@ -94,6 +101,13 @@ class Colloid(object):
         # all colloids have well defined orientations with respect to the base shape function
         if self.orientation is None:
             self.orientation = [0, 0, 1]
+
+        #####################
+        # body properties
+        #####################
+        self.body_num = 0
+        self.body_beads = []
+        self.body_mass = 0.0
 
     @property
     def surface_type(self):
@@ -179,6 +193,27 @@ class Colloid(object):
     def shape_flag(self):
         return self._sh.flags
 
+    @property
+    def body(self):
+        return self.body_num
+
+    @body.setter
+    def body(self, val):
+        self.body_num = val
+        for rigid_bead in self.body_beads:
+            rigid_bead.body = val
+
+    @property
+    def body_typelist(self):
+        return [bead.type for bead in self.body_beads]
+
+    def relative_positions(self):
+        _ = []
+        for position in self._sh.pos:
+            _.append((position[0], position[1], position[2]))
+        return _
+
+
     def sticky_excluded(self, _types, _rc = None):
         _exclusion_list = []
         for i in range(self.beads.__len__()):
@@ -193,16 +228,20 @@ class Colloid(object):
 
         return _exclusion_list
 
-    def rotate(self, r_mat):
+    def rotate(self, operation):
         _t = self.pos[0,:]
         self.pos = self.pos - _t
-        for i in range(self.pos.__len__()):
+        Q_op = Quat(operation)
+        r_mat = Q_op.transform
+        for i in range(self.body_beads.__len__(), self.pos.__len__()):
             _tmp_dump = vec(self.pos[i,:])
             _tmp_dump.rot(mat = r_mat)
             self.pos[i,:] = _tmp_dump.array
             self.beads[i].position = _tmp_dump.array + _t
             del _tmp_dump
         self.pos = self.pos + _t
+        self.quaternion *= Q_op
+
 
     def graft_EXT(self, EXT_IDX, rem_id, num, linker_type):
 
@@ -247,25 +286,8 @@ class Colloid(object):
                 self.dihedrals.append(_dump_copy.dihedrals[obj_int_dih])
             del _dump_copy, _att_vec
 
-class RigidStructure(object):
-    def __init__(self):
-        self.body_num = 0
-        self.body_beads = []
 
-    @property
-    def body(self):
-        return self.body_num
-    @body.setter
-    def body(self, val):
-        self.body_num = val
-        for rigid_bead in self.body_beads:
-            rigid_bead.body = val
-
-    @property
-    def body_typelist(self):
-        return [bead.type for bead in self.body_beads]
-
-class SimpleColloid(Colloid, RigidStructure):
+class SimpleColloid(Colloid):
     """
     This is the class used for simple rigid bodies, i.e., polyhedra, with a single surface atom type. Shape function must
     be a normalized one
@@ -273,14 +295,18 @@ class SimpleColloid(Colloid, RigidStructure):
     def __init__(self, size, **args):
 
         Colloid.__init__(self, **args)
-        RigidStructure.__init__(self)
+
 
         # set the surface mass to be 3/5 of the overall mass to fix the rigid body intertia
         self.s_mass = self.mass * 3.0 / 5.0 / self._sh.num_surf
         self.size = size
+        self.body_mass = self.mass
+
 
         # normalized shapes have simple moment of inertia (diagonal)
-        self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = self.c_type, body = 0, mass = self.mass * 2.0 / 5.0)]
+        self.beads = [CoarsegrainedBead.bead(position=np.array([0.0, 0.0, 0.0]), beadtype=self.c_type, body=0,
+                                             mass=self.mass * 2.0 / 5.0, quaternion=self.quaternion,
+                                             moment_inertia=self.diagI)]
 
         self.__build_surface()
         #check if the system is rigid
@@ -306,17 +332,19 @@ class SimpleColloid(Colloid, RigidStructure):
             for i in range(self._sh.keys['EXT'].__len__()):
                 self.graft_EXT(rem_id = 0, **self._sh.keys['EXT'][i][1])
 
-class ComplexColloid(Colloid, RigidStructure):
-    def __init__(self, **args):
 
-        Colloid.__init__(self, **args)
-        RigidStructure.__init__(self)
+class ComplexColloid(Colloid):
+    def __init__(self, **kwargs):
+
+        Colloid.__init__(self, **kwargs)
 
         # mass is set by the I_fixer from the base shape
         self.s_mass = 1.0
-
+        self.body_mass = self.mass
         # A complex colloid should have a moment of inertia defined by the I_fixer
-        self.beads = [CoarsegrainedBead.bead(position = np.array([0.0, 0.0, 0.0]), beadtype = self.c_type, body = 0, mass = self._sh.masses[0])]
+        self.beads = [CoarsegrainedBead.bead(position=np.array([0.0, 0.0, 0.0]), beadtype=self.c_type, body=0,
+                                             mass=self._sh.masses[0], quaternion=self.quaternion,
+                                             moment_inertia=self.diagI)]
 
         for i in range(1, self._sh.additional_points.__len__()):
             self.beads.append(CoarsegrainedBead.bead(position = self._sh.additional_points[i], beadtype=self.c_type + self._sh.type_suffix[i],
@@ -378,14 +406,3 @@ class ComplexColloid(Colloid, RigidStructure):
         for shl_idx in range(self._sh.keys['shell'].__len__()):
             for ext_idx in range(self._sh.keys['shell'][shl_idx][2].__len__()):
                 self.graft_EXT(rem_id = shl_idx, **self._sh.keys['shell'][shl_idx][2][ext_idx])
-
-
-class SurfaceTesselationColloid(SimpleColloid):
-    def __init__(self, **args):
-        super(SurfaceTesselationColloid, self).__init__(**args)
-        self.charge_to_var_cosine(**args)
-
-    def charge_to_var_cosine(self, function_cosine):
-        for bead in self.beads:
-            cth = bead.position[2] / (bead.position[0] ** 2.0 + bead.position[1] ** 2.0) ** 0.5
-            bead.charge = function_cosine(cth)

@@ -1,4 +1,8 @@
 __author__ = 'martin'
+
+# collection of methods / classes used by many other objects
+
+
 import random
 from math import *
 
@@ -21,6 +25,8 @@ class vector(object):
     def __neg__(self):
         return vector(-self.array)
 
+    def __sub__(self, other):
+        return vector(self.array - other.array)
     @property
     def x(self):
         return self.array[0]
@@ -106,11 +112,13 @@ def get_inv_rot_mat(cubic_plane):
         return _id
     return  _id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2)
 
+
 def gen_random_mat():
     _r_th = random.uniform(0, 2*pi)
     _r_z = random.uniform(0,1)
     _r_ori = [(1-_r_z**2)**0.5*cos(_r_th), (1-_r_z**2)**0.5*sin(_r_th), _r_z]
     return get_rot_mat(_r_ori)
+
 
 def isdiagonal(lattice):
     if (np.diag(lattice) == lattice).all():
@@ -124,7 +132,6 @@ def iscubic(lattice):
         return True
     else:
         return False
-
 
 def c_hoomd_box(v, int_bounds, z_multi=1.00):
     vx = v[0][:]

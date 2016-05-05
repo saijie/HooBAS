@@ -14,11 +14,30 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
 You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+Uses the Quaternion package
 
-Generates an initial system of block-DNA objects for hoomd. The block can be any shape (sphere, cube, ..., custom) 
-and is able to load from pdb files. Current implementation is based on a few objects : CenterFile (generates center positions), 
-Genshape (generate shape and directives) and Build (assembles the system from center and shapes). 
+Copyright (c) 2009, Smithsonian Astrophysical Observatory
+All rights reserved.
 
-Since it is based on much older code that wasn't meant to be used in this way and has been maintaining legacy compatibilty with
-that code, it is currently implemented in a bizarre way, with many obsolete function, options and names. Newer versions may break
-compatibility with legacy versions when this is corrected. 
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of the <organization> nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
+INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. 
+IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL 
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; 
+OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY
+   OF SUCH DAMAGE.
+
+Generates an initial system of colloids coated with arbitrary ligands and places them on either random positions or lattice sites
+defined by arbitrary lattice (supports triclinic boxes). Functions built-in to add other particles, such as salts, free chains floating.
+
