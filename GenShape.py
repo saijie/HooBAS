@@ -469,7 +469,7 @@ class PdbProtein(shape):
                     _cnt += 1
                 _t.append(_cnt)
 
-        if _t.__len__() > 1:
+        if _t.__len__() >= 1:
             self.flags['multiple_surface_types'] = _t
 
     def add_shell(self, key, shell_name=None):

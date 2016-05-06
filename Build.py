@@ -470,16 +470,14 @@ class BuildHoomdXML(object):
             for j in range(self._c_pos[i].__len__()):
 
                 # determine which type of colloid to create
-                if 'ColloidType' in self._sh_obj[i].keys:
-                    self.__particles.append(self._sh_obj[i].keys['ColloidType'](center_type=self._c_t[i],
+                if 'ColloidType' in self._sh_obj[i].flags:
+                    self.__particles.append(self._sh_obj[i].flags['ColloidType'](center_type=self._c_t[i],
                                                                                 loc_sh_obj=self._sh_obj[i],
                                                                                     **self._sh_obj[i].flags))
                 # no colloid class given yields a simple colloid
                 else:
-                    self.__particles.append(Colloid.SimpleColloid(center_type=self._c_t[i],
-                                                                  loc_sh_obj=self._sh_obj[i],
-                                                                **self._sh_obj[i].flags
-                                                               ))
+                    self.__particles.append(Colloid.SimpleColloid(center_type=self._c_t[i], loc_sh_obj=self._sh_obj[i],
+                                                                  **self._sh_obj[i].flags))
                 try:
                     self.__types.append([type(self.__particles[-1]).__name__ + self.flags['call']])
                 except KeyError:
@@ -492,7 +490,10 @@ class BuildHoomdXML(object):
                 # set body tags too the center tag
                 #########################################
                 if not self.__particles[-1].body == -1:
-                    self.__particles[-1].body = self.__p_num[-1] + 1
+                    try:
+                        self.__particles[-1].body = self.__p_num[-1] + 1
+                    except IndexError:
+                        pass
                     b_cnt += 1
 
                 try:
@@ -541,15 +542,10 @@ class BuildHoomdXML(object):
     def current_box(self):
         if self.impose_box.__len__() == 0:
             if type(self.centerobj).__name__ == 'Lattice':
-                # T#ODO : move the hoomd box calculation here from main
-                # L = self.__opts.rot_box
-                vx, vy, vz = self.centerobj.rot_crystal_box
-                # rotm = self.centerobj.rotation_matrix
-                # cut the z periodicity
+                vx, vy, vz = self.centerobj.rot_crystal_box  # TODO : check whether this can be called multiple times or if copy.deepcopy needs to be added
                 if self.centerobj.flags['vertical_slice']:
                     vz = [0.0, 0.0, vz[2]]
                 L = Util.c_hoomd_box([vx, vy, vz], self.centerobj.int_bounds, z_multi=self.z_multiplier)
-
 
             elif type(self.centerobj).__name__ == 'RandomPositions':
                 Mx = 0
@@ -732,7 +728,7 @@ class BuildHoomdXML(object):
         for i in range(self.beads.__len__()):
             self.beads[i].charge /= self.charge_normalization
         self.__writeXML(L)
-
+        self.impose_box = L
     def __writeXML(self, L):
         with open(self.filename + '.xml', 'w') as f:
             f.write('''<?xml version="1.0" encoding="UTF-8"?>\n''')

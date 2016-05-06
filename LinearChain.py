@@ -305,7 +305,6 @@ class Polyaniline(LinearChain):
         self.randomize_dirs()
         self.rem_sites = range(0, self.beads.__len__(), 4)+range(3, self.beads.__len__(), 4) # sites available for binding
 
-
     def __build_chain(self):
         self.positions = np.append(self.positions,[[0.0, 0.0, 0.0]], axis = 0)
         self.positions = np.append(self.positions, [[0.0, 0.0, self.lmono[1]]], axis = 0)

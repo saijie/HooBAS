@@ -320,7 +320,7 @@ class SimpleColloid(Colloid):
 
         self.__build_surface()
         # check if the system is rigid
-        if self.bonds.__len__() == 0:
+        if not self.bonds.__len__() == 0:
             self.body = -1
 
         # mass in shape class is normalized
@@ -369,7 +369,7 @@ class ComplexColloid(Colloid):
 
         self.__build_shells()
         # check if the system is rigid
-        if self.bonds.__len__() == 0:
+        if not self.bonds.__len__() == 0:
             self.body = -1
         self.build_shell()
 

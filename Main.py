@@ -14,9 +14,9 @@ import sys
 sys.path.append('/projects/b1030/hoomd-2.0-cuda7/')
 sys.path.append('/projects/b1030/hoomd-2.0-cuda7/hoomd/')
 
-from hoomd import *
-from md import *
-context.initialize()
+# from hoomd import *
+# from md import *
+# context.initialize()
 
 ##############################
 #### Simulation parameters####
@@ -25,7 +25,7 @@ context.initialize()
 
 options = type('', (), {})()
 _d = 0
-F = 7.0  # :: Full length binding energies, usual = 7
+F = 7.0  # binding energy
 Dump = 2e5 #dump period for dcd
 options.Um = 1.00
 
@@ -78,9 +78,12 @@ DNA_chain = LinearChain.DNAChain(n_ss = 1, n_ds = dsL, sticky_end = ['X', 'Y', '
 DNA_brush = LinearChain.DNAChain(n_ss = 1, n_ds = 1, sticky_end =[], bond_length = 0.6)
 
 shapes = [GenShape.RhombicDodecahedron(Num=600, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
-
+# shapes = [GenShape.PdbProtein(filename = '4BLC.pdb')]
 shapes[-1].set_properties(
-    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.SimpleColloid})
+    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.ComplexColloid})
+# shapes[-1].set_properties(properties={ 'surf_type': 'P', 'ColloidType': Colloid.ComplexColloid})
+# shapes[-1].add_shell(key = {'RES':'LYS'})
+#shapes[-1].pdb_build_table()
 shapes[-1].set_ext_grafts(DNA_chain, num=int(124 * options.density_multiplier), linker_bond_type='S-NP')
 shapes[-1].set_ext_grafts(DNA_brush, num=2 * 124, linker_bond_type='S-NP')
 
@@ -102,10 +105,7 @@ center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0
 center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0, 0.5])
 center_file_object.add_particles_on_lattice(center_type='W', offset=[0, 0.5, 0.5])
 center_file_object.rotate_and_cut(int_bounds = options.int_bounds)
-# options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
-# options.rotm = center_file_object.rotation_matrix
-# options.vz = [0.0, 0.0, options.vz[2]]
-# options.rot_box = c_hoomd_box([options.vx, options.vy, options.vz], options.int_bounds, z_multi=options.z_m)
+
 
 # Target box sizes
 ################################
@@ -127,6 +127,7 @@ if comm.get_rank() == 0:
     buildobj.write_to_file()
 
 
+
 #options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
 options.surface_types = buildobj.surface_types
@@ -137,15 +138,27 @@ options.sticky_types = buildobj.sticky_types
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
+boxL = buildobj.current_box()
+box = data.boxdim(boxL[0], boxL[1], boxL[2], boxL[3], boxL[4], boxL[5])
+system = init.create_empty(N=buildobj.beads.__len__(), box=box)
 
+for idx in range(buildobj.beads.__len__()):
+    propset = [prop for prop in dir(buildobj.beads[idx]) if
+               not prop.startswith('__') and not callable(getattr(buildobj.beads[idx], prop))]
+    for set_prop in propset:
+        setattr(system.particles[idx], set_prop, getattr(buildobj.beads[idx], set_prop))
 
-system = init.read_xml(filename=options.filenameformat+'.xml')
-#mol2 = dump.mol2()
-#mol2.write(filename=options.filenameformat+'.mol2')
+for bond in buildobj.bonds:
+    system.bonds.add(bond[-1], bond[0], bond[1])
 
-#Lx0 = options.sys_box[0]
-#Ly0 = options.sys_box[1]
-#Lz0 = options.sys_box[2]
+for ang in buildobj.angles:
+    system.angles.add(ang[-1], ang[0], ang[1], ang[2])
+
+rigid = constrain.rigid()
+_ = []
+for p in shapes[-1].table:
+    _.append((p[0], p[1], p[2]))
+rigid.set_param(type_name='W', types=['P'] * shapes[-1].table.__len__(), position = _)
 
 ####################################################################################
 #	Bond Setup
@@ -324,7 +337,10 @@ comm.barrier()
 ####################################################################################
 #    Make Groups  (of all rigid particles and of all nonrigid particles)
 ####################################################################################
-nonrigid = group.all()
+groupall = group.all()
+groupP = group.type('P')
+
+nonrigid = group.differenec(groupall, groupP, name='groupnonrigid')
 #rigid = group.rigid()
 
 integrate.mode_standard(dt=0.005)
