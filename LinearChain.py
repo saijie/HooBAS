@@ -414,14 +414,19 @@ class GenericRingPolymer(LinearChain):
         for i in range(self.positions.__len__()):
             self.beads.append(CoarsegrainedBead.bead(position=self.positions[i,:], beadtype='GenericPolymer', body = -1))
 
-class DNAChain(LinearChain): #TODO : fix the a_types and b_types and all the other stuff
-    def __init__(self, n_ss, n_ds, sticky_end, flexor = None, bond_length = 0.84):
-        LinearChain.__init__(self, n_monomer= n_ss + n_ds + sticky_end.__len__(), kuhn_length=bond_length)
+
+class DNAChain(LinearChain):
+    def __init__(self, n_ss, n_ds, sticky_end, flexor=None, **kwargs):
+        LinearChain.__init__(self, n_monomer=n_ss + n_ds + sticky_end.__len__(), kuhn_length=0.84)
         self.nss = n_ss
         self.nds = n_ds
         self.sticky_end = sticky_end
-        self.b_types = []
-        self.a_types = []
+        self.b_types = [['S-NP', 330.0, 0.84], ['S-S', 330.0, 0.84 * 0.5], ['S-A', 330.0, 0.84 * 0.75],
+                        ['backbone', 330.0, 0.84], ['A-B', 330.0, 0.84 * 0.75], ['B-B', 330.0, 0.84 * 0.5],
+                        ['C-FL', 330.0, 0.84 * 0.5], ['B-FL', 330.0 * 0.5 * 1.41], ['C-C', 330.0, 0.84 * 0.5]]
+        self.a_types = [['flexor', 2.0, pi], ['dsDNA', 30.0, pi], ['C-C-C', 10.0, pi], ['B-B-B', 10.0, pi],
+                        ['FL-C-FL', 100.0, pi], ['A-B-C', 120.0, 0.5 * pi], ['A-A-B', 2.0, pi], ['A-B-B', 2.0, pi],
+                        ['C-C-endFL', 50.0, pi]]
         self.rem_sites = [] # we dont attach anything to the DNA chain
         self.inner_types = []
         if not flexor is None:

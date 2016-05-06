@@ -1,9 +1,3 @@
-# Designed as patch for the limitation on init.reset() CUDA limitations on cluster. Generates new local variables instead of resetting them.
-# Apparently works independently on deletion of local variables in the patch function even if hoomd keeps some global variables.
-
-__author__ = 'martin'
-
- 
 from numpy import *
 del angle
 from math import *
@@ -11,18 +5,17 @@ import CenterFile
 import GenShape
 import Build
 import LinearChain
-
+import Colloid
 ###########################
 # installation dependant stuff
 #############################
 import sys
 
-sys.path.append(['/projects/b1030/hoomd-2.0-cuda7/'])
+sys.path.append('/projects/b1030/hoomd-2.0-cuda7/')
 sys.path.append('/projects/b1030/hoomd-2.0-cuda7/hoomd/')
 
 from hoomd import *
 from md import *
-
 context.initialize()
 
 ##############################
@@ -36,7 +29,7 @@ F = 7.0  # :: Full length binding energies, usual = 7
 Dump = 2e5 #dump period for dcd
 options.Um = 1.00
 
-options.target_dim = 14.1748
+options.target_dim = 35.07 / 2.0
 options.scale_factor = 1.0
 options.fix_temp = 1.2
 options.target_temp = options.fix_temp
@@ -79,17 +72,17 @@ dsL = 3+_d
 lz =2.0
 C = 0.0
 
-
-options.filenameformat = 'CubeHDMPI_BCT_'+str(S)+'_lz_'+str(lz)+'_dims_'+str(options.target_dim)+'_dsL'+str(dsL)+'_lm_'+str(options.z_m)+'_surf_'+str(options.exposed_surf)
+options.filenameformat = 'test_101'
 
 DNA_chain = LinearChain.DNAChain(n_ss = 1, n_ds = dsL, sticky_end = ['X', 'Y', 'Z'], bond_length = 0.6)
 DNA_brush = LinearChain.DNAChain(n_ss = 1, n_ds = 1, sticky_end =[], bond_length = 0.6)
 
-shapes = [GenShape.Cube(Num=150, Radius = 0.0, surf_plane = options.exposed_surf, lattice = [1.0, 1.0, lz])]
+shapes = [GenShape.RhombicDodecahedron(Num=600, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
 
-shapes[-1].set_properties(properties = {'size' : S, 'surf_type' : 'P', 'density' : 14.29})
-shapes[-1].set_ext_grafts(DNA_chain, num = int(0*options.density_multiplier), linker_bond_type='S-NP')
-shapes[-1].set_ext_grafts(DNA_brush, num = 2*1, linker_bond_type = 'S-NP')
+shapes[-1].set_properties(
+    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.SimpleColloid})
+shapes[-1].set_ext_grafts(DNA_chain, num=int(124 * options.density_multiplier), linker_bond_type='S-NP')
+shapes[-1].set_ext_grafts(DNA_brush, num=2 * 124, linker_bond_type='S-NP')
 
 
 ######################################################################
@@ -98,14 +91,16 @@ shapes[-1].set_ext_grafts(DNA_brush, num = 2*1, linker_bond_type = 'S-NP')
 options.sticky_pairs = [['X', 'Z'], ['Y', 'Y']]
 options.sticky_track = [['X', 'Z'], ['Y', 'Y']]
 
-
-options.int_bounds = [2, 2, 2] # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
+options.int_bounds = [1, 1,
+                      2]  # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
 
 options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*options.target_dim]
 center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, lattice = options.lattice_multi, int_bounds=options.int_bounds)
 center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0, 0, 0])
-center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0.5, 0.5, 0.5])
+center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0])
+center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0, 0.5])
+center_file_object.add_particles_on_lattice(center_type='W', offset=[0, 0.5, 0.5])
 center_file_object.rotate_and_cut(int_bounds = options.int_bounds)
 # options.vx, options.vy, options.vz = center_file_object.rot_crystal_box
 # options.rotm = center_file_object.rotation_matrix
@@ -128,8 +123,8 @@ d_tags_loc_len = d_tags[0].__len__()
 
 #buildobj.set_charge_to_pnum()
 buildobj.set_charge_to_dna_types()
-
-buildobj.write_to_file()
+if comm.get_rank() == 0:
+    buildobj.write_to_file()
 
 
 #options.sys_box = buildobj.sys_box
@@ -142,6 +137,7 @@ options.sticky_types = buildobj.sticky_types
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
+
 
 system = init.read_xml(filename=options.filenameformat+'.xml')
 #mol2 = dump.mol2()
@@ -156,17 +152,17 @@ system = init.read_xml(filename=options.filenameformat+'.xml')
 ####################################################################################
 #No.1 covelent bond, could be setup w/ dict
 harmonic = bond.harmonic()
-harmonic.set_coeff('S-NP', k=330.0, r0=0.84)
-harmonic.set_coeff('S-S', k=330.0, r0=0.84*0.5)
-harmonic.set_coeff('S-A', k=330.0, r0=0.84*0.75)
-harmonic.set_coeff('backbone', k=330.0, r0=0.84)
-harmonic.set_coeff('A-B', k=330.0, r0=0.84*0.75)
-harmonic.set_coeff('B-B', k=330.0, r0=0.84*0.5 )
-harmonic.set_coeff('B-C', k=330.0, r0=0.84*0.5 )
-harmonic.set_coeff('C-FL', k=330.0, r0=0.84*0.5 )
-harmonic.set_coeff('B-FL', k=330.0, r0=0.84*0.5*1.4)
-harmonic.set_coeff('C-C', k=330.0, r0=0.84*0.5)  # align the linker C-G
-#harmonic.set_coeff('UselessBond', k= 0.0, r0 = 0.0)
+harmonic.bond_coeff.set('S-NP', k=330.0, r0=0.84)
+harmonic.bond_coeff.set('S-S', k=330.0, r0=0.84 * 0.5)
+harmonic.bond_coeff.set('S-A', k=330.0, r0=0.84 * 0.75)
+harmonic.bond_coeff.set('backbone', k=330.0, r0=0.84)
+harmonic.bond_coeff.set('A-B', k=330.0, r0=0.84 * 0.75)
+harmonic.bond_coeff.set('B-B', k=330.0, r0=0.84 * 0.5)
+harmonic.bond_coeff.set('B-C', k=330.0, r0=0.84 * 0.5)
+harmonic.bond_coeff.set('C-FL', k=330.0, r0=0.84 * 0.5)
+harmonic.bond_coeff.set('B-FL', k=330.0, r0=0.84 * 0.5 * 1.4)
+harmonic.bond_coeff.set('C-C', k=330.0, r0=0.84 * 0.5)  # align the linker C-G
+# harmonic.bond_coeff.set('UselessBond', k= 0.0, r0 = 0.0)
 
 
 #No.2 Stiffness of a chain
@@ -175,36 +171,19 @@ Sangle = angle.harmonic()
 ## need to replace this with dict structure
 for i in range(options.ang_types.__len__()):
     if options.ang_types[i] == 'flexor':
-        Sangle.set_coeff('flexor', k=2.0, t0=pi)
+        Sangle.angle_coeff.set('flexor', k=2.0, t0=pi)
     if options.ang_types[i] == 'dsDNA':
-        Sangle.set_coeff('dsDNA', k=30.0, t0=pi)
+        Sangle.angle_coeff.set('dsDNA', k=30.0, t0=pi)
     if options.ang_types[i] == 'C-C-C':
-        Sangle.set_coeff('C-C-C', k=10.0, t0=pi)
+        Sangle.angle_coeff.set('C-C-C', k=10.0, t0=pi)
     if options.ang_types[i] == 'B-B-B':
-        Sangle.set_coeff('B-B-B', k=10.0, t0=pi)
+        Sangle.angle_coeff.set('B-B-B', k=10.0, t0=pi)
 
-Sangle.set_coeff('FL-C-FL', k=100.0, t0=pi)
-Sangle.set_coeff('A-B-C', k=120.0, t0=pi/2)
-Sangle.set_coeff('A-A-B', k=2.0, t0=pi)
-Sangle.set_coeff('A-B-B', k=2.0, t0=pi)
-Sangle.set_coeff('C-C-endFL', k=50.0, t0=pi)
-
-
-ktyp = 8000.00
-try :
-    for i in range(options.bond_types.__len__()):
-        _ad = False
-        for sh in range(shapes.__len__()):
-            for j in range(shapes[sh].internal_bonds.__len__()):
-                if shapes[sh].internal_bonds[j][-1] == options.bond_types[i]:
-                    harmonic.set_coeff(options.bond_types[i], k = ktyp, r0 = shapes[sh].internal_bonds[j][-2])
-                    _ad = True
-                    break
-            if _ad:
-                break
-except AttributeError:
-    pass
-
+Sangle.angle_coeff.set('FL-C-FL', k=100.0, t0=pi)
+Sangle.angle_coeff.set('A-B-C', k=120.0, t0=pi / 2)
+Sangle.angle_coeff.set('A-A-B', k=2.0, t0=pi)
+Sangle.angle_coeff.set('A-B-B', k=2.0, t0=pi)
+Sangle.angle_coeff.set('C-C-endFL', k=50.0, t0=pi)
 
 
 ##################################################################################
@@ -454,8 +433,8 @@ nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixin
 #    run(options.tab_update)
 run(3e6)
 
-nonrigid_integrator.disable()
-npt_integ = integrate.npt(group = nonrigid, T = options.target_temp_1, P = 1e-4, tau = 0.65, tauP = 1.0, couple = "none", all = True)
+# nonrigid_integrator.disable()
+#npt_integ = integrate.npt(group = nonrigid, T = options.target_temp_1, P = 1e-4, tau = 0.65, tauP = 1.0, couple = "none", all = True)
 integrate.mode_standard(dt=options.step_size)
 #rigid_integrator.set_params(T=options.target_temp_1)
 #nonrigid_integrator.set_params(T=options.target_temp_1)

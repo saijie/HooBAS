@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class bead(object):
     """
     This is a coarse grained bead
@@ -18,7 +19,7 @@ class bead(object):
         self.charge = charge
         self.diameter = diameter
         if quaternion is None:
-            self.orientation = np.array([1.0, 0.0, 0.0, 0.0])
+            self.orientation = np.array([0.0, 0.0, 0.0, 0.0])
         else:
             self.orientation = quaternion.q
         if moment_inertia is None:

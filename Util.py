@@ -1,8 +1,6 @@
-__author__ = 'martin'
-
-# collection of methods / classes used by many other objects
-
-
+"""
+    collection of methods / classes used by many other objects
+"""
 import random
 from math import *
 
@@ -13,26 +11,33 @@ class vector(object):
     """
     simple vector class with useful tools; should be reusable
     """
-    def __init__(self, array, ntol = 1e-5):
+
+    def __init__(self, array, ntol=1e-5):
         self.array = np.array(array, dtype=float)
         self.ntol = ntol
-        if array.__len__() <1:
+        if array.__len__() < 1:
             del self
+
     def __add__(self, other):
         return vector(self.array + other.array)
+
     def __mul__(self, other):
         return vector(self.array * other)
+
     def __neg__(self):
         return vector(-self.array)
 
     def __sub__(self, other):
         return vector(self.array - other.array)
+
     @property
     def x(self):
         return self.array[0]
+
     @property
     def y(self):
         return self.array[1]
+
     @property
     def z(self):
         return self.array[2]
@@ -43,18 +48,24 @@ class vector(object):
             _c += self.array[i]**2
         _c **= 0.5
         return _c
+
     def normalize(self):
         self.array /= self.__norm__()
+
     def x_prod_by001(self):
         _c = vector([-self.array[1], self.array[0], 0.0])
         return _c
+
     def i_prod_by001(self):
         _c = self.array[2]
         return _c
+
     def rot(self,mat):
         self.array = mat.dot(self.array)
+
     def irot(self,mat):
         self.array = np.linalg.inv(mat).dot(self.array)
+
     def s_proj_to_xy(self, vz):
         """
         special projection to (x,y) plane, rescales by |vz| / vec.z
@@ -62,6 +73,7 @@ class vector(object):
         if not(abs(self.array[2]) < self.ntol):
             self.array *= vz.__norm__()/(self.array[2])
             self.array[2] = 0.0
+
 
 def read_centers(f_center):
     """

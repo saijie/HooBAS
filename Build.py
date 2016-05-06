@@ -10,7 +10,6 @@ import numpy as np
 
 import CoarsegrainedBead
 import Colloid
-import PeriodicBC
 from Util import vector as vec
 from Util import iscubic
 from Util import get_rot_mat
@@ -588,9 +587,6 @@ class BuildHoomdXML(object):
         L = self.current_box()
         _dmp_copy = copy.deepcopy(ext_obj)
         for i in range(_dmp_copy.beads.__len__()):
-            _p, _fl = PeriodicBC.PeriodicBC_simple_cubic(r = copy.deepcopy(_dmp_copy.beads[i].position), L = [L[0]/2.0, L[1]/2.0, L[2]/2.0])
-            _dmp_copy.beads[i].position = _p
-            _dmp_copy.beads[i].image = _fl
             self.beads.append(_dmp_copy.beads[i])
         for i in range(_dmp_copy.pnum.__len__()):
             self.__p_num.append(_dmp_copy.pnum[i])
@@ -614,7 +610,7 @@ class BuildHoomdXML(object):
         :return:
         """
 
-        #create the current box, set all centers of build-like objects inside, set everything by periodicBC
+        # create the current box, set all centers of build-like objects inside, set everything by periodicBC
         L = self.current_box()
         for n in range(N):
             _dmp_copy = copy.deepcopy(ext_obj)
@@ -624,9 +620,6 @@ class BuildHoomdXML(object):
             _dmp_copy.center_position = _dmp_center_pos
 
             for i in range(_dmp_copy.beads.__len__()):
-                _p, _fl = PeriodicBC.PeriodicBC_simple_cubic(r = copy.deepcopy(_dmp_copy.beads[i].position), L = [L[0]/2.0, L[1]/2.0, L[2]/2.0])
-                _dmp_copy.beads[i].position = _p
-                _dmp_copy.beads[i].image = _fl
                 self.beads.append(_dmp_copy.beads[i])
             for i in range(_dmp_copy.pnum.__len__()):
                 self.__p_num.append(_dmp_copy.pnum[i])
@@ -812,16 +805,13 @@ class BuildHoomdXML(object):
         for bead in self.beads:
             _a = list(np.linalg.solve(_mat, np.array(bead.position)))
             for i in range(_a.__len__()):
-                _ctmp = 0
                 while _a[i] > self.centerobj.int_bounds[i]:
                     _a[i] -= 2*self.centerobj.int_bounds[i]
-                    _ctmp += 1
+                    bead.image[i] += 1
                 while _a[i] < -self.centerobj.int_bounds[i]:
                     _a[i] += 2*self.centerobj.int_bounds[i]
-                    _ctmp -= 1
-
+                    bead.image[i] -= 1
             bead.position = np.dot(_a, _mat)
-            #bead.image = _ctmp
 
     def enforce_XYPBC(self):
         """
@@ -840,13 +830,12 @@ class BuildHoomdXML(object):
         for bead in self.beads:
             _a = list(np.linalg.solve(_mat, np.array(bead.position[0:2])))
             for i in range(_a.__len__()):
-                _ctmp = 0
                 while _a[i] > self.centerobj.int_bounds[i]:
-                    _a[i] -= 2* self.centerobj.int_bounds[i]
-                    _ctmp += 1
+                    _a[i] -= 2 * self.centerobj.int_bounds[i]
+                    bead.image[i] += 1
                 while _a[i] < -self.centerobj.int_bounds[i]:
                     _a[i] += 2* self.centerobj.int_bounds[i]
-                    _ctmp -= 1
+                    bead.image[i] -= 1
                 _xypos = np.dot(_mat, _a)
                 bead.position[0] = _xypos[0]
                 bead.position[1] = _xypos[1]
