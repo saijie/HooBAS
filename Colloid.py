@@ -299,24 +299,24 @@ class Colloid(object):
                 self.dihedrals.append(_dump_copy.dihedrals[obj_int_dih])
             del _dump_copy, _att_vec
 
-
 class SimpleColloid(Colloid):
     """
     This is the class used for simple rigid bodies, i.e., polyhedra, with a single surface atom type.
     """
-    def __init__(self, size, **args):
 
-        Colloid.__init__(self, **args)
+    def __init__(self, size, **kwargs):
+
+        super(SimpleColloid, self).__init__(**kwargs)
 
         # set the surface mass to be 3/5 of the overall mass to fix the rigid body intertia
         self.s_mass = self.mass * 3.0 / 5.0 / self._sh.num_surf
         self.size = size
         self.body_mass = self.mass
 
-        # normalized shapes have simple moment of inertia (diagonal)
+        # the center particle holds the rigid body structure
         self.beads = [CoarsegrainedBead.bead(position=np.array([0.0, 0.0, 0.0]), beadtype=self.c_type, body=0,
-                                             mass=self.mass * 2.0 / 5.0, quaternion=self.quaternion,
-                                             moment_inertia=self.diagI)]
+                                             mass=self.mass, quaternion=self.quaternion,
+                                             moment_inertia=self.diagI * self.mass * (self.size ** 2.0))]
 
         self.__build_surface()
         # check if the system is rigid
@@ -345,15 +345,14 @@ class SimpleColloid(Colloid):
 
 class ComplexColloid(Colloid):
     def __init__(self, **kwargs):
-
-        Colloid.__init__(self, **kwargs)
+        super(ComplexColloid, self).__init__(**kwargs)
 
         # mass is set by the I_fixer from the base shape
         self.s_mass = 1.0
         self.body_mass = self.mass
         # A complex colloid should have a moment of inertia defined by the I_fixer
         self.beads = [CoarsegrainedBead.bead(position=np.array([0.0, 0.0, 0.0]), beadtype=self.c_type, body=0,
-                                             mass=self._sh.masses[0], quaternion=self.quaternion,
+                                             mass=self.body_mass, quaternion=self.quaternion,
                                              moment_inertia=self.diagI)]
 
         for i in range(1, self._sh.additional_points.__len__()):

@@ -1,4 +1,6 @@
-__author__ = 'martin'
+"""
+Genshape provides classes to represent colloid shapes in hoobas.
+"""
 
 from math import *
 from fractions import gcd
@@ -21,6 +23,8 @@ class shape(object):
     self.internal_bonds is a list of length N, containing N bonds in the form of [i, j, r0, type]
     self.internal_angles is a list of length N, containing N angle potentials in the form [i, j, k, theta0, type]
 
+    self.Itensor is the inertia tensor of the shape
+    self.quaternion is the quaternion of the shape
 
     properties is a dict object for additional properties useful for non-trivial cases (read xyz / pdb parsed files):
     'surface' : Used for DNA coverage specifications
@@ -28,53 +32,15 @@ class shape(object):
     'volume' : Used for mass calculation if a density is given
     'mass' : if volume is not specified
     'size' : as old options.size, if the shape is to be scaled by some constant, this is it.
-
-    ### Only for surface representations
-    'normalized' : set to either True or False, build will either multiply dimensions by size (True) or not (False)
-    'tensor_name' : filename or path to filename to the tensor of inertia of the real molecule.
+    'normalized' : set to either True or False, defines if the shape is a geometric representation or a real object (say protein)
 
     basic shape types are not covered, since they are custom (cube, sphere etc.).
 
     General methods :
 
-    write_table(filename = None)
-    writes the current surface table (not added beads) into an off file specified by filename. If left to None, the method
-    assume legacy functionality
+    set_properties : sets the additional properties required for building such as density, mass, etc.
 
-    load_file, load_file_Angstrom(parser = None, file_name = None)
-    loads a surface from a file. Current available parser is xyz, if left to None will default to it. If filename is not specified
-    method will assume legacy behavior
 
-    load_file_Anstrom_m(parser = None, files = None)
-    loads a surface given by multiple different files (multiple surface types). Will enable the 'mst' flag for building. files is a list of
-    filenames. If left to none, will assume legacy behavior.
-
-    parse_pdb_protein(filename = None)
-    will load a protein from a pdb file. Calculates mass, moment of inertia. If filename is left to none, assumes legacy filename behavior.
-
-    add_pdb_DNA_key(key, *DNA_args)
-    keys a type of DNA given by DNA_args to specific locations in the pdb files, given by keys.
-
-    will_build_from_shapes(properties)
-    sets the shape as a pdb object for the builder and updates the flag list from self.flags.update(properties). Need to call set_DNA afterwards
-    to have proper pdb type DNA keying for the builder.
-
-    set_DNA(*DNA_args)
-    sets DNA on the surface. Used to emulate pdb-like behavior in the builder.
-
-    generate_internal_bonds(signature, num_nn)
-    sets the internal surface bonds and center-surface bonds. Generic names are used for bonds and signature signs the names. If two different shapes
-    have the same signature, it is likely to result in overlapping bond names. num_nn is used for the number of nearest neighbours on the surface. Needs to be run
-    after fix_I_moment if additional beads are needed.
-
-    generate_surface_bonds(*args)
-    calls generate_internal_bonds(*args)
-
-    reduce_internal_DOF(n_rel_tol)
-    iterates over internal DOF (bonds, angles) and removes types that are less different than n_rel_tol
-
-    fix_I_moment
-    adds ficticious beads in the center of the shape to correct the moment of inertia
 
     """
     def __init__(self, surf_plane = None, lattice = None, properties = None):
@@ -204,11 +170,6 @@ class shape(object):
         if operator is None:
             operator = np.eye(3)
         Q_op = Quat(operator)
-        #        mat = Q_op.transform
-        #        for i in range(self.table.__len__()):
-        #            self.table[i] = np.dot(mat, self.table[i])
-        #        for i in range(self.additional_points.__len__()):
-        #            self.additional_points[i] = np.dot(mat, self.additional_points[i])
         self.quaternion *= Q_op
 
     def Set_Geometric_Quaternion(self):
@@ -225,91 +186,19 @@ class shape(object):
         inertia_tensor[2, 0] = inertia_tensor[0, 2]
         inertia_tensor[2, 1] = inertia_tensor[1, 2]
 
-        w, v = np.linalg.eigh(inertia_tensor)
+        w, v = np.linalg.eigh(inertia_tensor * 0.6 / self.table.__len__())
 
         # sort the eigenvalues
-
-        idx = w.argsort()[::-1]
+        idx = w.argsort(kind='mergesort')[::-1]
         w = w[idx]
         v = v[:, idx]
 
-        # invert one axis
+        # invert one axis if the coordinate system has become left-handed
         if np.linalg.det(v) < 0:
             v[:, 0] = -v[:, 0]
 
         self.quaternion = Quat(v)
-        self.Itensor = (w[0] * 3.0 / 5.0, w[1] * 3.0 / 5.0, w[2] * 3.0 / 5.0)
-
-
-class SoftSurfaces(object):
-    def __init__(self):
-        pass
-
-    def generate_internal_bonds(self, signature, num_nn = 3):
-        """
-        Generates surface bonds for the num_nn nearest neighbours on the surface. Also adds one bond per surface atom between the center and the surface. Note
-        that this has to be run after the additional beads are created from the moment of inertia fixer or the indices will be wrong.
-        :param signature: internal DOF-wide generic name. Making two shapes with same signature will most likely generate overlapping bond types
-        :param num_nn: number of neighbours to consider when creating surface bonds
-        :return:
-        """
-        try:
-            multi = self.flags['size'] / 2.0
-        except KeyError:
-            multi = 1.0
-
-        self.flags['soft_shell'] = True
-
-        #_offset = self.additional_points.__len__() push the table onto additional points and store it on table. TODO : Make a nicer method, this is ugly
-        _offset = 1
-        self.table = np.append(self.additional_points[1:, :], self.table, axis = 0)
-
-        #construct a list of nn for each particle in the table, append [i, j, r0] to the surf bond list, where i-j are the nn couples and r0 is their distance
-        _dist_sq = np.zeros((self.table.__len__(), self.table.__len__())) # table of distances between i-j squared
-        _nn = np.zeros((self.table.__len__(), num_nn)) # table of nearest neighbours
-        for i in range(self.table.__len__()):
-            for j in range(self.table.__len__()):
-                for k in range(3):
-                    _dist_sq[i,j] += (self.table[i,k] - self.table[j,k])**2 # calculate rij **2
-
-        for i in range(self.table.__len__()):
-            _dumpsort = np.argsort(_dist_sq[i,:], kind = 'mergesort') # sort the indices
-            _ind_to_add = [] # initialize the indices to add
-            for j in range(1, _dumpsort.__len__()):
-                _curr = True
-                for k in range(self.internal_bonds.__len__()): # check whether we already appended this bond
-                    if self.internal_bonds[k][0] == _dumpsort[j]+_offset and self.internal_bonds[k][1] == i + _offset:
-                        _curr = False
-                if _curr:
-                    _ind_to_add.append(_dumpsort[j])
-                if _ind_to_add.__len__() == num_nn:
-                    break
-            for j in range(_ind_to_add.__len__()):
-                self.internal_bonds.append([i + _offset, _ind_to_add[j] +_offset, _dist_sq[i, _ind_to_add[j]]**0.5 * multi, signature + '_' + str(i) + '_' + str(j)])
-        for i in range(self.table.__len__()):
-            self.internal_bonds.append([0, i +_offset, (self.table[i,0]**2 + self.table[i,1]**2 + self.table[i,2]**2)**0.5 * multi, signature + '_' + str(i)])
-        self.flags['soft_signature'] = signature
-        self.table = np.delete(self.table, range(self.additional_points.__len__()-1), axis = 0)
-
-    def reduce_internal_DOF(self, n_rel_tol = 1e-2):
-        """
-        Reduces the number of internal DOF by comparing each DOF parameters (r0 for bonds, theta0 for angles) and eliminating
-        one type if is it within n_rel_tol of the other one. Comparison is done by |r0i - r0j| < n_rel_tol * (r0i + r0j)/2
-        :param n_rel_tol: relative tolerance of the comparison
-        :return:
-        """
-
-        for i in range(self.internal_bonds.__len__()):
-            for j in range(i+1, self.internal_bonds.__len__()):
-                if abs(self.internal_bonds[i][-2] - self.internal_bonds[j][-2]) < n_rel_tol * 0.5 * (self.internal_bonds[i][-2] + self.internal_bonds[j][-2]):
-                    self.internal_bonds[j][-1] = self.internal_bonds[i][-1]
-                    self.internal_bonds[j][-2] = self.internal_bonds[j][-2]
-
-        for i in range(self.internal_angles.__len__()):
-            for j in range(i+1, self.internal_angles.__len__()):
-                if abs(self.internal_angles[i][-2] - self.internal_angles[j][-2]) < n_rel_tol * 0.5 * (self.internal_angles[i][-2] + self.internal_angles[j][-2]):
-                    self.internal_angles[j][-1] = self.internal_angles[i][-1]
-                    self.internal_angles[j][-2] = self.internal_angles[j][-2]
+        self.Itensor = np.array([w[0], w[1], w[2]], dtype=float)
 
 
 class Cube(shape):
@@ -406,7 +295,6 @@ class Cube(shape):
         self.Set_Geometric_Quaternion()
         self.initial_rotation()
 
-
 class Octahedron(shape):
     def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
         shape.__init__(self,  surf_plane, lattice, properties)
@@ -480,6 +368,24 @@ class Octahedron(shape):
         self.initial_rotation()
 
 class PdbProtein(shape):
+    """
+    Provides a class to import PDB protein files into hoobas
+
+    Methods :
+
+    parse_pdb_protein(filename = None)
+    will load a protein from a pdb file. Calculates mass, moment of inertia. If filename is left to none, assumes legacy filename behavior.
+
+    add_shell(key, shell_name = None)
+    parses the keys in the pdb list and adds a shell representation of the parsed keys. Giving it a name allows to bind stuff onto the shell
+
+    set_ext_shell_grafts(ext_obj, num = None, linker_bond_type = None, shell_name = None)
+    binds num ext_objs onto the shell with name shell_name. A bond of linker_bond_type is added between the shell and external object
+
+    pdb_build_table()
+    needs to be called once all shells / grafts are set
+
+    """
     def __init__(self, surf_plane = None, lattice = None, properties = None, filename = None):
         shape.__init__(self, surf_plane, lattice, properties)
         self.pdbITensor = np.zeros((3, 3))
@@ -534,7 +440,7 @@ class PdbProtein(shape):
         pdbITensor = np.array([[_i_v[0], _i_v[3], _i_v[4]], [_i_v[3], _i_v[1], _i_v[5]], [_i_v[4], _i_v[5], _i_v[2]]])
         pdbITensor /= 650.0
         w, v = np.linalg.eigh(self.pdbITensor)
-        idx = w.argsort()[::-1]
+        idx = w.argsort(kind='mergesort')[::-1]
         w = w[idx]
         v = v[:, idx]
 
@@ -543,52 +449,7 @@ class PdbProtein(shape):
             v[:, 0] = -v[:, 0]
 
         self.quaternion = Quat(v)
-        self.Itensor = (w[0], w[1], w[2])
-
-    def add_pdb_dna_key(self, key, n_ss=None, n_ds=None, s_end=None, p_flex=None, num=None):
-        """
-        Keys some dna to pdb parsed protein
-
-        The key speficies whatever is parsed by parse_pdb_protein, rest is DNA options. Multiple DNAs can be keyed to the same site.
-        :param key: dictionary specifying columns to match in the pdb file. Standard use would be {'RES' : 'LYS', 'ATOM' : 'N'}. Always searches in 'ATOM'
-        supports 'RES' for residue name, 'TYPE' for atom element, 'CHAIN' for chain identifier, 'OCC' for occupancy, 'TYPE' includes charge (e.g. 'N1+')
-        :param n_ss:
-        :param n_ds:
-        :param s_end:
-        :param p_flex:
-        :param num:
-        :return:
-        """
-
-        pdb_form = {'HEAD' : 0, 'RES' : 3, 'TYPE' : -1, 'CHAIN' : 5, 'OCC' : 10, 'ATOM' : 2}
-        # case of no_dna key
-        _l_list = []
-
-        for _line in self._pdb:
-            _s = _line.strip().split()
-            if _s[0] == 'ATOM':
-                _l = True
-                for _k in key.iterkeys():
-                    if hasattr(key[_k], '__iter__'): # argument passed is an iterable, e.g. 'CHAIN':[12, 14, 15]
-                        inkey = False
-                        for elem in key[_k]:
-                            inkey = inkey or _s[pdb_form[_k]] == str(elem)
-                        _l = _l and inkey
-                    else:
-                        _l = _l and _s[pdb_form[_k]] == key[_k]
-                if _l :
-                    _l_list.append([float(_s[6])/20.0, float(_s[7])/20.0,float(_s[8])/20.0])
-
-        if n_ss is None and n_ds is None and s_end is None and p_flex is None:
-            try:
-                self.keys['no_dna'].append([_l_list, key])
-            except KeyError:
-                self.keys['no_dna'] = [[_l_list, key]]
-        else:
-            try:
-                self.keys['dna'].append([_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num}])
-            except KeyError:
-                self.keys['dna'] = [[_l_list, {'n_ds' : n_ds, 'n_ss' : n_ss, 's_end' : s_end, 'p_flex' : p_flex, 'num' : num }, key]]
+        self.Itensor = np.array([w[0], w[1], w[2]], dtype=float)
 
     def pdb_build_table(self):
         """
@@ -601,18 +462,6 @@ class PdbProtein(shape):
         self.table = np.zeros((0,3))
         _t = []
         _cnt = 0
-        if 'no_dna' in self.keys:
-            for _k in range(self.keys['no_dna'].__len__()):
-                for _kk in range(self.keys['no_dna'][_k].__len__()):
-                    self.table = np.append(self.table, [np.array([self.keys['no_dna'][_k][0][_kk][0], self.keys['no_dna'][_k][0][_kk][1], self.keys['no_dna'][_k][0][_kk][2]])-com], axis = 0)
-                    _cnt += 1
-                _t.append(_cnt)
-        if 'dna' in self.keys:
-            for _k in range(self.keys['dna'].__len__()):
-                for _kk in range(self.keys['dna'][_k][0].__len__()):
-                    self.table = np.append(self.table, [np.array([self.keys['dna'][_k][0][_kk][0], self.keys['dna'][_k][0][_kk][1], self.keys['dna'][_k][0][_kk][2]])-com], axis = 0)
-                    _cnt += 1
-                _t.append(_cnt)
         if 'shell' in self.keys:
             for shl in self.keys['shell']:
                 for idx in shl[1]:
@@ -881,3 +730,95 @@ class Tetrahedron(shape):
 
         self.Set_Geometric_Quaternion()
         self.initial_rotation()
+
+
+class SoftSurfaces(shape):
+    """
+    SoftSurfaces extends the shape class for soft surface interations
+
+
+    generate_internal_bonds(signature, num_nn)
+    sets the internal surface bonds and center-surface bonds. Generic names are used for bonds and signature signs the names. If two different shapes
+    have the same signature, it is likely to result in overlapping bond names. num_nn is used for the number of nearest neighbours on the surface. Needs to be run
+    after fix_I_moment if additional beads are needed.
+
+    reduce_internal_DOF(n_rel_tol)
+    iterates over internal DOF (bonds, angles) and removes types that are less different than n_rel_tol
+
+
+    """
+
+    def __init__(self, **kwargs):
+        super(SoftSurfaces, self).__init__(kwargs)
+
+    def generate_internal_bonds(self, signature, num_nn=3):
+        """
+        Generates surface bonds for the num_nn nearest neighbours on the surface. Also adds one bond per surface atom between the center and the surface. Note
+        that this has to be run after the additional beads are created from the moment of inertia fixer or the indices will be wrong.
+        :param signature: internal DOF-wide generic name. Making two shapes with same signature will most likely generate overlapping bond types
+        :param num_nn: number of neighbours to consider when creating surface bonds
+        :return:
+        """
+        try:
+            multi = self.flags['size'] / 2.0
+        except KeyError:
+            multi = 1.0
+
+        self.flags['soft_shell'] = True
+
+        # _offset = self.additional_points.__len__() push the table onto additional points and store it on table. TODO : Make a nicer method, this is ugly
+        _offset = 1
+        self.table = np.append(self.additional_points[1:, :], self.table, axis=0)
+
+        # construct a list of nn for each particle in the table, append [i, j, r0] to the surf bond list, where i-j are the nn couples and r0 is their distance
+        _dist_sq = np.zeros((self.table.__len__(), self.table.__len__()))  # table of distances between i-j squared
+        _nn = np.zeros((self.table.__len__(), num_nn))  # table of nearest neighbours
+        for i in range(self.table.__len__()):
+            for j in range(self.table.__len__()):
+                for k in range(3):
+                    _dist_sq[i, j] += (self.table[i, k] - self.table[j, k]) ** 2  # calculate rij **2
+
+        for i in range(self.table.__len__()):
+            _dumpsort = np.argsort(_dist_sq[i, :], kind='mergesort')  # sort the indices
+            _ind_to_add = []  # initialize the indices to add
+            for j in range(1, _dumpsort.__len__()):
+                _curr = True
+                for k in range(self.internal_bonds.__len__()):  # check whether we already appended this bond
+                    if self.internal_bonds[k][0] == _dumpsort[j] + _offset and self.internal_bonds[k][1] == i + _offset:
+                        _curr = False
+                if _curr:
+                    _ind_to_add.append(_dumpsort[j])
+                if _ind_to_add.__len__() == num_nn:
+                    break
+            for j in range(_ind_to_add.__len__()):
+                self.internal_bonds.append(
+                    [i + _offset, _ind_to_add[j] + _offset, _dist_sq[i, _ind_to_add[j]] ** 0.5 * multi,
+                     signature + '_' + str(i) + '_' + str(j)])
+        for i in range(self.table.__len__()):
+            self.internal_bonds.append(
+                [0, i + _offset, (self.table[i, 0] ** 2 + self.table[i, 1] ** 2 + self.table[i, 2] ** 2) ** 0.5 * multi,
+                 signature + '_' + str(i)])
+        self.flags['soft_signature'] = signature
+        self.table = np.delete(self.table, range(self.additional_points.__len__() - 1), axis=0)
+
+    def reduce_internal_DOF(self, n_rel_tol=1e-2):
+        """
+        Reduces the number of internal DOF by comparing each DOF parameters (r0 for bonds, theta0 for angles) and eliminating
+        one type if is it within n_rel_tol of the other one. Comparison is done by |r0i - r0j| < n_rel_tol * (r0i + r0j)/2
+        :param n_rel_tol: relative tolerance of the comparison
+        :return:
+        """
+
+        for i in range(self.internal_bonds.__len__()):
+            for j in range(i + 1, self.internal_bonds.__len__()):
+                if abs(self.internal_bonds[i][-2] - self.internal_bonds[j][-2]) < n_rel_tol * 0.5 * (
+                    self.internal_bonds[i][-2] + self.internal_bonds[j][-2]):
+                    self.internal_bonds[j][-1] = self.internal_bonds[i][-1]
+                    self.internal_bonds[j][-2] = self.internal_bonds[j][-2]
+
+        for i in range(self.internal_angles.__len__()):
+            for j in range(i + 1, self.internal_angles.__len__()):
+                if abs(self.internal_angles[i][-2] - self.internal_angles[j][-2]) < n_rel_tol * 0.5 * (
+                    self.internal_angles[i][-2] + self.internal_angles[j][-2]):
+                    self.internal_angles[j][-1] = self.internal_angles[i][-1]
+                    self.internal_angles[j][-2] = self.internal_angles[j][-2]

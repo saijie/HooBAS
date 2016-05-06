@@ -333,12 +333,6 @@ nlist.set_params(check_period=1)
 nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
 
 
-#part_len = system.particles.__len__() # avoid calls later to the system
-#_t = time.time()
-#reset_nblock_list()
-#_t = time.time() - _t
-#print 'reset_nblock_list() timing :'+str(_t)
-
 dump.dcd(filename=options.filenameformat+'_dcd.dcd', period=Dump, overwrite = True) # dump a .dcd file for the trajectory
 
 nve = integrate.nve(group=nonrigid, limit=0.0005)
