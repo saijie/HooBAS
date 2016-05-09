@@ -4,6 +4,7 @@ Genshape provides classes to represent colloid shapes in hoobas.
 
 from math import *
 from fractions import gcd
+import warnings
 
 import numpy as np
 
@@ -135,7 +136,7 @@ class shape(object):
         DupRows = []
         for i in range(self.table.__len__() - 1):
             for j in range(i + 1, self.table.__len__()):
-                if (self.table[i, 0] - self.table[j, 0]) ** 2 + (self.table[i, 1] - self.table[j, 1]) ** 2 + +(
+                if (self.table[i, 0] - self.table[j, 0]) ** 2 + (self.table[i, 1] - self.table[j, 1]) ** 2 + (
                             self.table[i, 2] - self.table[j, 2]) ** 2 < tol * tol:
                     DupRows.append(j)
         DupRows = np.unique(DupRows)
@@ -197,7 +198,7 @@ class shape(object):
         _maxel = np.max(inertia_tensor)
         for dim1 in range(3):
             for dim2 in range(3):
-                if inertia_tensor[dim1, dim2] < tol_eps_rel * np.finfo(np.float).eps * _maxel:
+                if abs(inertia_tensor[dim1, dim2]) < tol_eps_rel * np.finfo(np.float).eps * _maxel:
                     inertia_tensor[dim1, dim2] = 0.0
 
 
@@ -215,8 +216,11 @@ class shape(object):
 
     def get_N_idx(self, N, **sortargs):
         """
-        gets the N smallest indexes of norm values in self.table and adds one to the result to offset the center.
-        This is made for geometric shapes.
+        gets the N smallest indexes of norm values in self.table calculates offsets so whatever is defined in
+        self.additional_points is not taken into account.
+
+        This is made for geometric shapes, but can be used for other things.
+
         :param N number of largest norm values to return
         :return list of indexes
         """
@@ -224,8 +228,20 @@ class shape(object):
         for idx in range(self.table.__len__()):
             _norm[idx] = self.table[idx, 0] ** 2.0 + self.table[idx, 1] ** 2.0 + self.table[idx, 2] ** 2.0
         args = np.argsort(_norm, **sortargs)
-        args = args[0: N] + 1
+        args = args[0: N] + self.additional_points.__len__()
         return args.tolist()
+
+    def get_rigid_tuple(self):
+        if 'size' in self.flags:
+            _size = self.flags['size']
+        else:
+            _size = 1.0
+            if 'ColloidType' in self.flags and self.flags['ColloidType'] == 'SimpleColloid':
+                warnings.warn('did not find size property in shape while the colloid is defined as simple', UserWarning)
+        _concat = []
+        for p in self.table:
+            _concat.append((p[0] * _size, p[1] * _size, p[2] * _size))
+
 
 class Cube(shape):
     def __init__(self, Num,  surf_plane = None, lattice = None, properties = None, Radius = None):
@@ -413,10 +429,11 @@ class PdbProtein(shape):
 
     """
     def __init__(self, surf_plane = None, lattice = None, properties = None, filename = None):
+        self.BuiltFlag = False
         shape.__init__(self, surf_plane, lattice, properties)
-        self.pdbITensor = np.zeros((3, 3))
         if filename is not None:
             self.parse_pdb_protein(filename)
+        self.BuildMethod = self.pdb_build_table
 
     def parse_pdb_protein(self, filename):
         """
@@ -431,7 +448,7 @@ class PdbProtein(shape):
 
         _m =0.0
         # inertia vector : ixx, iyy, izz, ixy, ixz, iyz
-        _i_v = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        _i_v = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.longfloat)  # catch some stuff close to zero
         _com = np.array([0.0, 0.0, 0.0])
         _geo_c = np.array([0.0, 0.0, 0.0])
         _cnt = 0
@@ -454,6 +471,15 @@ class PdbProtein(shape):
                 _p = np.array([float(_s[6])/20.0, float(_s[7])/20.0, float(_s[8])/20.0])-_com
                 _i_v += np.array([_p[1]**2 + _p[2]**2, _p[0]**2 + _p[2]**2, _p[0]**2 + _p[1]**2, -_p[0]*_p[1], -_p[0]*_p[2], -_p[1]*_p[2]])*_m_l
 
+        _i_v = _i_v.astype(np.float)
+        ########
+        # numerical precision issues before diagonalization
+        #######
+        _maxel = np.max(_i_v.flatten())
+        for el_idx in range(_i_v.__len__()):
+            if abs(_i_v[el_idx]) < np.finfo(np.float).eps * 2.0 * _maxel:
+                _i_v[el_idx] = 0.0
+
 
         self.flags['normalized'] = False
         self.flags['mass'] = _m / 650.0
@@ -465,7 +491,7 @@ class PdbProtein(shape):
 
         pdbITensor = np.array([[_i_v[0], _i_v[3], _i_v[4]], [_i_v[3], _i_v[1], _i_v[5]], [_i_v[4], _i_v[5], _i_v[2]]])
         pdbITensor /= 650.0
-        w, v = np.linalg.eigh(self.pdbITensor)
+        w, v = np.linalg.eigh(pdbITensor)
         idx = w.argsort(kind='mergesort')[::-1]
         w = w[idx]
         v = v[:, idx]
@@ -476,6 +502,7 @@ class PdbProtein(shape):
 
         self.quaternion = Quat(v)
         self.Itensor = np.array([w[0], w[1], w[2]], dtype=float)
+        self.__check_build_order()
 
     def pdb_build_table(self):
         """
@@ -497,6 +524,7 @@ class PdbProtein(shape):
 
         if _t.__len__() >= 1:
             self.flags['multiple_surface_types'] = _t
+        self.BuiltFlag = True
 
     def add_shell(self, key, shell_name=None):
         """
@@ -551,6 +579,7 @@ class PdbProtein(shape):
             self.keys['shell'].append([ shell_name, _l_list, [] ])
         else:
             self.keys['shell'][_shl_idx][1] += _l_list
+        self.__check_build_order()
 
     def set_ext_shell_grafts(self, ext_obj, num = None, linker_bond_type = None, shell_name = None):
         """
@@ -581,6 +610,10 @@ class PdbProtein(shape):
             return
         self.ext_objects.append(ext_obj)
         self.keys['shell'][_shl_idx][2].append({'EXT_IDX':self.ext_objects.__len__() - 1, 'num' : num, 'linker_type' : linker_bond_type})
+
+    def __check_build_order(self):
+        if self.BuiltFlag:
+            warnings.warn('Directives were set after the shape was built. Unbuilding the shape', UserWarning)
 
 class Sphere(shape):
     def __init__(self, Num, surf_plane = None, lattice = None, properties = None):

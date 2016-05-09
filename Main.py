@@ -14,10 +14,10 @@ import sys
 sys.path.append('/projects/b1030/hoomd-2.0-cuda7/')
 sys.path.append('/projects/b1030/hoomd-2.0-cuda7/hoomd/')
 
-from hoomd import *
-from md import *
+# from hoomd import *
+# from md import *
 
-context.initialize()
+#context.initialize()
 
 ##############################
 #### Simulation parameters####
@@ -78,13 +78,13 @@ options.filenameformat = 'test_001'
 DNA_chain = LinearChain.DNAChain(n_ss = 1, n_ds = dsL, sticky_end = ['X', 'Y', 'Z'], bond_length = 0.6)
 DNA_brush = LinearChain.DNAChain(n_ss = 1, n_ds = 1, sticky_end =[], bond_length = 0.6)
 
-shapes = [GenShape.Cube(Num=600, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
-# shapes = [GenShape.PdbProtein(filename = '4BLC.pdb')]
-shapes[-1].set_properties(
-    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.SimpleColloid})
-# shapes[-1].set_properties(properties={ 'surf_type': 'P', 'ColloidType': Colloid.ComplexColloid})
-# shapes[-1].add_shell(key = {'RES':'LYS'})
-#shapes[-1].pdb_build_table()
+# shapes = [GenShape.Cube(Num=600, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
+shapes = [GenShape.PdbProtein(filename='4BLC.pdb')]
+# shapes[-1].set_properties(
+#    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.SimpleColloid})
+shapes[-1].set_properties(properties={'surf_type': 'P', 'ColloidType': Colloid.ComplexColloid})
+shapes[-1].add_shell(key={'RES': 'LYS'})
+shapes[-1].pdb_build_table()
 _t = arccos(1.0 / 3.0)
 # shapes[-1].rotate_object(
 #    operator=linalg.inv([[cos(_t / 2), -sin(_t / 2), 0.0], [sin(_t / 2), cos(_t / 2), 0.0], [0.0, 0.0, 1.0]]))
@@ -99,9 +99,12 @@ _t = arccos(1.0 / 3.0)
 options.sticky_pairs = [['X', 'Z'], ['Y', 'Y']]
 options.sticky_track = [['X', 'Z'], ['Y', 'Y']]
 
-options.int_bounds = [1, 1,
-                      1]  # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
+
+
+# for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
+options.int_bounds = [1, 1,1]
+
 
 options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*options.target_dim]
 center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, lattice = options.lattice_multi, int_bounds=options.int_bounds)
@@ -126,13 +129,15 @@ c_tags = buildobj.center_tags
 d_tags_len = d_tags.__len__()
 d_tags_loc_len = d_tags[0].__len__()
 
+rigid_type_list, rigid_tuple_list = buildobj.aggregate_rigid_tuples()
+
 #buildobj.set_charge_to_pnum()
 buildobj.set_charge_to_dna_types()
+
 if comm.get_rank() == 0:
     buildobj.write_to_file()
 
 
-#options.sys_box = buildobj.sys_box
 options.center_types = buildobj.center_types
 options.surface_types = buildobj.surface_types
 options.sticky_types = buildobj.sticky_types

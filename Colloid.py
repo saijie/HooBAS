@@ -73,8 +73,14 @@ class Colloid(object):
         self.surf_tags = []
 
         self.sticky_used = []
-        # associated shape, contains list of surface, and directives in .flags
+
+        # associated shape, contains list of surface, and directives
         self._sh = copy.deepcopy(loc_sh_obj)
+        # check if the shape has a supplementary building method that has to be run but wasnt
+        if hasattr(self._sh, 'BuiltFlag') and self._sh.BuiltFlag is False:
+            getattr(self._sh, self._sh.BuildMethod)
+            warnings.warn('Colloid found a non-built shape object and had to build it', UserWarning)
+
         self.orientation = self._sh.n_plane
         # table of table
         self.rem_list = []
@@ -218,7 +224,7 @@ class Colloid(object):
 
     @property
     def body_typelist(self):
-        return [bead.type for bead in self.body_beads]
+        return [bead.beadtype for bead in self.body_beads]
 
     def relative_positions(self):
         """

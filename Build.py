@@ -384,8 +384,8 @@ class BuildHoomdXML(object):
         for i in range(self.beads.__len__()):
             self.beads[i].position = list(np.dot(_hoomd_mat, self.beads[i].position))
 
-    def add_particle(self, ptype, *args):
-        self.__particles.append(Colloid.Colloid(*args))
+    def add_particle(self, ptype, ColloidConstructor, **args):
+        self.__particles.append(ColloidConstructor(**args))
         self.__types.append(ptype)
         try:
             self.__particles[-1].pnum_offset = self.__p_num[-1]+1
@@ -685,6 +685,14 @@ class BuildHoomdXML(object):
                 setattr(bead, attr, val)
 
     def set_attr_by_attr(self, attribute_test, test_value, attribute_change, value):
+        """
+        general serach and replace attributes of beads
+        :param attribute_test: which attribute to test
+        :param test_value: which value to test
+        :param attribute_change: which attribute to change when the test attributes evals to true
+        :param value: value to change
+        :return:
+        """
         for bead in self.beads:
             if isinstance(test_value, float):
                 if abs(getattr(bead, attribute_test) - test_value) < 1e-2:
@@ -695,6 +703,19 @@ class BuildHoomdXML(object):
 
     def fix_remaining_charge(self, ptype = 'ion', ntype = 'ion', pion_mass = 1.0, nion_mass = 1.0,
                              qp = 1.0, qn = -1.0, pion_diam = 1.0, nion_diam = 1.0, isrerun = False):
+        """
+        fixes the leftover charge in the system with ions
+        :param ptype: type name of cation
+        :param ntype: type name of anion
+        :param pion_mass: mass of cation
+        :param nion_mass: mass of anion
+        :param qp: charge of cation
+        :param qn: charge of anion
+        :param pion_diam: diameter of cation
+        :param nion_diam: diameter of anion
+        :param isrerun: internal parameter; should not be used from outside
+        :return:
+        """
         _internal_charge = 0.0
         for i in range(self.beads.__len__()):
             _internal_charge += self.beads[i].charge
@@ -712,7 +733,11 @@ class BuildHoomdXML(object):
             warnings.warn('Cannot fix the intrinsic charge in the system', UserWarning)
 
     def write_to_file(self, **kwargs):
-
+        """
+        writes the current buildobj to hoomd XML file. All other arguments are deprecated and will raise warnings
+        :param kwargs:
+        :return:
+        """
         if kwargs:
             warnings.warn(DeprecationWarning,
                           'supplied extra arguments which are not used, all file writing options are internal to build')
@@ -731,12 +756,11 @@ class BuildHoomdXML(object):
         else:
             self.enforce_PBC(z_box_multi=1.0)
 
-
-
         for i in range(self.beads.__len__()):
             self.beads[i].charge /= self.charge_normalization
         self.__writeXML(L)
         self.impose_box = L
+
     def __writeXML(self, L):
         with open(self.filename + '.xml', 'w') as f:
             f.write('''<?xml version="1.0" encoding="UTF-8"?>\n''')
@@ -813,7 +837,13 @@ class BuildHoomdXML(object):
             f.write('''</configuration>\n''')
             f.write('''</hoomd_xml>''')
 
-    def enforce_PBC(self, z_box_multi):
+    def enforce_PBC(self, z_box_multi=None):
+        """
+        enforced the PBC condition; note that z is always orthogonal to XY plane and is multiplied by the argument
+         provided
+        :param z_box_multi: z multiplier for PBC
+        :return:
+        """
         _b_1 = vec(self.centerobj.vx)
         _b_2 = vec(self.centerobj.vy)
         _b_z = vec(self.centerobj.vz)
@@ -860,21 +890,15 @@ class BuildHoomdXML(object):
                 bead.position[0] = _xypos[0]
                 bead.position[1] = _xypos[1]
 
+    def aggregate_rigid_tuples(self):
+        """
+        provides a method to get correct arguments for constrain.rigid()
+        :return: list of typelists, list of tuple lists
+        """
+        _r_typelist = []
+        _r_tuple_list = []
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        for particle in self.__particles:
+            _r_typelist += [particle.body_typelist]
+            _r_tuple_list += [[particle.relative_positions()]]
+        return _r_typelist, _r_tuple_list
