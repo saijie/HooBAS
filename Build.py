@@ -125,7 +125,7 @@ class BuildHoomdXML(object):
         # list of properties defined in the Hoomd xml formats. First list refers to particle properties,
         # second to bonded interaction types
         self.xml_proplist = ['velocity', 'acceleration', 'diameter', 'charge', 'body', 'orientation', 'angmom',
-                             'moment_inertia', 'image', 'orientation']
+                             'moment_inertia', 'image']
         self.xml_inter_prop_list = ['bonds', 'angles', 'dihedrals', 'impropers']
 
         # overriding defaults
@@ -331,7 +331,7 @@ class BuildHoomdXML(object):
     def add_einstein_crystal_lattice(self):
         self.__types.append('EC')
         for i in range(self.__particles.__len__()):
-            self.beads.append(CoarsegrainedBead.bead(position=self.__particles[i].center_position, beadtype='EC', mass = 1.0))
+            self.beads.append(CoarsegrainedBead.bead(position=self.__particles[i].center_position, beadtype='EC'))
             self.__p_num.append(self.__p_num[-1]+1)
             self.bonds.append(['EC-bond', self.__particles[i].pnum_offset, self.__p_num[-1]])
 
@@ -659,7 +659,8 @@ class BuildHoomdXML(object):
                             _rej_check = True
                     except KeyError:
                         pass
-            self.beads.append(CoarsegrainedBead.bead(position=_gen_pos, beadtype=qtype, mass = ion_mass, body = -1, charge = q, diameter = ion_diam))
+            self.beads.append(
+                CoarsegrainedBead.bead(position=_gen_pos, beadtype=qtype, mass=ion_mass, charge=q, diameter=ion_diam))
 
     def set_diameter_by_type(self, btype, diam):
         for i in range(self.beads.__len__()):
@@ -770,7 +771,23 @@ class BuildHoomdXML(object):
                     if _current_prop:
                         f.write('<' + prop_list[propidx] + '>\n')
                         for bead_idx in range(self.beads.__len__()):
-                            f.write(str(getattr(self.beads[bead_idx], prop_list[propidx])).strip('[').strip(']').lstrip()+'\n')
+                            objtoprint = getattr(self.beads[bead_idx], prop_list[propidx])
+                            printstr = ''
+                            if hasattr(objtoprint, '__iter__'):
+                                if isinstance(objtoprint[0], float):
+                                    for element in objtoprint:
+                                        printstr += str('{:f}').format(element) + ' '
+                                    f.write(printstr + '\n')
+                                else:
+                                    for element in objtoprint:
+                                        printstr += str(element) + ' '
+                                    f.write(printstr + '\n')
+                            else:
+                                if isinstance(objtoprint, float):
+                                    f.write(str('{:f}').format(objtoprint) + '\n')
+                                else:
+                                    f.write(str(getattr(self.beads[bead_idx], prop_list[propidx])).strip('[').strip(
+                                        ']').lstrip() + '\n')
                         f.write('</'+prop_list[propidx]+'>\n')
                 except AttributeError:
                     pass

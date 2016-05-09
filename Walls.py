@@ -1,51 +1,13 @@
 __author__ = 'martin'
-import numpy as np
-import CoarsegrainedBead as CG
 import copy
 import random
+from math import *
 
+import numpy as np
 
-class vec(object):
-        """
-        simple vector class with useful tools; should be reusable
-        """
-        def __init__(self, array, ntol = 1e-5):
-            self.array = np.array(array, dtype=float)
-            self.ntol = ntol
-            if array.__len__() <1:
-                del self
-        def __neg__(self):
-            self.array = -self.array
-            return self
-        @property
-        def x(self):
-            return self.array[0]
-        @property
-        def y(self):
-            return self.array[1]
-        @property
-        def z(self):
-            return self.array[2]
-
-        def __norm__(self):
-            _c = 0.0
-            for i in range(self.array.__len__()):
-                _c += self.array[i]**2
-            _c **= 0.5
-            return _c
-        def normalize(self):
-            self.array /= self.__norm__()
-        def rot(self,mat):
-            self.array = mat.dot(self.array)
-        def inv_rot(self, mat):
-            if self.x != 0 or self.y != 0 or self.z !=0:
-                self.array = np.linalg.solve(mat, np.array([0.0, 0.0, 1.0])*self.__norm__())
-        def x_prod_by001(self):
-            _c = vec([-self.array[1], self.array[0], 0.0])
-            return _c
-        def i_prod_by001(self):
-            _c = self.array[2]
-            return _c
+import CoarsegrainedBead as CG
+from Util import get_rot_mat
+from Util import vector as vec
 
 
 class Wall(object):
@@ -136,7 +98,7 @@ class Wall(object):
         _r_th = random.uniform(0, 2*pi)
         _r_z = random.uniform(0,1)
         _r_ori = [(1-_r_z**2)**0.5*cos(_r_th), (1-_r_z**2)**0.5*sin(_r_th), _r_z]
-        return LinearChain.get_rot_mat(_r_ori)
+        return get_rot_mat(_r_ori)
 
     def random_rotation(self):
         _r_mat = self.random_rot_matrix()

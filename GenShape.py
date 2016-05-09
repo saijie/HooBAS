@@ -162,7 +162,7 @@ class shape(object):
                 dmp_vec = vec(self.table[i, :])
                 dmp_vec.rot(mat=self.srot_mat)
                 self.table[i, :] = dmp_vec.array
-            self.quaternion *= Quat(self.srot_mat)
+            self.quaternion = Quat(self.srot_mat) * self.quaternion
         except AttributeError:
             pass
 
@@ -170,7 +170,7 @@ class shape(object):
         if operator is None:
             operator = np.eye(3)
         Q_op = Quat(operator)
-        self.quaternion *= Q_op
+        self.quaternion = Q_op * self.quaternion
 
     def Set_Geometric_Quaternion(self):
         # calculate the initial tensor
@@ -192,7 +192,6 @@ class shape(object):
         idx = w.argsort(kind='mergesort')[::-1]
         w = w[idx]
         v = v[:, idx]
-
         # invert one axis if the coordinate system has become left-handed
         if np.linalg.det(v) < 0:
             v[:, 0] = -v[:, 0]
@@ -200,6 +199,19 @@ class shape(object):
         self.quaternion = Quat(v)
         self.Itensor = np.array([w[0], w[1], w[2]], dtype=float)
 
+    def get_N_largest(self, N):
+        """
+        gets the N largest indexes of norm values in self.table and adds one to the result to offset the center.
+        This is made for geometric shapes.
+        :param N number of largest norm values to return
+        :return list of indexes
+        """
+        _norm = np.zeros(self.table.__len__(), dtype=float)
+        for idx in range(self.table.__len__()):
+            _norm[idx] = self.table[idx, 0] ** 2.0 + self.table[idx, 1] ** 2.0 + self.table[idx, 2] ** 2.0
+        args = np.argsort(_norm)
+        args = args[0: N] + 1
+        return args.tolist()
 
 class Cube(shape):
     def __init__(self, Num,  surf_plane = None, lattice = None, properties = None, Radius = None):
@@ -399,7 +411,7 @@ class PdbProtein(shape):
         :return:
         """
 
-        with open(filename, 'r') as f:
+        with open(filename) as f:
             self._pdb = f.readlines()
         del f
 
@@ -691,7 +703,7 @@ class Tetrahedron(shape):
         FacePoint = Table.__len__()
         Table /= np.max(Table)
         _ang = acos(1.0 / 3.0)
-        _r_mat = self.mat_from_plane(plane= [0.0, sin(_ang), cos(_ang)])
+        _r_mat = get_rot_mat([0.0, sin(_ang), cos(_ang)])
 
 
         TableZ = np.copy(Table)

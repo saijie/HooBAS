@@ -6,6 +6,7 @@ import GenShape
 import Build
 import LinearChain
 import Colloid
+from Util import get_inv_rot_mat
 ###########################
 # installation dependant stuff
 #############################
@@ -14,9 +15,10 @@ import sys
 sys.path.append('/projects/b1030/hoomd-2.0-cuda7/')
 sys.path.append('/projects/b1030/hoomd-2.0-cuda7/hoomd/')
 
-# from hoomd import *
-# from md import *
-# context.initialize()
+from hoomd import *
+from md import *
+
+context.initialize()
 
 ##############################
 #### Simulation parameters####
@@ -24,12 +26,12 @@ sys.path.append('/projects/b1030/hoomd-2.0-cuda7/hoomd/')
 
 
 options = type('', (), {})()
-_d = 0
+_d = 3
 F = 7.0  # binding energy
 Dump = 2e5 #dump period for dcd
 options.Um = 1.00
 
-options.target_dim = 35.07 / 2.0
+options.target_dim = 57.63 / 2.0
 options.scale_factor = 1.0
 options.fix_temp = 1.2
 options.target_temp = options.fix_temp
@@ -53,7 +55,7 @@ options.flag_flexor_angle = False
 
 options.center_sec_factor = (3**0.5)*1.35 # security factor for center-center. min dist between particles in random config.
 options.z_m = 1.7 # box z multiplier for surface energy calculations.
-options.exposed_surf = [1, 0, 1] ## z component must not be zero
+options.exposed_surf = [0, 0, 1]  ## z component must not be zero
 options.delta_surface = 0.00
 options.density_multiplier = 1.00
 
@@ -66,13 +68,13 @@ options.size = [28.5/5.0]
 options.num_particles = [27]
 options.center_types = ['W'] #Should be labeled starting with 'W', must have distinct names
 
-S = 6.0
+S = 5.0
 llen = 3
 dsL = 3+_d
-lz =2.0
+lz = 1.0
 C = 0.0
 
-options.filenameformat = 'test_101'
+options.filenameformat = 'test_001'
 
 DNA_chain = LinearChain.DNAChain(n_ss = 1, n_ds = dsL, sticky_end = ['X', 'Y', 'Z'], bond_length = 0.6)
 DNA_brush = LinearChain.DNAChain(n_ss = 1, n_ds = 1, sticky_end =[], bond_length = 0.6)
@@ -80,10 +82,14 @@ DNA_brush = LinearChain.DNAChain(n_ss = 1, n_ds = 1, sticky_end =[], bond_length
 shapes = [GenShape.RhombicDodecahedron(Num=600, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
 # shapes = [GenShape.PdbProtein(filename = '4BLC.pdb')]
 shapes[-1].set_properties(
-    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.ComplexColloid})
+    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.SimpleColloid})
 # shapes[-1].set_properties(properties={ 'surf_type': 'P', 'ColloidType': Colloid.ComplexColloid})
 # shapes[-1].add_shell(key = {'RES':'LYS'})
 #shapes[-1].pdb_build_table()
+_t = arccos(1.0 / 3.0)
+shapes[-1].rotate_object(
+    operator=linalg.inv([[cos(_t / 2), -sin(_t / 2), 0.0], [sin(_t / 2), cos(_t / 2), 0.0], [0.0, 0.0, 1.0]]))
+shapes[-1].rotate_object(operator=get_inv_rot_mat([1, 0, 1]))
 shapes[-1].set_ext_grafts(DNA_chain, num=int(124 * options.density_multiplier), linker_bond_type='S-NP')
 shapes[-1].set_ext_grafts(DNA_brush, num=2 * 124, linker_bond_type='S-NP')
 
@@ -95,7 +101,7 @@ options.sticky_pairs = [['X', 'Z'], ['Y', 'Y']]
 options.sticky_track = [['X', 'Z'], ['Y', 'Y']]
 
 options.int_bounds = [1, 1,
-                      2]  # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
+                      1]  # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
 
 options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*options.target_dim]
@@ -138,27 +144,14 @@ options.sticky_types = buildobj.sticky_types
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
-boxL = buildobj.current_box()
-box = data.boxdim(boxL[0], boxL[1], boxL[2], boxL[3], boxL[4], boxL[5])
-system = init.create_empty(N=buildobj.beads.__len__(), box=box)
 
-for idx in range(buildobj.beads.__len__()):
-    propset = [prop for prop in dir(buildobj.beads[idx]) if
-               not prop.startswith('__') and not callable(getattr(buildobj.beads[idx], prop))]
-    for set_prop in propset:
-        setattr(system.particles[idx], set_prop, getattr(buildobj.beads[idx], set_prop))
-
-for bond in buildobj.bonds:
-    system.bonds.add(bond[-1], bond[0], bond[1])
-
-for ang in buildobj.angles:
-    system.angles.add(ang[-1], ang[0], ang[1], ang[2])
+system = init.read_xml(options.filenameformat + '.xml')
 
 rigid = constrain.rigid()
 _ = []
 for p in shapes[-1].table:
     _.append((p[0], p[1], p[2]))
-rigid.set_param(type_name='W', types=['P'] * shapes[-1].table.__len__(), position = _)
+rigid.set_param(type_name='W', types=['P'] * shapes[-1].table.__len__(), positions=_)
 
 ####################################################################################
 #	Bond Setup
@@ -340,7 +333,7 @@ comm.barrier()
 groupall = group.all()
 groupP = group.type('P')
 
-nonrigid = group.differenec(groupall, groupP, name='groupnonrigid')
+nonrigid = group.difference(a=groupall, b=groupP, name='groupnonrigid')
 #rigid = group.rigid()
 
 integrate.mode_standard(dt=0.005)

@@ -394,6 +394,10 @@ class Quat(object):
         """
         return Quat([self.q[0], self.q[1], self.q[2], -self.q[3]])
 
+    @property
+    def q_w_ijk(self):
+        q = self.q
+        return np.array([q[3], q[0], q[1], q[2]])
 
 def normalize(array):
     """

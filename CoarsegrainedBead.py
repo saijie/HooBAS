@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 
 
@@ -21,7 +23,13 @@ class bead(object):
         if quaternion is None:
             self.orientation = np.array([0.0, 0.0, 0.0, 0.0])
         else:
-            self.orientation = quaternion.q
+            try:
+                self.orientation = quaternion.q_w_ijk
+            except AttributeError:  # In case whatever is passed doesnt support q_w_ijk;
+                warnings.warn(
+                    'the quaternion passed doesnt support q_w_ijk; errors may be encountered while printing XML',
+                    UserWarning)
+                self.orientation = quaternion
         if moment_inertia is None:
             self.moment_inertia = np.array([0.0, 0.0, 0.0])
         else:

@@ -106,6 +106,7 @@ class Colloid(object):
         self.body_num = 0
         self.body_beads = []
         self.body_mass = 0.0
+        self.__initial_rotation()
 
     @property
     def surface_type(self):
@@ -229,6 +230,13 @@ class Colloid(object):
             _.append((position[0], position[1], position[2]))
         return _
 
+    def __initial_rotation(self):
+        for pidx in range(self._sh.table.__len__()):
+            lvec = vec(copy.deepcopy(self._sh.table[pidx]))
+            lvec.rot(mat=self.quaternion.transform)
+            self._sh.table[pidx] = lvec.array
+
+
     def rotate(self, operation):
         """
         rotates the colloid
@@ -239,14 +247,14 @@ class Colloid(object):
         self.pos = self.pos - _t
         q_op = Quat(operation)
         r_mat = q_op.transform
-        for i in range(self.body_beads.__len__(), self.pos.__len__()):
+        for i in range(0, self.pos.__len__()):
             _tmp_dump = vec(self.pos[i, :])
             _tmp_dump.rot(mat=r_mat)
             self.pos[i,:] = _tmp_dump.array
             self.beads[i].position = _tmp_dump.array + _t
             del _tmp_dump
         self.pos = self.pos + _t
-        self.quaternion *= q_op
+        self.quaternion = q_op * self.quaternion
 
     def graft_EXT(self, EXT_IDX, rem_id, num, linker_type):
         """
@@ -271,15 +279,22 @@ class Colloid(object):
 
         for obj_copy_idx in range(num):
             _dump_copy = copy.deepcopy(self._sh.ext_objects[EXT_IDX])
+
+            # try setting some random rotation to avoid overlaps
+            try:
+                _dump_copy.randomize_dirs()
+            except AttributeError:
+                pass
+
             _p_off = self.p_num[-1]+1
             _att_vec = vec(copy.deepcopy(self.pos[self.att_list[-1][obj_copy_idx], :] - self.pos[0, :]))
-            _att_vec.rot(mat=self.quaternion.transform)
             _rot_matrix = get_rot_mat(_att_vec.array)
             for obj_int_crd in range(_dump_copy.beads.__len__()):
                 _v = vec(_dump_copy.beads[obj_int_crd].position)
                 _v.rot(_rot_matrix)
                 _dump_copy.beads[obj_int_crd].position = self.pos[0, :] + _att_vec.array * (
-                1.00 + 0.8 / _att_vec.__norm__()) + _v.array
+                    1.00 + 0.8 / _att_vec.__norm__()) + _v.array + np.array(
+                    [random.uniform(-1.0, 1.0), random.uniform(-1.0, 1.0), random.uniform(-1.0, 1.0)]) * 0.1
                 del _v
                 self.pos = np.append(self.pos, np.array([_dump_copy.beads[obj_int_crd].position[:]]), axis = 0)
                 self.beads.append(_dump_copy.beads[obj_int_crd])
@@ -317,7 +332,6 @@ class SimpleColloid(Colloid):
         self.beads = [CoarsegrainedBead.bead(position=np.array([0.0, 0.0, 0.0]), beadtype=self.c_type, body=0,
                                              mass=self.mass, quaternion=self.quaternion,
                                              moment_inertia=self.diagI * self.mass * (self.size ** 2.0))]
-
         self.__build_surface()
         # check if the system is rigid
         if not self.bonds.__len__() == 0:
@@ -335,7 +349,7 @@ class SimpleColloid(Colloid):
         self.beads += [CoarsegrainedBead.bead(position=copy.deepcopy(self._sh.pos[i] * self.size / 2.0),
                                               beadtype=self.s_type, body=0, mass=self.s_mass) for i in
                        range(self._sh.pos.__len__())]
-        self.body_beads += [self.beads[i] for i in range(1, self.beads.__len__())]
+        self.body_beads += [self.beads[i] for i in range(0, self.beads.__len__())]
 
     def __build_grafts(self):
         if 'EXT' in self._sh.keys:
@@ -366,7 +380,7 @@ class ComplexColloid(Colloid):
             self.nshells = self._sh.flags['multiple_surface_types'].__len__()
         else:
             self.nshells = 1
-
+        self.body_beads += self.beads
         self.__build_shells()
         # check if the system is rigid
         if not self.bonds.__len__() == 0:

@@ -85,14 +85,14 @@ def read_centers(f_center):
     lines = fc.readlines()[2:]
 
     positions = []
-    type = []
+    types = []
     for line in lines:
         l = line.strip().split()
         pos = [float(l[1])*1.0, float(l[2])*1.0, float(l[3])*1.0]
         positions.append(pos)
-        type.append(l[0])
+        types.append(l[0])
 
-    return type, positions
+    return types, positions
 
 def get_rot_mat(cubic_plane):
     _cp = vector(cubic_plane)
@@ -107,7 +107,7 @@ def get_rot_mat(cubic_plane):
 
     if _v.array[0] == 0.0 and _v.array[1] == 0.0: # surface is [001]
         return _id
-    return  np.linalg.inv(_id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2))
+    return _id + _mat_vx + (1.0 - _cl) / _sl ** 2 * np.linalg.matrix_power(_mat_vx, 2)
 
 def get_inv_rot_mat(cubic_plane):
     _cp = vector(cubic_plane)
@@ -122,7 +122,7 @@ def get_inv_rot_mat(cubic_plane):
 
     if _v.array[0] == 0.0 and _v.array[1] == 0.0: # surface is [001]
         return _id
-    return  _id + _mat_vx + (1.0-_cl) / _sl**2 * np.linalg.matrix_power(_mat_vx, 2)
+    return np.linalg.inv(_id + _mat_vx + (1.0 - _cl) / _sl ** 2 * np.linalg.matrix_power(_mat_vx, 2))
 
 
 def gen_random_mat():
