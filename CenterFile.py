@@ -287,10 +287,9 @@ class Lattice(CenterFile):
 
                 #check lattice params, need some tolerance check in here
                 _tol = 1e-3
-                if (-int_bounds[0] - _tol < _a1 <= int_bounds[0] + _tol) \
-                        and (-int_bounds[1]-_tol < _a2 <= int_bounds[1]+_tol) \
-                        and (-int_bounds[2]-_tol < _a3 <= int_bounds[2] + _tol) :
-
+                if (-int_bounds[0] + _tol < _a1 <= int_bounds[0] + _tol) \
+                        and (-int_bounds[1] + _tol < _a2 <= int_bounds[1] + _tol) \
+                        and (-int_bounds[2] + _tol < _a3 <= int_bounds[2] + _tol):
                     _index_to_keep.append([i,j])
                 del _tmp_dump
 

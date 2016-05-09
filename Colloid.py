@@ -76,6 +76,7 @@ class Colloid(object):
 
         # associated shape, contains list of surface, and directives
         self._sh = copy.deepcopy(loc_sh_obj)
+        self.CONST_SHAPE_TABLE = copy.deepcopy(loc_sh_obj.table)
         # check if the shape has a supplementary building method that has to be run but wasnt
         if hasattr(self._sh, 'BuiltFlag') and self._sh.BuiltFlag is False:
             getattr(self._sh, self._sh.BuildMethod)
@@ -232,7 +233,7 @@ class Colloid(object):
         :return: list of tuples
         """
         _ = []
-        for position in self._sh.pos:
+        for position in self.CONST_SHAPE_TABLE:
             _.append((position[0], position[1], position[2]))
         return _
 

@@ -103,8 +103,7 @@ options.sticky_track = [['X', 'Z'], ['Y', 'Y']]
 
 # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
-options.int_bounds = [1, 1,1]
-
+options.int_bounds = [1, 1, 1]
 
 options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*options.target_dim]
 center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, lattice = options.lattice_multi, int_bounds=options.int_bounds)
@@ -129,7 +128,7 @@ c_tags = buildobj.center_tags
 d_tags_len = d_tags.__len__()
 d_tags_loc_len = d_tags[0].__len__()
 
-rigid_type_list, rigid_tuple_list = buildobj.aggregate_rigid_tuples()
+rigid_tuple_list = buildobj.aggregate_rigid_tuples()
 
 #buildobj.set_charge_to_pnum()
 buildobj.set_charge_to_dna_types()
@@ -141,8 +140,6 @@ if comm.get_rank() == 0:
 options.center_types = buildobj.center_types
 options.surface_types = buildobj.surface_types
 options.sticky_types = buildobj.sticky_types
-
-#options.sticky_exclusions = buildobj.sticky_excluded(['X', 'X0'], r_cut = 1.50)
 
 options.build_flags = buildobj.flags # none defined at the moment, for future usage, dictionary of flags
 options.bond_types = buildobj.bond_types

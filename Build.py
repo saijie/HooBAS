@@ -895,10 +895,17 @@ class BuildHoomdXML(object):
         provides a method to get correct arguments for constrain.rigid()
         :return: list of typelists, list of tuple lists
         """
+        _r_c_typelist = []
         _r_typelist = []
         _r_tuple_list = []
 
         for particle in self.__particles:
-            _r_typelist += [particle.body_typelist]
-            _r_tuple_list += [[particle.relative_positions()]]
-        return _r_typelist, _r_tuple_list
+            _r_c_typelist.append(particle.center_type)
+            _r_typelist.append(particle.body_typelist[1:])
+            _r_tuple_list.append(particle.relative_positions())
+
+        _ftuplelist = []
+        for l_idx in range(_r_tuple_list.__len__()):
+            _ftuplelist.append((_r_typelist[l_idx], _r_tuple_list[l_idx]))
+
+        return list(set(_ftuplelist))
