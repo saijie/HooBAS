@@ -172,9 +172,13 @@ class shape(object):
         Q_op = Quat(operator)
         self.quaternion = Q_op * self.quaternion
 
-    def Set_Geometric_Quaternion(self):
-        # calculate the initial tensor
-        inertia_tensor = np.zeros((3, 3))
+    def Set_Geometric_Quaternion(self, tol_eps_rel=2.0):
+        """
+        calculates the tensor of the structure in self.table; uses diagonalization methods and has numerical precision
+        issues
+        :return:
+        """
+        inertia_tensor = np.zeros((3, 3), dtype=np.longfloat)
         for point in self.table:
             inertia_tensor[0, 0] += point[1] * point[1] + point[2] * point[2]
             inertia_tensor[1, 1] += point[0] * point[0] + point[2] * point[2]
@@ -186,6 +190,17 @@ class shape(object):
         inertia_tensor[2, 0] = inertia_tensor[0, 2]
         inertia_tensor[2, 1] = inertia_tensor[1, 2]
 
+        #####################################
+        # numerical fixing of some low values
+        #####################################
+        inertia_tensor = inertia_tensor.astype(dtype=np.float)
+        _maxel = np.max(inertia_tensor)
+        for dim1 in range(3):
+            for dim2 in range(3):
+                if inertia_tensor[dim1, dim2] < tol_eps_rel * np.finfo(np.float).eps * _maxel:
+                    inertia_tensor[dim1, dim2] = 0.0
+
+
         w, v = np.linalg.eigh(inertia_tensor * 0.6 / self.table.__len__())
 
         # sort the eigenvalues
@@ -195,13 +210,12 @@ class shape(object):
         # invert one axis if the coordinate system has become left-handed
         if np.linalg.det(v) < 0:
             v[:, 0] = -v[:, 0]
-
         self.quaternion = Quat(v)
         self.Itensor = np.array([w[0], w[1], w[2]], dtype=float)
 
-    def get_N_largest(self, N):
+    def get_N_idx(self, N, **sortargs):
         """
-        gets the N largest indexes of norm values in self.table and adds one to the result to offset the center.
+        gets the N smallest indexes of norm values in self.table and adds one to the result to offset the center.
         This is made for geometric shapes.
         :param N number of largest norm values to return
         :return list of indexes
@@ -209,7 +223,7 @@ class shape(object):
         _norm = np.zeros(self.table.__len__(), dtype=float)
         for idx in range(self.table.__len__()):
             _norm[idx] = self.table[idx, 0] ** 2.0 + self.table[idx, 1] ** 2.0 + self.table[idx, 2] ** 2.0
-        args = np.argsort(_norm)
+        args = np.argsort(_norm, **sortargs)
         args = args[0: N] + 1
         return args.tolist()
 

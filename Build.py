@@ -328,12 +328,19 @@ class BuildHoomdXML(object):
                         self.__particles[i].beads[k].charge = _offset
             _offset += 1
 
-    def add_einstein_crystal_lattice(self):
+    def add_einstein_crystal_lattice(self, additional_offsets=None):
         self.__types.append('EC')
         for i in range(self.__particles.__len__()):
             self.beads.append(CoarsegrainedBead.bead(position=self.__particles[i].center_position, beadtype='EC'))
             self.__p_num.append(self.__p_num[-1]+1)
             self.bonds.append(['EC-bond', self.__particles[i].pnum_offset, self.__p_num[-1]])
+            if not additional_offsets is None:
+                for offset in additional_offsets:
+                    self.beads.append(
+                        CoarsegrainedBead.bead(position=self.beads[self.__particles[i].pnum_offset + offset],
+                                               beadtype='EC'))
+                    self.__p_num.append(self.__p_num[-1] + 1)
+                    self.bonds.append(['EC-bond', self.__particles[i].pnum_offset + offset, self.__p_num[-1]])
 
     def sticky_excluded(self, sticky_pair, r_cut = None):
         #######

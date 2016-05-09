@@ -6,7 +6,6 @@ import GenShape
 import Build
 import LinearChain
 import Colloid
-from Util import get_inv_rot_mat
 ###########################
 # installation dependant stuff
 #############################
@@ -79,7 +78,7 @@ options.filenameformat = 'test_001'
 DNA_chain = LinearChain.DNAChain(n_ss = 1, n_ds = dsL, sticky_end = ['X', 'Y', 'Z'], bond_length = 0.6)
 DNA_brush = LinearChain.DNAChain(n_ss = 1, n_ds = 1, sticky_end =[], bond_length = 0.6)
 
-shapes = [GenShape.RhombicDodecahedron(Num=600, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
+shapes = [GenShape.Cube(Num=600, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
 # shapes = [GenShape.PdbProtein(filename = '4BLC.pdb')]
 shapes[-1].set_properties(
     properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.SimpleColloid})
@@ -87,11 +86,11 @@ shapes[-1].set_properties(
 # shapes[-1].add_shell(key = {'RES':'LYS'})
 #shapes[-1].pdb_build_table()
 _t = arccos(1.0 / 3.0)
-shapes[-1].rotate_object(
-    operator=linalg.inv([[cos(_t / 2), -sin(_t / 2), 0.0], [sin(_t / 2), cos(_t / 2), 0.0], [0.0, 0.0, 1.0]]))
-shapes[-1].rotate_object(operator=get_inv_rot_mat([1, 0, 1]))
-shapes[-1].set_ext_grafts(DNA_chain, num=int(124 * options.density_multiplier), linker_bond_type='S-NP')
-shapes[-1].set_ext_grafts(DNA_brush, num=2 * 124, linker_bond_type='S-NP')
+# shapes[-1].rotate_object(
+#    operator=linalg.inv([[cos(_t / 2), -sin(_t / 2), 0.0], [sin(_t / 2), cos(_t / 2), 0.0], [0.0, 0.0, 1.0]]))
+# shapes[-1].rotate_object(operator=get_inv_rot_mat([1, 0, 1]))
+# shapes[-1].set_ext_grafts(DNA_chain, num=int(124 * options.density_multiplier), linker_bond_type='S-NP')
+# shapes[-1].set_ext_grafts(DNA_brush, num=2 * 124, linker_bond_type='S-NP')
 
 
 ######################################################################
@@ -131,7 +130,6 @@ d_tags_loc_len = d_tags[0].__len__()
 buildobj.set_charge_to_dna_types()
 if comm.get_rank() == 0:
     buildobj.write_to_file()
-
 
 
 #options.sys_box = buildobj.sys_box

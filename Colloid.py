@@ -231,9 +231,10 @@ class Colloid(object):
         return _
 
     def __initial_rotation(self):
+        _mat = self.quaternion.transform
         for pidx in range(self._sh.table.__len__()):
             lvec = vec(copy.deepcopy(self._sh.table[pidx]))
-            lvec.rot(mat=self.quaternion.transform)
+            lvec.rot(mat=_mat)
             self._sh.table[pidx] = lvec.array
 
 
