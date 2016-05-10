@@ -612,6 +612,9 @@ class PdbProtein(shape):
         self.keys['shell'][_shl_idx][2].append({'EXT_IDX':self.ext_objects.__len__() - 1, 'num' : num, 'linker_type' : linker_bond_type})
 
     def __check_build_order(self):
+        """
+        checks that the object wasn't built when directives are passed
+        """
         if self.BuiltFlag:
             warnings.warn('Directives were set after the shape was built. Unbuilding the shape', UserWarning)
 

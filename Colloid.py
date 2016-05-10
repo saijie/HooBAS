@@ -396,16 +396,16 @@ class ComplexColloid(Colloid):
         self.build_shell()
 
     def __build_shells(self):
-        for i in range(self.beads.__len__()):
-            self.beads[i].body = -1
+
         self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos), axis = 0)
+
+        # do some parsing on the surface types
 
         if not hasattr(self.s_type, '__iter__'):
             self.s_type = [self.s_type]
             warnings.warn(
                 'ComplexColloid : __build_shells() : Surface types are not iterable while trying to build multiple '
                 'shells, assuming string was passed; padding', SyntaxWarning)
-
         _c = 0
         if self._sh.flags['multiple_surface_types'].__len__() > self.s_type.__len__() == 1:
             _temp = self.s_type[0]
@@ -420,6 +420,7 @@ class ComplexColloid(Colloid):
             warnings.warn('ComplexColloid : __build_shells() : Lengths of surface types greater than the number of '
                           'shells to build. Some names will remain unused', SyntaxWarning)
 
+        # create the shells; mst is the indexes
         for i in range(self._sh.flags['multiple_surface_types'].__len__()):
             self.rem_list.append([])
             while _c < self._sh.flags['multiple_surface_types'][i]:
