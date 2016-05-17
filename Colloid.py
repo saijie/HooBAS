@@ -328,7 +328,6 @@ class SimpleColloid(Colloid):
     """
 
     def __init__(self, size, **kwargs):
-
         super(SimpleColloid, self).__init__(**kwargs)
 
         # set the surface mass to be 3/5 of the overall mass to fix the rigid body intertia
@@ -341,6 +340,7 @@ class SimpleColloid(Colloid):
                                              mass=self.mass, quaternion=self.quaternion,
                                              moment_inertia=self.diagI * self.mass * (self.size ** 2.0))]
         self.__build_surface()
+
         # check if the system is rigid
         if not self.bonds.__len__() == 0:
             self.body = -1
@@ -366,6 +366,9 @@ class SimpleColloid(Colloid):
 
 
 class ComplexColloid(Colloid):
+    """
+    provides an object to build complex colloids, mainly proteins;
+    """
     def __init__(self, **kwargs):
         super(ComplexColloid, self).__init__(**kwargs)
 
@@ -377,10 +380,13 @@ class ComplexColloid(Colloid):
                                              mass=self.body_mass, quaternion=self.quaternion,
                                              moment_inertia=self.diagI)]
 
+        # in case we have more stuff defined (note additional point[0] is the center)
         for i in range(1, self._sh.additional_points.__len__()):
             self.beads.append(CoarsegrainedBead.bead(position = self._sh.additional_points[i], beadtype=self.c_type + self._sh.type_suffix[i],
                                                      body = 0, mass = self._sh.masses[i]))
             self.p_num.append(self.p_num[-1]+1)
+
+        # append those positions
         self.pos = np.append(self.pos, self._sh.additional_points[1:], axis = 0)
 
         # check for the number of shells in the shape
@@ -388,15 +394,18 @@ class ComplexColloid(Colloid):
             self.nshells = self._sh.flags['multiple_surface_types'].__len__()
         else:
             self.nshells = 1
+
+        # the base beads are part of the body
         self.body_beads += self.beads
+
         self.__build_shells()
-        # check if the system is rigid
-        if not self.bonds.__len__() == 0:
-            self.body = -1
         self.build_shell()
 
     def __build_shells(self):
-
+        """
+        builds the rigid shells supplied by add_shell in shape
+        :return:
+        """
         self.pos = np.append(self.pos, copy.deepcopy(self._sh.pos), axis = 0)
 
         # do some parsing on the surface types
@@ -420,7 +429,7 @@ class ComplexColloid(Colloid):
             warnings.warn('ComplexColloid : __build_shells() : Lengths of surface types greater than the number of '
                           'shells to build. Some names will remain unused', SyntaxWarning)
 
-        # create the shells; mst is the indexes
+        # create the shells; mst is the indexes of the end of each shell
         for i in range(self._sh.flags['multiple_surface_types'].__len__()):
             self.rem_list.append([])
             while _c < self._sh.flags['multiple_surface_types'][i]:
@@ -430,10 +439,15 @@ class ComplexColloid(Colloid):
                                                          body=self.body, mass=self.s_mass))
                 _c += 1
                 self.body_beads.append(self.beads[-1])
+        # in case we have additional internal stuff
         for i in range(self._sh.internal_bonds.__len__()):
             self.bonds.append([self._sh.internal_bonds[i][-1], self._sh.internal_bonds[i][0], self._sh.internal_bonds[i][1]])
 
     def build_shell(self):
+        """
+        grafts the chains (or whatever specified grafting object) using the graft_EXT command
+        :return:
+        """
         for shl_idx in range(self._sh.keys['shell'].__len__()):
             for ext_idx in range(self._sh.keys['shell'][shl_idx][2].__len__()):
                 self.graft_EXT(rem_id = shl_idx, **self._sh.keys['shell'][shl_idx][2][ext_idx])

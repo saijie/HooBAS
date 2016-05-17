@@ -86,6 +86,12 @@ shapes[-1].set_properties(properties={'surf_type': 'P', 'ColloidType': Colloid.C
 shapes[-1].add_shell(key={'RES': 'LYS'})
 shapes[-1].pdb_build_table()
 _t = arccos(1.0 / 3.0)
+
+shapes.append(GenShape.PdbProtein(filename='4BLC.pdb'))
+shapes[-1].set_properties(properties={'surf_type': 'P2', 'ColloidType': Colloid.ComplexColloid})
+shapes[-1].add_shell(key={'RES': 'LYS', 'ATOM': 'N'})
+shapes[-1].pdb_build_table()
+
 # shapes[-1].rotate_object(
 #    operator=linalg.inv([[cos(_t / 2), -sin(_t / 2), 0.0], [sin(_t / 2), cos(_t / 2), 0.0], [0.0, 0.0, 1.0]]))
 # shapes[-1].rotate_object(operator=get_inv_rot_mat([1, 0, 1]))
@@ -108,10 +114,11 @@ options.int_bounds = [1, 1, 1]
 options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*options.target_dim]
 center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, lattice = options.lattice_multi, int_bounds=options.int_bounds)
 center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0, 0, 0])
-center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0])
-center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0, 0.5])
-center_file_object.add_particles_on_lattice(center_type='W', offset=[0, 0.5, 0.5])
-center_file_object.rotate_and_cut(int_bounds = options.int_bounds)
+center_file_object.add_particles_on_lattice(center_type='W2', offset=[0.5, 0.5, 0.5])
+# center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0])
+# center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0, 0.5])
+# center_file_object.add_particles_on_lattice(center_type='W', offset=[0, 0.5, 0.5])
+center_file_object.rotate_and_cut(int_bounds=[0.5, 0.5, 0.5])
 
 
 # Target box sizes
@@ -148,10 +155,8 @@ options.ang_types = buildobj.ang_types
 system = init.read_xml(options.filenameformat + '.xml')
 
 rigid = constrain.rigid()
-_ = []
-for p in shapes[-1].table:
-    _.append((p[0], p[1], p[2]))
-rigid.set_param(type_name='W', types=['P'] * shapes[-1].table.__len__(), positions=_)
+for cons in rigid_tuple_list:
+    rigid.set_param(type_name=cons[0], types=cons[1], positions=cons[2])
 
 ####################################################################################
 #	Bond Setup

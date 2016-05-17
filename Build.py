@@ -893,8 +893,14 @@ class BuildHoomdXML(object):
     def aggregate_rigid_tuples(self):
         """
         provides a method to get correct arguments for constrain.rigid()
-        :return: list of typelists, list of tuple lists
+        :return: list of centers, list of typelists, list of tuple lists
         """
+
+        # first create the full list then only keep uniques of these lists (only a single of the three have to be
+        # different for a particle to be added
+
+
+        # build full lists
         _r_c_typelist = []
         _r_typelist = []
         _r_tuple_list = []
@@ -904,8 +910,44 @@ class BuildHoomdXML(object):
             _r_typelist.append(particle.body_typelist[1:])
             _r_tuple_list.append(particle.relative_positions())
 
-        _ftuplelist = []
-        for l_idx in range(_r_tuple_list.__len__()):
-            _ftuplelist.append((_r_typelist[l_idx], _r_tuple_list[l_idx]))
+        # at least add the first element of the list
+        try:
+            _r_c_out = [_r_c_typelist[0]]
+            _r_type_out = [_r_typelist[0]]
+            _r_tuple_out = [_r_tuple_list[0]]
+        except IndexError:
+            # some particle is defined as rigid but is empty
+            warnings.warn('Some colloids have empty lists of positions / types, unable to return rigid structures')
+            return [], [], []
 
-        return list(set(_ftuplelist))
+        # find all uniques particles
+        for idx in range(1, _r_c_typelist.__len__()):
+            # all compare refers to the full comparison with all previously added rigid particles it is set to true if
+            # the three lists are different to all previously added three lists
+            _all_compare_bool = True
+
+            # compare refers to the current comparison in the already added lists
+            _compare_bool = False
+
+            for idx_compare in range(0, _r_c_out.__len__()):
+                if _r_c_out[idx_compare] != _r_c_typelist[idx]:
+                    _compare_bool = True
+                elif _r_type_out[idx_compare] != _r_typelist[idx]:
+                    _compare_bool = True
+                elif _r_tuple_out[idx_compare] != _r_tuple_list[idx]:
+                    _compare_bool = True
+                _all_compare_bool = _all_compare_bool and _compare_bool
+                if not _all_compare_bool:
+                    break
+
+            if _all_compare_bool:
+                _r_c_out.append(_r_c_typelist[idx])
+                _r_type_out.append(_r_typelist[idx])
+                _r_tuple_out.append(_r_tuple_list[idx])
+
+        # aggregate into tuples
+        _out = []
+        for idx in range(_r_c_out.__len__()):
+            _out.append((_r_c_out[idx], _r_type_out[idx], _r_tuple_out[idx]))
+
+        return _out
