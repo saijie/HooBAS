@@ -87,10 +87,10 @@ shapes[-1].add_shell(key={'RES': 'LYS'})
 shapes[-1].pdb_build_table()
 _t = arccos(1.0 / 3.0)
 
-shapes.append(GenShape.PdbProtein(filename='4BLC.pdb'))
-shapes[-1].set_properties(properties={'surf_type': 'P2', 'ColloidType': Colloid.ComplexColloid})
-shapes[-1].add_shell(key={'RES': 'LYS', 'ATOM': 'N'})
-shapes[-1].pdb_build_table()
+shapes.append(GenShape.Sphere(Num=200))
+shapes[-1].set_properties(
+    properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': 5.0, 'density': 14.29})
+
 
 # shapes[-1].rotate_object(
 #    operator=linalg.inv([[cos(_t / 2), -sin(_t / 2), 0.0], [sin(_t / 2), cos(_t / 2), 0.0], [0.0, 0.0, 1.0]]))

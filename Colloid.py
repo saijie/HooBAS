@@ -334,7 +334,7 @@ class SimpleColloid(Colloid):
         self.s_mass = self.mass * 3.0 / 5.0 / self._sh.num_surf
         self.size = size
         self.body_mass = self.mass
-
+        self.CONST_SHAPE_TABLE *= self.size / 2.0
         # the center particle holds the rigid body structure
         self.beads = [CoarsegrainedBead.bead(position=np.array([0.0, 0.0, 0.0]), beadtype=self.c_type, body=0,
                                              mass=self.mass, quaternion=self.quaternion,
