@@ -269,10 +269,24 @@ class Colloid(object):
         grafts external objects unto a colloid
         :param EXT_IDX int external index
         :param rem_id int index of list
-        :param num number to graft
+        :param num number to graft either int number / function(size) for simple colloids / function() else
         :param linker_type string bond name
         """
-        if num > self.rem_list[rem_id].__len__():
+
+        if isinstance(num, int):
+            _num = num
+        elif hasattr(num, '__call__') and hasattr(self, 'size'):
+            _num = num(self.size)
+        elif hasattr(num, '__call__'):
+            _num = num()
+        else:
+            _num = int(num)
+            warnings.warn('Colloid : graft_EXT had to do a type conversion to int', SyntaxWarning)
+
+        if not isinstance(_num, int):
+            raise SyntaxError('Colloid : graft_EXT could not make an int out of supplied number of grafts')
+
+        if _num > self.rem_list[rem_id].__len__():
             raise ValueError('DNA chain number greater than number of surface beads')
         try:
             self.sticky_used.append(self._sh.ext_objects[EXT_IDX].sticky_end)
@@ -280,12 +294,12 @@ class Colloid(object):
             pass
 
         _tmp_a_list = []
-        while _tmp_a_list.__len__() < num:
+        while _tmp_a_list.__len__() < _num:
             _tmp_a_list.append(self.rem_list[rem_id].pop(random.randint(0, self.rem_list[rem_id].__len__()-1)))
 
         self.att_list.append(_tmp_a_list)
 
-        for obj_copy_idx in range(num):
+        for obj_copy_idx in range(_num):
             _dump_copy = copy.deepcopy(self._sh.ext_objects[EXT_IDX])
 
             # try setting some random rotation to avoid overlaps
@@ -332,7 +346,17 @@ class SimpleColloid(Colloid):
 
         # set the surface mass to be 3/5 of the overall mass to fix the rigid body intertia
         self.s_mass = self.mass * 3.0 / 5.0 / self._sh.num_surf
-        self.size = size
+        if isinstance(size, float):
+            self.size = size
+        elif hasattr(size, '__call__'):
+            self.size = size()
+        else:
+            self.size = float(size)
+            warnings.warn('Colloid : SimpleColloid constructor had to convert non-float type', SyntaxWarning)
+
+        if not isinstance(self.size, float):
+            raise SyntaxError('Colloid : size function passed in SimpleColloid constructor did not return a float')
+
         self.body_mass = self.mass
         self.CONST_SHAPE_TABLE *= self.size / 2.0
         # the center particle holds the rigid body structure
@@ -363,7 +387,6 @@ class SimpleColloid(Colloid):
         if 'EXT' in self._sh.keys:
             for i in range(self._sh.keys['EXT'].__len__()):
                 self.graft_EXT(rem_id=0, **self._sh.keys['EXT'][i][1])
-
 
 class ComplexColloid(Colloid):
     """

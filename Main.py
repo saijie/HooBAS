@@ -6,6 +6,7 @@ import GenShape
 import Build
 import LinearChain
 import Colloid
+import random
 ###########################
 # installation dependant stuff
 #############################
@@ -87,9 +88,13 @@ shapes[-1].add_shell(key={'RES': 'LYS'})
 shapes[-1].pdb_build_table()
 _t = arccos(1.0 / 3.0)
 
+
+def random_size():
+    return random.uniform(4.0, 6.0)
+
 shapes.append(GenShape.Sphere(Num=200))
 shapes[-1].set_properties(
-    properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': 5.0, 'density': 14.29})
+    properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': random_size, 'density': 14.29})
 
 
 # shapes[-1].rotate_object(
@@ -118,7 +123,7 @@ center_file_object.add_particles_on_lattice(center_type='W2', offset=[0.5, 0.5, 
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0, 0.5])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0, 0.5, 0.5])
-center_file_object.rotate_and_cut(int_bounds=[0.5, 0.5, 0.5])
+center_file_object.rotate_and_cut(int_bounds=[1.0, 1.0, 1.0])
 
 
 # Target box sizes
