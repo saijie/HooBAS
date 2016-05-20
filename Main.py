@@ -60,14 +60,6 @@ options.delta_surface = 0.00
 options.density_multiplier = 1.00
 
 
-###################################################################################################################
-## Code allows for mixing any number of composite shapes. size / num_particles / center_types / shapes must be lists of equal length,
-## with length of the number of species of building blocks
-##################################################################################################################
-options.size = [28.5/5.0]
-options.num_particles = [27]
-options.center_types = ['W'] #Should be labeled starting with 'W', must have distinct names
-
 S = 5.0
 llen = 3
 dsL = 3+_d
@@ -95,13 +87,6 @@ def random_size():
 shapes.append(GenShape.Sphere(Num=200))
 shapes[-1].set_properties(
     properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': random_size, 'density': 14.29})
-
-
-# shapes[-1].rotate_object(
-#    operator=linalg.inv([[cos(_t / 2), -sin(_t / 2), 0.0], [sin(_t / 2), cos(_t / 2), 0.0], [0.0, 0.0, 1.0]]))
-# shapes[-1].rotate_object(operator=get_inv_rot_mat([1, 0, 1]))
-# shapes[-1].set_ext_grafts(DNA_chain, num=int(124 * options.density_multiplier), linker_bond_type='S-NP')
-# shapes[-1].set_ext_grafts(DNA_brush, num=2 * 124, linker_bond_type='S-NP')
 
 
 ######################################################################

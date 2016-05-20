@@ -12,18 +12,8 @@ from Util import get_rot_mat
 
 class CenterFile(object):
     """
-    Object which is mainly a contained for a table of positions and a writer method, internal structure is given by
-    self.__table, which is a table of arrays of postions, self.__table_size, which is the total number of lines and
-    self.__options, which is the given options. must contain options.num_particles, options.center_types, with
-    the length of num_particles < length of center_types. If random particles is used, options.size must be defined with
-    length of num_particles < length of size as well as options.center_sec_factor. self.__built_centers is the
-    current list of center that have been appended to the table. Non-private functions will check is the added center
-    is in that table and append to the current list. Note that current implementation of drop_table does not remove it
-    from options so that size and others is still defined even if no centers are in the table. This enables the use of
-    drop_table followed by add_ functions.
-
-    Usage of force_crystal_rot should be careful, method can be called multiple times and will rotate the table to new top
-    axis successively. If non-decorated cubic lattice is sufficient, use of init = 'cubic' is simpler
+    Provides a class to manage positions of colloids. The class manages types of centers in self.built_centers and
+    self.table is a list of list of positions. The first dimension of self.table matches the size of self.built_centers
     """
     def __init__(self):
         """
@@ -182,7 +172,10 @@ class CenterFile(object):
             self.table[drop_index] = np.zeros((0,3))
 
 class Lattice(CenterFile):
-
+    """
+    provides a class for building lattices of colloids. Class provides methods to add particles inside the unit cell by
+    use of an offset, a rotation method and a cut method
+    """
     def __init__(self,  lattice, surf_plane = None, int_bounds = None):
         CenterFile.__init__(self)
         self.flags['vertical_slice'] = False
@@ -234,8 +227,9 @@ class Lattice(CenterFile):
 
     def rotate_and_cut(self, int_bounds):
         """
-        rotates the crystal system so that the surface plane faces the Z direction. The new crystal axes are generally
-        trigonal in nature and the crystallinity in Z is not guaranteed unless the rotated axes point along Z.
+        rotates the crystal system so that the surface plane face supplied faces the Z direction. The new crystal axes
+        are generally trigonal in nature and the crystallinity in Z is not guaranteed unless the rotated axes point
+        along Z.
 
         :param int_bounds: list of length 3 of integer bounds
         :return: none
@@ -313,8 +307,8 @@ class Lattice(CenterFile):
 
     def add_particles_on_lattice(self, center_type, offset):
         """
-        Adds particle on a orthorhombic lattice, with offset as a way to decorate (i.e. make FCC crystals), each offsets adds
-        one particle per unit cell; if Lattice is unset, defaults to cubic
+        Adds particle on a orthorhombic lattice, with offset as a way to decorate (i.e. make FCC crystals), each offset
+        adds one particle per unit cell;
 
         Useful decorators (cubic lattice)
 
@@ -323,8 +317,8 @@ class Lattice(CenterFile):
         Diamond : FCC + [1/4, 1/4, 1/4]
 
 
-        :param center_type: str to write in xyz table
-        :param offset: list of length 3 in units of lattice
+        :param center_type: type of center built, will try to match previously built ones
+        :param offset: list of length 3 in units of [vx, vy, vz] which are the base lattice vectors
         :return: None
         """
 

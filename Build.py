@@ -282,6 +282,13 @@ class BuildHoomdXML(object):
         return list(set(list(chain.from_iterable(_tlist))))
 
     def get_type_charge_product(self, typeA, typeB):
+        """
+        returns the charge product of two types of beads in the lists. Will not return correct values if multiple beads
+        of a given type can have different charges
+        :param typeA: 
+        :param typeB:
+        :return:
+        """
         _qa = 0.0
         _qb = 0.0
         # define some bools so we dont iterate for no reason
@@ -316,10 +323,18 @@ class BuildHoomdXML(object):
         self.permittivity = np.interp(val, self.Xsalt, self.Ysalt) * 0.2 # <- hoomd charge normalization
 
     def set_charge_to_pnum(self):
+        """
+        sets the charge of each bead to its list number
+        :return:
+        """
         for i in range(self.beads.__len__()):
             self.beads[i].charge = float(self.__p_num[i])
 
     def set_charge_to_dna_types(self):
+        """
+        sets a different charge value to each of the sticky ends of the particle
+        :return: None
+        """
         _offset = 1
         for i in range(self.__particles.__len__()):
             for j in range(self.__particles[i].sticky_types.__len__()):
@@ -328,19 +343,57 @@ class BuildHoomdXML(object):
                         self.__particles[i].beads[k].charge = _offset
             _offset += 1
 
-    def add_einstein_crystal_lattice(self, additional_offsets=None):
-        self.__types.append('EC')
+    def add_einstein_crystal_lattice(self, additional_offsets=None, beadopts=None, bond_name=None, colloid_test=None):
+        """
+        creates additional beads on each center of the colloids. Default type is 'EC' with a default mass of 1.0. Bonds
+        are appended between this particle and the colloid center for thermodynamic integration. Bond name is 'EC-bond'
+        by default. Additional points to append can be supplied by additional_offsets, which are offsets from the center
+        of the colloid by index.
+
+        Conditions to evaluate on the properties of the colloid can be specified by a colloid dict.
+
+        :param additional_offsets: additional points where to add beads
+        :param beadopts: options to be passed to the bead constructor
+        :param bond_name: name of the bond to append
+        :param colloid_test: dict of properties that has to be specified
+        :return: None
+        """
+
+        # manage default arguments
+        if beadopts is None:
+            beadopts = {'beadtype': 'EC', 'mass': 1.0}
+        if bond_name is None:
+            bond_name = 'EC-bond'
+        if colloid_test is None:
+            colloid_test = {}
+        self.__types.append(beadopts['beadtype'])
+
+
         for i in range(self.__particles.__len__()):
-            self.beads.append(CoarsegrainedBead.bead(position=self.__particles[i].center_position, beadtype='EC'))
+            validates = True
+            # test whether we satisfy requirements of the colloid specifications
+            try:
+                for key in colloid_test:
+                    if not getattr(self.__particles[i], key) == colloid_test[key]:
+                        validates = False
+            # some property is missing from the colloid
+            except AttributeError:
+                validates = False
+
+            if not validates:
+                continue
+
+            # append the beads / bonds into the lists
+            self.beads.append(CoarsegrainedBead.bead(position=self.__particles[i].center_position, **beadopts))
             self.__p_num.append(self.__p_num[-1]+1)
-            self.bonds.append(['EC-bond', self.__particles[i].pnum_offset, self.__p_num[-1]])
+            self.bonds.append([bond_name, self.__particles[i].pnum_offset, self.__p_num[-1]])
             if not additional_offsets is None:
                 for offset in additional_offsets:
                     self.beads.append(
                         CoarsegrainedBead.bead(position=self.beads[self.__particles[i].pnum_offset + offset],
-                                               beadtype='EC'))
+                                               **beadopts))
                     self.__p_num.append(self.__p_num[-1] + 1)
-                    self.bonds.append(['EC-bond', self.__particles[i].pnum_offset + offset, self.__p_num[-1]])
+                    self.bonds.append([bond_name, self.__particles[i].pnum_offset + offset, self.__p_num[-1]])
 
     def sticky_excluded(self, sticky_pair, r_cut = None):
         #######
@@ -391,6 +444,7 @@ class BuildHoomdXML(object):
             self.__particles[-1].pnum_offset = self.__p_num[-1]+1
         except IndexError:
             pass
+            # TODO add options to make this stuff random positioned
 
     def rm_particle(self, ind):
         try:
