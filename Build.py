@@ -285,7 +285,7 @@ class BuildHoomdXML(object):
         """
         returns the charge product of two types of beads in the lists. Will not return correct values if multiple beads
         of a given type can have different charges
-        :param typeA: 
+        :param typeA:
         :param typeB:
         :return:
         """
@@ -305,12 +305,10 @@ class BuildHoomdXML(object):
                 break
         if not _qaf:
             warnings.warn(
-                'Build : get_type_charge_product : Did not find type ' + typeA + ' in the lists, returned 0 for charge product',
-                UserWarning)
+                'Build : get_type_charge_product : Did not find type ' + typeA + ' in the lists, returned 0 for charge product')
         if not _qbf:
             warnings.warn(
-                'Build : get_type_charge_product : Did not find type ' + typeB + ' in the lists, returned 0 for charge product',
-                UserWarning)
+                'Build : get_type_charge_product : Did not find type ' + typeB + ' in the lists, returned 0 for charge product')
         return _qa * _qb
 
     def set_eps_to_salt(self, val):
@@ -412,7 +410,10 @@ class BuildHoomdXML(object):
             self.beads[i].position[index] += d
 
     def set_rot_to_hoomd(self):
-
+        """
+        shifts the base vectors used in the build to hoomd standards
+        :return:
+        """
         if not type(self.centerobj).__name__ == 'Lattice':
             return
         vx, vy, vz = self.centerobj.rot_crystal_box
@@ -465,6 +466,10 @@ class BuildHoomdXML(object):
             self.rm_particle(ind = ind_to_rem.pop())
 
     def build_lists_from_particles(self):
+        """
+        rebuilds pnum, beads, angles & bonds lists from the colloid lists
+        :return:
+        """
         self.__p_num  = []
         self.beads  = []
         self.angles = []
@@ -490,7 +495,7 @@ class BuildHoomdXML(object):
 
     def set_rotation_function(self, mode=None, mode_opts=None):
         # TODO : change mode_opts to **kwargs
-        if mode is None:
+        if mode is None or mode == 'none':
             ####################################################
             # Grabs orientation from definition of particles and rotate them, could move s_plane setter to here
             # and leave all lattice considerations out of GenShape
@@ -572,6 +577,12 @@ class BuildHoomdXML(object):
                     self.beads.append(self.__particles[-1].beads[k])
 
     def rename_type(self, initial_type, new_type):
+        """
+        renames all beads of a given type to another
+        :param initial_type:
+        :param new_type:
+        :return:
+        """
         _indices = []
         for i in range(self.beads.__len__()):
             if self.beads[i].beadtype == initial_type:
@@ -911,10 +922,10 @@ class BuildHoomdXML(object):
             for i in range(_a.__len__()):
                 while _a[i] > self.centerobj.int_bounds[i]:
                     _a[i] -= 2*self.centerobj.int_bounds[i]
-                    bead.image[i] += 1
+                    # bead.image[i] -= 1
                 while _a[i] < -self.centerobj.int_bounds[i]:
                     _a[i] += 2*self.centerobj.int_bounds[i]
-                    bead.image[i] -= 1
+                    #bead.image[i] += 1
             bead.position = np.dot(_a, _mat)
 
     def enforce_XYPBC(self):
@@ -927,19 +938,19 @@ class BuildHoomdXML(object):
 
         _mat = np.array([[_b_1.x, _b_2.x], [_b_1.y, _b_2.y]])
         if abs(_b_1.z) > 1e-5:
-            warnings.warn(UserWarning, 'XY bound vector (b1) has non-zero z component; check results')
+            warnings.warn('XY bound vector (b1) has non-zero z component; check results')
         if abs(_b_2.z) > 1e-5:
-            warnings.warn(UserWarning, 'XY bound vector (b2) has non-zero z component; check results')
+            warnings.warn('XY bound vector (b2) has non-zero z component; check results')
 
         for bead in self.beads:
             _a = list(np.linalg.solve(_mat, np.array(bead.position[0:2])))
             for i in range(_a.__len__()):
                 while _a[i] > self.centerobj.int_bounds[i]:
                     _a[i] -= 2 * self.centerobj.int_bounds[i]
-                    bead.image[i] += 1
+                    #bead.image[i] += 1
                 while _a[i] < -self.centerobj.int_bounds[i]:
                     _a[i] += 2* self.centerobj.int_bounds[i]
-                    bead.image[i] -= 1
+                    #bead.image[i] -= 1
                 _xypos = np.dot(_mat, _a)
                 bead.position[0] = _xypos[0]
                 bead.position[1] = _xypos[1]

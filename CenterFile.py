@@ -3,6 +3,7 @@ __author__ = 'martin'
 import random
 from fractions import gcd
 from math import *
+import warnings
 
 import numpy as np
 
@@ -188,7 +189,9 @@ class Lattice(CenterFile):
         if not (surf_plane is None) and surf_plane.__len__() == 3:
             surf_plane[:] = (x / reduce(gcd, surf_plane) for x in surf_plane)
 
-            r_vec = surf_plane[0] * self.reciprocal[:,0] + surf_plane[1] * self.reciprocal[:,1] + surf_plane[2] * self.reciprocal[2]
+            r_vec = surf_plane[0] * self.reciprocal[0, :] + surf_plane[1] * self.reciprocal[1, :] + surf_plane[
+                                                                                                        2] * self.reciprocal[
+                                                                                                             2, :]
 
             #r_vec = [surf_plane[0] / self.lattice[0], surf_plane[1] / self.lattice[1], surf_plane[2] / self.lattice[2]]
             self.rot_mat = get_rot_mat(r_vec)
@@ -218,14 +221,21 @@ class Lattice(CenterFile):
             if isinstance(lattice[0], float):
                 self.lattice = np.array([[lattice[0], 0, 0], [0,lattice[1],0], [0,0,lattice[2]]], dtype=float)
             elif hasattr(lattice[0], '__iter__'):
-                self.lattice = np.array([[lattice[0][0], lattice[1][0],lattice[2][0]],[lattice[0][1], lattice[1][1],lattice[2][1]],[lattice[0][2], lattice[1][2],lattice[2][2]]],
+                self.lattice = np.array(
+                    [[lattice[0][0], lattice[0][1], lattice[0][2]], [lattice[1][0], lattice[1][1], lattice[1][2]],
+                     [lattice[2][0], lattice[2][1], lattice[2][2]]],
                                     dtype=float)
             else:
                 raise _e
         else:
             raise _e
 
-    def rotate_and_cut(self, int_bounds):
+    def rotate_and_cut(self, int_bounds, *args, **kwargs):
+        warnings.warn('rotate_and_cut will be deprecated, switch to cut_to_dimensions or make_Z_slice',
+                      DeprecationWarning)
+        self.cut_to_dimensions(int_bounds)
+
+    def cut_to_dimensions(self, int_bounds):
         """
         rotates the crystal system so that the surface plane face supplied faces the Z direction. The new crystal axes
         are generally trigonal in nature and the crystallinity in Z is not guaranteed unless the rotated axes point
@@ -235,7 +245,6 @@ class Lattice(CenterFile):
         :return: none
         """
 
-        self.flags['vertical_slice'] = True
         for i in range(self.table.__len__()):
             for j in range(self.table[i].__len__()):
                 _dump_vec = vector(self.table[i][j,:])
@@ -243,32 +252,16 @@ class Lattice(CenterFile):
                 self.table[i][j,:] = _dump_vec.array
                 del _dump_vec
 
-        _b_x = vector(self.lattice[:,0])
-        _b_y = vector(self.lattice[:,1])
-        _b_z = vector(self.lattice[:,2])
+        _b_x = vector(self.lattice[0, :])
+        _b_y = vector(self.lattice[1, :])
+        _b_z = vector(self.lattice[2, :])
 
         _b_x.rot(mat = self.rot_mat)
         _b_y.rot(mat = self.rot_mat)
         _b_z.rot(mat = self.rot_mat)
-        if abs(_b_z.z) > abs(_b_x.z) and abs(_b_z.z) > abs(_b_y.z):
-            # usual case, take bz as reference for z axis
-            _b_xN = _b_x + -_b_z * (_b_x.z / _b_z.z)
-            _b_yN = _b_y + -_b_z * (_b_y.z / _b_z.z)
-        else:
-            if abs(_b_x.z) > abs(_b_y.z):
-                _b_xN = _b_z + -_b_x * (_b_z.z / _b_x.z)
-                _b_yN = _b_y + -_b_x * (_b_y.z / _b_x.z)
-                _b_z.array = _b_x.array
-            else:
-                _b_xN = _b_x + -_b_y * (_b_x.z / _b_y.z)
-                _b_yN = _b_z + -_b_y * (_b_z.z / _b_y.z)
-                _b_z.array = _b_y.array
 
-        _b_y.array = _b_yN.array
-        _b_x.array = _b_xN.array
-        # del _b_xN, _b_yN
         #decomposition matrix
-        _mat = np.array([[_b_x.x, _b_y.x,0.0* _b_z.x], [_b_x.y, _b_y.y,0.0*_b_z.y], [0.0,0.0,_b_z.z]])
+        _mat = np.array([[_b_x.x, _b_y.x, _b_z.x], [_b_x.y, _b_y.y, _b_z.y], [_b_x.z, _b_y.z, _b_z.z]])
 
 
         _index_to_keep = []
@@ -285,6 +278,77 @@ class Lattice(CenterFile):
                         and (-int_bounds[1] + _tol < _a2 <= int_bounds[1] + _tol) \
                         and (-int_bounds[2] + _tol < _a3 <= int_bounds[2] + _tol):
                     _index_to_keep.append([i,j])
+                del _tmp_dump
+
+        for i in range(self.table.__len__()):
+            _loc_list = []
+            for j in range(_index_to_keep.__len__()):
+                if _index_to_keep[j][0] == i:
+                    _loc_list.append(_index_to_keep[j][1])
+            self.table[i] = self.table[i][_loc_list, :]
+        # this discards sanity checks, should be careful.
+        self.table_size = 0
+        for i in range(self.table.__len__()):
+            self.table_size += self.table[i].__len__()
+
+        self.vx = list(_b_x.array)
+        self.vy = list(_b_y.array)
+        self.vz = list(_b_z.array)
+
+        self.vmat = _mat
+        self.int_bounds = int_bounds
+
+    def make_Z_slice(self, int_bounds, plane_vectors=None):
+        """
+        rotates the crystal system so that the surface plane face supplied faces the Z direction. The new crystal axes
+        are generally trigonal in nature and the crystallinity in Z is not guaranteed unless the rotated axes point
+        along Z.
+
+        :param int_bounds: list of length 3 of integer bounds
+        :return: none
+        """
+
+        self.flags['vertical_slice'] = True
+        for i in range(self.table.__len__()):
+            for j in range(self.table[i].__len__()):
+                _dump_vec = vector(self.table[i][j, :])
+                _dump_vec.rot(mat=self.rot_mat)
+                self.table[i][j, :] = _dump_vec.array
+                del _dump_vec
+
+        _b_x = vector(self.lattice[0, :])
+        _b_y = vector(self.lattice[1, :])
+        _b_z = vector(self.lattice[2, :])
+
+        _b_x.rot(mat=self.rot_mat)
+        _b_y.rot(mat=self.rot_mat)
+        _b_z.rot(mat=self.rot_mat)
+
+        if plane_vectors is not None:
+            _b_x.array, _b_y.array = plane_vectors[0][0] * _b_x.array + plane_vectors[0][1] * _b_y.array + \
+                                     plane_vectors[0][2] * _b_z.array, \
+                                     plane_vectors[1][0] * _b_x.array + plane_vectors[1][1] * _b_y.array + \
+                                     plane_vectors[1][2] * _b_z.array
+            _b_z.array = np.array(
+                [0.0, 0.0, (self.surf_plane[0] ** 2 / self.lattice[0][0] ** 2 + self.surf_plane[1] ** 2 /
+                            self.lattice[1][1] ** 2 + self.surf_plane[2] ** 2 / self.lattice[2][2] ** 2) ** -0.5])
+        # decomposition matrix
+        _mat = np.array([[_b_x.x, _b_y.x, 0.0 * _b_z.x], [_b_x.y, _b_y.y, 0.0 * _b_z.y], [0.0, 0.0, _b_z.z]])
+
+        _index_to_keep = []
+        for i in range(self.table.__len__()):
+            for j in range(self.table[i].__len__()):
+                _tmp_dump = vector(list(self.table[i][j, :]))
+
+                # decompose into base vectors _b_x, _b_y, _b_z
+                _a1, _a2, _a3 = np.linalg.solve(_mat, _tmp_dump.array)
+
+                # check lattice params, need some tolerance check in here
+                _tol = 1e-3
+                if (-int_bounds[0] + _tol < _a1 <= int_bounds[0] + _tol) \
+                        and (-int_bounds[1] + _tol < _a2 <= int_bounds[1] + _tol) \
+                        and (-int_bounds[2] + _tol < _a3 <= int_bounds[2] + _tol):
+                    _index_to_keep.append([i, j])
                 del _tmp_dump
 
         for i in range(self.table.__len__()):

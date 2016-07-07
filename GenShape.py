@@ -335,7 +335,7 @@ class Cube(shape):
         self.flags['call'] = 'cube'
 
         self.Set_Geometric_Quaternion()
-        self.initial_rotation()
+        # self.initial_rotation()
 
 class Octahedron(shape):
     def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
@@ -407,7 +407,7 @@ class Octahedron(shape):
         self.flags['call'] = 'oct'
 
         self.Set_Geometric_Quaternion()
-        self.initial_rotation()
+        #self.initial_rotation()
 
 class PdbProtein(shape):
     """
@@ -639,7 +639,7 @@ class Sphere(shape):
         self.flags['simple_I_tensor'] = True
 
         self.Set_Geometric_Quaternion()
-        self.initial_rotation()
+        #self.initial_rotation()
 
 class RhombicDodecahedron(shape):
     def __init__(self, Num,  surf_plane = None, lattice = None, properties = None):
@@ -722,7 +722,7 @@ class RhombicDodecahedron(shape):
         self.flags['call'] = 'rh_dodec'
 
         self.Set_Geometric_Quaternion()
-        self.initial_rotation()
+        #self.initial_rotation()
 
 class Tetrahedron(shape):
     def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
@@ -791,7 +791,7 @@ class Tetrahedron(shape):
         self.flags['call'] = 'Tetrahedron'
 
         self.Set_Geometric_Quaternion()
-        self.initial_rotation()
+        #self.initial_rotation()
 
 
 class SoftSurfaces(shape):

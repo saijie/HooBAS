@@ -263,6 +263,7 @@ class Colloid(object):
             del _tmp_dump
         self.pos = self.pos + _t
         self.quaternion = q_op * self.quaternion
+        self.beads[0].orientation = self.quaternion.q_w_ijk
 
     def graft_EXT(self, EXT_IDX, rem_id, num, linker_type):
         """

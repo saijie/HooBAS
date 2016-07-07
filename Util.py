@@ -18,6 +18,9 @@ class vector(object):
         if array.__len__() < 1:
             del self
 
+    def __getitem__(self, item):
+        return self.array[item]
+
     def __add__(self, other):
         return vector(self.array + other.array)
 
@@ -162,8 +165,32 @@ def c_hoomd_box(v, int_bounds, z_multi=1.00):
     v0xv1 = np.cross(vx, vy)
     v0xv1mag = sqrt(np.dot(v0xv1, v0xv1))
     lz = np.dot(vz, v0xv1) / v0xv1mag
+    if lz < 0.0:
+        vz = -np.array(vz)
+        lz = np.dot(vz, v0xv1) / v0xv1mag
     a3x = np.dot(vx, vz) / lx
     xz = a3x / lz
     yz = (np.dot(vy, vz) - a2x * a3x) / (ly * lz)
 
     return [lx, ly, lz, xy, xz, yz]
+
+
+def solve_Dioph(a, b, c):
+    m1 = 1
+    m2 = 0
+    n1 = 0
+    n2 = 1
+    r1 = a
+    r2 = b
+    while r1 % r2 != 0:
+        q = r1 / r2
+        aux = r1 % r2
+        r1 = r2
+        r2 = aux
+        aux3 = n1 - (n2 * q)
+        aux2 = m1 - (m2 * q)
+        m1 = m2
+        n1 = n2
+        m2 = aux2
+        n2 = aux3
+    return m2 * c, n2 * c

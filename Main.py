@@ -6,17 +6,17 @@ import GenShape
 import Build
 import LinearChain
 import Colloid
-import random
 ###########################
 # installation dependant stuff
 #############################
 import sys
 
-sys.path.append('/projects/b1030/hoomd-2.0-cuda7/')
-sys.path.append('/projects/b1030/hoomd-2.0-cuda7/hoomd/')
+sys.path.append('/projects/b1030/hoomd-2.0-ModifiedLJ/')
+# sys.path.append('/projects/b1030/hoomd-2.0-ModifiedLJ/hoomd/')
 
 # from hoomd import *
-# from md import *
+# from hoomd.md import *
+#from hoomd import deprecated as hdepr
 
 #context.initialize()
 
@@ -26,12 +26,15 @@ sys.path.append('/projects/b1030/hoomd-2.0-cuda7/hoomd/')
 
 
 options = type('', (), {})()
-_d = 3
+_d = 2
+lz = 1.54
+nchains = 20
+
 F = 7.0  # binding energy
 Dump = 2e5 #dump period for dcd
 options.Um = 1.00
 
-options.target_dim = 57.63 / 2.0
+options.target_dim = 18.2363
 options.scale_factor = 1.0
 options.fix_temp = 1.2
 options.target_temp = options.fix_temp
@@ -58,35 +61,51 @@ options.z_m = 1.7 # box z multiplier for surface energy calculations.
 options.exposed_surf = [0, 0, 1]  ## z component must not be zero
 options.delta_surface = 0.00
 options.density_multiplier = 1.00
+options.z_m = 1.7  # box z multiplier for surface energy calculations.
 
+options.delta_surface = 0.00
+options.density_multiplier = 1.00
 
-S = 5.0
+options.restart = False
+
+options.n_lambda = 24
+options.EC_ntstep = 1e6
+options.k_Einstein_Crystal = 1000.0
+
+S = 7.0
 llen = 3
-dsL = 3+_d
-lz = 1.0
+dsL = 3+ _d
+ec = 0.1
 C = 0.0
-
-options.filenameformat = 'test_001'
+print 'Creating shapes ... '
+options.filenameformat = 'CuBCTlog_FE_' + str(S) + '_EC_' + str(options.k_Einstein_Crystal) + '_' + str(
+    ec) + '_' + '_dims_' + str(options.target_dim) + '_dsL' + str(dsL) + '_lm_' + str(options.z_m) + '_surf_' + str(
+    options.exposed_surf)
 
 DNA_chain = LinearChain.DNAChain(n_ss = 1, n_ds = dsL, sticky_end = ['X', 'Y', 'Z'], bond_length = 0.6)
 DNA_brush = LinearChain.DNAChain(n_ss = 1, n_ds = 1, sticky_end =[], bond_length = 0.6)
 
-# shapes = [GenShape.Cube(Num=600, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
-shapes = [GenShape.PdbProtein(filename='4BLC.pdb')]
-# shapes[-1].set_properties(
-#    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.SimpleColloid})
-shapes[-1].set_properties(properties={'surf_type': 'P', 'ColloidType': Colloid.ComplexColloid})
-shapes[-1].add_shell(key={'RES': 'LYS'})
-shapes[-1].pdb_build_table()
-_t = arccos(1.0 / 3.0)
-
-
-def random_size():
-    return random.uniform(4.0, 6.0)
-
-shapes.append(GenShape.Sphere(Num=200))
+shapes = [GenShape.Cube(Num=200, surf_plane=options.exposed_surf, lattice=[1.0, 1.0, lz])]
+shapes[-1].set_ext_grafts(DNA_chain, num=nchains, linker_bond_type='S-NP')
+shapes[-1].set_ext_grafts(DNA_brush, num=2 * nchains, linker_bond_type='S-NP')
+# shapes = [GenShape.PdbProtein(filename='4BLC.pdb')]
 shapes[-1].set_properties(
-    properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': random_size, 'density': 14.29})
+    properties={'size': S, 'surf_type': 'P', 'density': 14.29, 'ColloidType': Colloid.SimpleColloid})
+# shapes[-1].set_properties(properties={'surf_type': 'P', 'ColloidType': Colloid.ComplexColloid})
+# shapes[-1].add_shell(key={'RES': 'LYS'})
+# shapes[-1].pdb_build_table()
+# _t = arccos(1.0 / 3.0)
+print '... Done'
+
+# def random_size():
+#    return random.uniform(4.0, 6.0)
+
+# shapes.append(GenShape.Sphere(Num=200))
+# shapes[-1].set_properties(
+#    properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': random_size, 'density': 14.29})
+
+planelist = {(1, 0, 1): [[1, 0, 1], [0, 1, 0]], (1, 1, 1): [[-1, 1, 0], [1, 0, -1]], (1, 1, 0): [[0, 0, 1], [1, -1, 0]],
+             (1, 0, 0): [[0, 1, 0], [0, 0, 1]], (0, 0, 1): [[1, 0, 0], [0,1,0]]}
 
 
 ######################################################################
@@ -95,30 +114,33 @@ shapes[-1].set_properties(
 options.sticky_pairs = [['X', 'Z'], ['Y', 'Y']]
 options.sticky_track = [['X', 'Z'], ['Y', 'Y']]
 
-
-
+print 'Creating lattice ...'
 # for rotations, new box size, goes from -bound to + bound; check GenShape.py for docs, # particles != prod(bounds)
 #  restricted by crystallography, [2,2,2] for [1 0 1], [3,3,3] for [1,1,1]
 options.int_bounds = [1, 1, 1]
 
 options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*options.target_dim]
+options.lattice_multi = [[20.0, 0.0, 0.0], [0.0, 20.0, 0.0], [20.0, 0.0, 20.0]]
 center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, lattice = options.lattice_multi, int_bounds=options.int_bounds)
-center_file_object.add_particles_on_lattice(center_type = 'W', offset = [0, 0, 0])
-center_file_object.add_particles_on_lattice(center_type='W2', offset=[0.5, 0.5, 0.5])
+center_file_object.add_particles_on_lattice(center_type = 'W', offset =[0, 0, 0])
+center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0.5])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0, 0.5])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0, 0.5, 0.5])
-center_file_object.rotate_and_cut(int_bounds=[1.0, 1.0, 1.0])
+center_file_object.rotate_and_cut(int_bounds=[1.0, 1.0, 1.0])  #, plane_vectors=planelist[tuple(options.exposed_surf)])
 
+print '... done'
 
 # Target box sizes
 ################################
 # Making buildobj
 ################################
-
+print 'Building ...'
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, z_multiplier=options.z_m,
                                filename=options.filenameformat)
-buildobj.set_rotation_function(mode = 'none')
+buildobj.set_rotation_function(mode='none')
+
+print '...Done'
 
 d_tags = buildobj.dna_tags
 c_tags = buildobj.center_tags
@@ -130,10 +152,10 @@ rigid_tuple_list = buildobj.aggregate_rigid_tuples()
 #buildobj.set_charge_to_pnum()
 buildobj.set_charge_to_dna_types()
 
-if comm.get_rank() == 0:
-    buildobj.write_to_file()
+# if comm.get_rank() == 0:
+buildobj.write_to_file()
 
-
+raise StandardError
 options.center_types = buildobj.center_types
 options.surface_types = buildobj.surface_types
 options.sticky_types = buildobj.sticky_types
@@ -142,7 +164,11 @@ options.build_flags = buildobj.flags # none defined at the moment, for future us
 options.bond_types = buildobj.bond_types
 options.ang_types = buildobj.ang_types
 
-system = init.read_xml(options.filenameformat + '.xml')
+comm.barrier()
+print 'Initializing...'
+system = hdepr.init.read_xml(options.filenameformat + '.xml')
+
+print '... Done'
 
 rigid = constrain.rigid()
 for cons in rigid_tuple_list:
@@ -191,8 +217,11 @@ Sangle.angle_coeff.set('C-C-endFL', k=50.0, t0=pi)
 #     Lennard-jones potential---- attraction and repulsion parameters
 ##################################################################################
 
+nb_list = nlist.tree()
+nb_list.reset_exclusions(['bond', 'angle', 'body'])
+
 #force field setup
-lj = pair.lj(r_cut=1.5, name = 'lj')
+lj = pair.lj(r_cut=1.5, nlist=nb_list, name = 'lj')
 lj.set_params(mode="shift")
 
 def attract(a,b,sigma=1.0,epsilon=1.0):
@@ -240,7 +269,7 @@ for i in range(options.sticky_track.__len__()):
         lja_names[i] += options.sticky_track[i][j]
 
 for i in range(options.sticky_track.__len__()):
-    lja_list.append(pair.lj(r_cut = 2.0, name = lja_names[i]))
+    lja_list.append(pair.lj(r_cut=2.0, name=lja_names[i], nlist = nb_list))
 
     for j in range(radius.__len__()):
         for k in range(j, radius.__len__()):
@@ -333,19 +362,22 @@ nonrigid = group.difference(a=groupall, b=groupP, name='groupnonrigid')
 
 integrate.mode_standard(dt=0.005)
 
-nlist.set_params(check_period=1)
-nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
+# nlist.set_params(check_period=1)
+#nlist.reset_exclusions(exclusions=['body', 'bond', 'angle'])
 
 
 dump.dcd(filename=options.filenameformat+'_dcd.dcd', period=Dump, overwrite = True) # dump a .dcd file for the trajectory
 
 nve = integrate.nve(group=nonrigid, limit=0.0005)
 keep_phys = update.zero_momentum(period=100)
-run(3e5)
+run(1e5)
+
+#update.box_resize(Lx = variant.linear_interp([(0, initbox[0] * 1.1), (2e5, initbox[0])]), Ly = variant.linear_interp([(0, initbox[1] * 1.1), (2e5, initbox[1])]), Lz = variant.linear_interp([(0, initbox[2] * 1.1), (2e5, initbox[2])]))
+
 nve.disable()
 #keep_phys.disable()
 
-nonrigid_integrator = integrate.nvt(group=nonrigid, T=0.1, tau = 0.65)
+nonrigid_integrator = integrate.nvt(group=nonrigid, kT=0.1, tau = 0.65)
 integrate.mode_standard(dt=0.00001)
 run(1e6)
 
@@ -364,14 +396,15 @@ run(1e6)
 ###  Equilibrate System #################
 
 #set integrate low so that system can equilibrate
+
+#set integrate low so that system can equilibrate
 integrate.mode_standard(dt=0.00001)
 #set the check period very low to let the system equilibrate
 
-run(2e6)
-
-
 
 run(2e6)
+
+
 
 ##################################################################
 #	Heat System Up to Mix/then slowly cool it down
@@ -381,41 +414,24 @@ run(2e6)
 integrate.mode_standard(dt=0.0002)
 
 #rigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
-nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
+nonrigid_integrator.set_params(
+    kT=variant.linear_interp(points=[(0, logger.query('temperature')), (1e6, options.mixing_temp)]))
 
 run(1e6)
-#starting here we periodicaly update the nn table which changes DNA types
-#options.tab_update = 1e3
-#curr_types = ['X'+str(i) for i in range(12)] + ['X12' for i in range(options.special - 12)]
-
-
-#for i in range(int(1e6 / options.tab_update)):
-
-#    reset_nblock_list()
-#    run(options.tab_update)
-
 
 
 integrate.mode_standard(dt=0.0005)
 
 #rigid_integrator.set_params(T=options.mixing_temp)
-nonrigid_integrator.set_params(T=options.mixing_temp)
+nonrigid_integrator.set_params(kT=options.mixing_temp)
 run(2e6)
-
-#for i in range(int(2e6 / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
-
 
 keep_phys.disable()
 
 integrate.mode_standard(dt=0.0005)
-#rigid_integrator.set_params(T=options.mixing_temp)
-nonrigid_integrator.set_params(T=options.mixing_temp)
 
-#for i in range(int(options.mix_time/options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
+nonrigid_integrator.set_params(kT=options.mixing_temp)
+
 run(options.mix_time)
 
 
@@ -424,31 +440,6 @@ run(options.mix_time)
 
 integrate.mode_standard(dt=options.step_size)
 #rigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
-nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
+#nonrigid_integrator.set_params(T=variant.linear_interp(points=[(0, options.mixing_temp), (3e6, options.target_temp_1)]))
 
-#for i in range(int(3e6 / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
-run(3e6)
-
-# nonrigid_integrator.disable()
-#npt_integ = integrate.npt(group = nonrigid, T = options.target_temp_1, P = 1e-4, tau = 0.65, tauP = 1.0, couple = "none", all = True)
-integrate.mode_standard(dt=options.step_size)
-#rigid_integrator.set_params(T=options.target_temp_1)
-#nonrigid_integrator.set_params(T=options.target_temp_1)
-
-#for i in range(int(1e6 / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
-run(3e7)
-
-#mol2.write(filename='BefCoolSnap'+options.filenameformat+'.mol2')
-
-integrate.mode_standard(dt=options.step_size)
-#rigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
-#nonrigid_integrator.set_params(T=variant.linear_interp(points = [(0, options.target_temp_1), (options.cool_time, options.target_temp_2)]))
-
-#for i in range(int(options.cool_time / options.tab_update)):
-#    reset_nblock_list()
-#    run(options.tab_update)
-#run(options.cool_time)
+run(1e7)
