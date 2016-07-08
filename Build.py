@@ -11,7 +11,6 @@ import numpy as np
 import CoarsegrainedBead
 import Colloid
 from Util import vector as vec
-from Util import iscubic
 from Util import get_rot_mat
 from Util import gen_random_mat
 import Util
@@ -810,13 +809,15 @@ class BuildHoomdXML(object):
         L = self.current_box()
         if self.impose_box.__len__() == 0:
             if type(self.centerobj).__name__ == 'Lattice':
-                if iscubic(self.centerobj.lattice) or \
-                        (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.y == 0) or \
-                        (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.z == 0) or \
-                        (self.centerobj.surf_plane.y == 0 and self.centerobj.surf_plane.z == 0):  # cubic
-                    self.enforce_PBC(self.z_multiplier)
-                else:
+                # if iscubic(self.centerobj.lattice) or \
+                #        (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.y == 0) or \
+                #        (self.centerobj.surf_plane.x == 0 and self.centerobj.surf_plane.z == 0) or \
+                #        (self.centerobj.surf_plane.y == 0 and self.centerobj.surf_plane.z == 0):  # cubic
+                #    self.enforce_PBC(self.z_multiplier)
+                if self.centerobj.flags['vertical_slice']:
                     self.enforce_XYPBC()
+                else:
+                    self.enforce_PBC(z_box_multi=1.0)
                 self.set_rot_to_hoomd()
         else:
             self.enforce_PBC(z_box_multi=1.0)
@@ -915,18 +916,18 @@ class BuildHoomdXML(object):
         if not z_box_multi is None:
             _b_z.array *= z_box_multi
 
-        _mat = np.array([[_b_1.x, _b_2.x, 0.0], [_b_1.y, _b_2.y, 0.0], [0.0, 0.0, _b_z.z]])
+        _mat = np.array([[_b_1.x, _b_2.x, _b_z.x], [_b_1.y, _b_2.y, _b_z.y], [_b_1.z, _b_2.z, _b_z.z]])
 
         for bead in self.beads:
             _a = list(np.linalg.solve(_mat, np.array(bead.position)))
             for i in range(_a.__len__()):
                 while _a[i] > self.centerobj.int_bounds[i]:
                     _a[i] -= 2*self.centerobj.int_bounds[i]
-                    # bead.image[i] -= 1
+                    bead.image[i] += 1
                 while _a[i] < -self.centerobj.int_bounds[i]:
                     _a[i] += 2*self.centerobj.int_bounds[i]
-                    #bead.image[i] += 1
-            bead.position = np.dot(_a, _mat)
+                    bead.image[i] -= 1
+            bead.position = np.dot(_mat, _a)
 
     def enforce_XYPBC(self):
         """
@@ -947,10 +948,10 @@ class BuildHoomdXML(object):
             for i in range(_a.__len__()):
                 while _a[i] > self.centerobj.int_bounds[i]:
                     _a[i] -= 2 * self.centerobj.int_bounds[i]
-                    #bead.image[i] += 1
+                    bead.image[i] += 1
                 while _a[i] < -self.centerobj.int_bounds[i]:
                     _a[i] += 2* self.centerobj.int_bounds[i]
-                    #bead.image[i] -= 1
+                    bead.image[i] -= 1
                 _xypos = np.dot(_mat, _a)
                 bead.position[0] = _xypos[0]
                 bead.position[1] = _xypos[1]

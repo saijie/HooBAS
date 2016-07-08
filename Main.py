@@ -100,9 +100,9 @@ print '... Done'
 # def random_size():
 #    return random.uniform(4.0, 6.0)
 
-# shapes.append(GenShape.Sphere(Num=200))
-# shapes[-1].set_properties(
-#    properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': random_size, 'density': 14.29})
+shapes.append(GenShape.Sphere(Num=200))
+shapes[-1].set_properties(
+    properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': 5.0, 'density': 14.29})
 
 planelist = {(1, 0, 1): [[1, 0, 1], [0, 1, 0]], (1, 1, 1): [[-1, 1, 0], [1, 0, -1]], (1, 1, 0): [[0, 0, 1], [1, -1, 0]],
              (1, 0, 0): [[0, 1, 0], [0, 0, 1]], (0, 0, 1): [[1, 0, 0], [0,1,0]]}
@@ -123,7 +123,7 @@ options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*opti
 options.lattice_multi = [[20.0, 0.0, 0.0], [0.0, 20.0, 0.0], [20.0, 0.0, 20.0]]
 center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, lattice = options.lattice_multi, int_bounds=options.int_bounds)
 center_file_object.add_particles_on_lattice(center_type = 'W', offset =[0, 0, 0])
-center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0.5])
+center_file_object.add_particles_on_lattice(center_type='W2', offset=[0.5, 0.5, 0.5])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0, 0.5])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0, 0.5, 0.5])
