@@ -8,6 +8,7 @@ from itertools import chain
 
 import numpy as np
 
+from Quaternion import Quat
 import CoarsegrainedBead
 import Colloid
 from Util import vector as vec
@@ -432,10 +433,15 @@ class BuildHoomdXML(object):
         if _s == 0 :
             _hoomd_mat = _id
         else:
-            _hoomd_mat = np.linalg.inv(_id + _vx + np.linalg.matrix_power(_vx,2)*(1-_c)/(_s**2))
+            _hoomd_mat = _id + _vx + np.linalg.matrix_power(_vx, 2) * (1 - _c) / (_s ** 2)
+            # _hoomd_mat = np.linalg.inv(_id + _vx + np.linalg.matrix_power(_vx,2)*(1-_c)/(_s**2))
 
         for i in range(self.beads.__len__()):
             self.beads[i].position = list(np.dot(_hoomd_mat, self.beads[i].position))
+        Q = Quat(_hoomd_mat)
+        for particle in self.__particles:
+            particle.quaternion = Q * particle.quaternion
+            self.beads[particle.p_num[0]].orientation = particle.quaternion.q_w_ijk
 
     def add_particle(self, ptype, ColloidConstructor, **args):
         self.__particles.append(ColloidConstructor(**args))
@@ -923,10 +929,10 @@ class BuildHoomdXML(object):
             for i in range(_a.__len__()):
                 while _a[i] > self.centerobj.int_bounds[i]:
                     _a[i] -= 2*self.centerobj.int_bounds[i]
-                    bead.image[i] += 1
+                #                    bead.image[i] += 1
                 while _a[i] < -self.centerobj.int_bounds[i]:
                     _a[i] += 2*self.centerobj.int_bounds[i]
-                    bead.image[i] -= 1
+                #                    bead.image[i] -= 1
             bead.position = np.dot(_mat, _a)
 
     def enforce_XYPBC(self):
@@ -948,10 +954,10 @@ class BuildHoomdXML(object):
             for i in range(_a.__len__()):
                 while _a[i] > self.centerobj.int_bounds[i]:
                     _a[i] -= 2 * self.centerobj.int_bounds[i]
-                    bead.image[i] += 1
+                #                    bead.image[i] += 1
                 while _a[i] < -self.centerobj.int_bounds[i]:
                     _a[i] += 2* self.centerobj.int_bounds[i]
-                    bead.image[i] -= 1
+                #                    bead.image[i] -= 1
                 _xypos = np.dot(_mat, _a)
                 bead.position[0] = _xypos[0]
                 bead.position[1] = _xypos[1]

@@ -165,9 +165,9 @@ def c_hoomd_box(v, int_bounds, z_multi=1.00):
     v0xv1 = np.cross(vx, vy)
     v0xv1mag = sqrt(np.dot(v0xv1, v0xv1))
     lz = np.dot(vz, v0xv1) / v0xv1mag
-    if lz < 0.0:
-        vz = -np.array(vz)
-        lz = np.dot(vz, v0xv1) / v0xv1mag
+    # if lz < 0.0:
+    #    vz = -np.array(vz)
+    #    lz = np.dot(vz, v0xv1) / v0xv1mag
     a3x = np.dot(vx, vz) / lx
     xz = a3x / lz
     yz = (np.dot(vy, vz) - a2x * a3x) / (ly * lz)

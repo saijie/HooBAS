@@ -8,7 +8,7 @@ import warnings
 import numpy as np
 
 from Util import vector
-from Util import get_rot_mat
+from Util import get_inv_rot_mat
 
 
 class CenterFile(object):
@@ -194,7 +194,7 @@ class Lattice(CenterFile):
                                                                                                              2, :]
 
             #r_vec = [surf_plane[0] / self.lattice[0], surf_plane[1] / self.lattice[1], surf_plane[2] / self.lattice[2]]
-            self.rot_mat = get_rot_mat(r_vec)
+            self.rot_mat = get_inv_rot_mat(r_vec)
             self.rot_flag = True
             self.surf_plane = vector(surf_plane)
             self.n_plane = vector(r_vec)
@@ -333,7 +333,7 @@ class Lattice(CenterFile):
                 [0.0, 0.0, (self.surf_plane[0] ** 2 / self.lattice[0][0] ** 2 + self.surf_plane[1] ** 2 /
                             self.lattice[1][1] ** 2 + self.surf_plane[2] ** 2 / self.lattice[2][2] ** 2) ** -0.5])
         # decomposition matrix
-        _mat = np.array([[_b_x.x, _b_y.x, 0.0 * _b_z.x], [_b_x.y, _b_y.y, 0.0 * _b_z.y], [0.0, 0.0, _b_z.z]])
+        _mat = np.array([[_b_x.x, _b_y.x, 0.0], [_b_x.y, _b_y.y, 0.0], [0.0, 0.0, _b_z.z]])
 
         _index_to_keep = []
         for i in range(self.table.__len__()):

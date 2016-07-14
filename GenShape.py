@@ -10,6 +10,7 @@ import numpy as np
 
 from Util import vector as vec
 from Util import get_rot_mat
+from Util import get_inv_rot_mat
 from Quaternion import Quat
 
 
@@ -82,7 +83,7 @@ class shape(object):
         if not (surf_plane is None) and surf_plane.__len__() == 3:# and not (surf_plane[1] == surf_plane[0] ==0):
             surf_plane[:] = (x / reduce(gcd, surf_plane) for x in surf_plane)
             r_vec = [surf_plane[0] / self.__lattice[0], surf_plane[1] / self.__lattice[1], surf_plane[2] / self.__lattice[2]]
-            self.__rot_mat = get_rot_mat(r_vec)
+            self.__rot_mat = get_inv_rot_mat(r_vec)
             self.srot_mat = self.__rot_mat # temp fix
             self.__surf_plane = vec(surf_plane)
             self.__n_plane = vec(r_vec)
@@ -112,7 +113,7 @@ class shape(object):
 
             r_vec = [surf_plane[0] / self.__lattice[0], surf_plane[1] / self.__lattice[1], surf_plane[2] / self.__lattice[2]]
             self.__n_plane = vec(r_vec)
-            self.__rot_mat = get_rot_mat(r_vec)
+            self.__rot_mat = get_inv_rot_mat(r_vec)
             self.__surf_plane = vec(surf_plane)
     @property
     def n_plane(self):
@@ -159,10 +160,10 @@ class shape(object):
 
     def initial_rotation(self):
         try:
-            for i in range(self.table.__len__()):
-                dmp_vec = vec(self.table[i, :])
-                dmp_vec.rot(mat=self.srot_mat)
-                self.table[i, :] = dmp_vec.array
+            # for i in range(self.table.__len__()):
+            #    dmp_vec = vec(self.table[i, :])
+            #    dmp_vec.rot(mat=self.srot_mat)
+            #    self.table[i, :] = dmp_vec.array
             self.quaternion = Quat(self.srot_mat) * self.quaternion
         except AttributeError:
             pass
@@ -231,16 +232,6 @@ class shape(object):
         args = args[0: N] + self.additional_points.__len__()
         return args.tolist()
 
-    def get_rigid_tuple(self):
-        if 'size' in self.flags:
-            _size = self.flags['size']
-        else:
-            _size = 1.0
-            if 'ColloidType' in self.flags and self.flags['ColloidType'] == 'SimpleColloid':
-                warnings.warn('did not find size property in shape while the colloid is defined as simple', UserWarning)
-        _concat = []
-        for p in self.table:
-            _concat.append((p[0] * _size, p[1] * _size, p[2] * _size))
 
 
 class Cube(shape):
@@ -335,7 +326,8 @@ class Cube(shape):
         self.flags['call'] = 'cube'
 
         self.Set_Geometric_Quaternion()
-        # self.initial_rotation()
+        # self.quaternion = Quat(np.eye(3))
+        self.initial_rotation()
 
 class Octahedron(shape):
     def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
@@ -407,7 +399,7 @@ class Octahedron(shape):
         self.flags['call'] = 'oct'
 
         self.Set_Geometric_Quaternion()
-        #self.initial_rotation()
+        self.initial_rotation()
 
 class PdbProtein(shape):
     """
@@ -639,7 +631,7 @@ class Sphere(shape):
         self.flags['simple_I_tensor'] = True
 
         self.Set_Geometric_Quaternion()
-        #self.initial_rotation()
+        self.initial_rotation()
 
 class RhombicDodecahedron(shape):
     def __init__(self, Num,  surf_plane = None, lattice = None, properties = None):
@@ -722,7 +714,7 @@ class RhombicDodecahedron(shape):
         self.flags['call'] = 'rh_dodec'
 
         self.Set_Geometric_Quaternion()
-        #self.initial_rotation()
+        self.initial_rotation()
 
 class Tetrahedron(shape):
     def __init__(self, Num, surf_plane = None, lattice = None, properties = None):
@@ -791,7 +783,7 @@ class Tetrahedron(shape):
         self.flags['call'] = 'Tetrahedron'
 
         self.Set_Geometric_Quaternion()
-        #self.initial_rotation()
+        self.initial_rotation()
 
 
 class SoftSurfaces(shape):

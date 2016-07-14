@@ -58,7 +58,7 @@ options.flag_flexor_angle = False
 
 options.center_sec_factor = (3**0.5)*1.35 # security factor for center-center. min dist between particles in random config.
 options.z_m = 1.7 # box z multiplier for surface energy calculations.
-options.exposed_surf = [0, 0, 1]  ## z component must not be zero
+options.exposed_surf = [1, 1, 1]  ## z component must not be zero
 options.delta_surface = 0.00
 options.density_multiplier = 1.00
 options.z_m = 1.7  # box z multiplier for surface energy calculations.
@@ -104,8 +104,9 @@ shapes.append(GenShape.Sphere(Num=200))
 shapes[-1].set_properties(
     properties={'surf_type': 'P2', 'ColloidType': Colloid.SimpleColloid, 'size': 5.0, 'density': 14.29})
 
-planelist = {(1, 0, 1): [[1, 0, 1], [0, 1, 0]], (1, 1, 1): [[-1, 1, 0], [1, 0, -1]], (1, 1, 0): [[0, 0, 1], [1, -1, 0]],
-             (1, 0, 0): [[0, 1, 0], [0, 0, 1]], (0, 0, 1): [[1, 0, 0], [0,1,0]]}
+# one could use Util.diophantine to get this but it's unstable
+planelist = {(1, 0, 1): [[1, 0, -1], [0, 1, 0]], (1, 1, 1): [[1, 0, -1], [-1, 1, 0]],
+             (1, 1, 0): [[0, 0, 1], [1, -1, 0]], (1, 0, 0): [[0, 1, 0], [0, 0, 1]], (0, 0, 1): [[1, 0, 0], [0, 1, 0]]}
 
 
 ######################################################################
@@ -120,14 +121,14 @@ print 'Creating lattice ...'
 options.int_bounds = [1, 1, 1]
 
 options.lattice_multi = [1.0*options.target_dim, 1.0*options.target_dim, lz*options.target_dim]
-options.lattice_multi = [[20.0, 0.0, 0.0], [0.0, 20.0, 0.0], [20.0, 0.0, 20.0]]
+# options.lattice_multi = [[20.0, 0.0, 0.0], [0.0, 20.0, 0.0], [0.0, 0.0, 20.0]]
 center_file_object = CenterFile.Lattice(surf_plane = options.exposed_surf, lattice = options.lattice_multi, int_bounds=options.int_bounds)
 center_file_object.add_particles_on_lattice(center_type = 'W', offset =[0, 0, 0])
-center_file_object.add_particles_on_lattice(center_type='W2', offset=[0.5, 0.5, 0.5])
+center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0.5])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0.5, 0])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0.5, 0, 0.5])
 # center_file_object.add_particles_on_lattice(center_type='W', offset=[0, 0.5, 0.5])
-center_file_object.rotate_and_cut(int_bounds=[1.0, 1.0, 1.0])  #, plane_vectors=planelist[tuple(options.exposed_surf)])
+center_file_object.make_Z_slice(int_bounds=[1.0, 1.0, 1.0], plane_vectors=planelist[tuple(options.exposed_surf)])
 
 print '... done'
 
@@ -138,7 +139,7 @@ print '... done'
 print 'Building ...'
 buildobj = Build.BuildHoomdXML(center_obj=center_file_object, shapes=shapes, z_multiplier=options.z_m,
                                filename=options.filenameformat)
-buildobj.set_rotation_function(mode='none')
+#buildobj.set_rotation_function(mode='none')
 
 print '...Done'
 
